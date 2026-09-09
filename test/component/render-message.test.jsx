@@ -167,3 +167,61 @@ describe('MessageRow', () => {
         expect(screen.getByText('urgent')).toBeInTheDocument();
     });
 });
+
+describe('MessageRow — merged and excluded regressions', () => {
+    it('explains a merged bubble instead of rendering a bare dash', () => {
+        render(
+            <MessageRow
+                message={message({ body: '', merged: true, rowCount: 2 })}
+                showAuthor
+                showAvatar
+                selectable={false}
+            />
+        );
+        expect(screen.getByText(/2 messages share this Message ID/)).toBeInTheDocument();
+        expect(screen.getByText('Concat()')).toBeInTheDocument();
+    });
+
+    it('dims ALTERNATIVE state, not only excluded', () => {
+        // Native Sense charts grey both 'X' (excluded) and 'A' (alternative).
+        const { container: excluded } = render(
+            <MessageRow
+                message={message({ state: 'X' })}
+                showAuthor
+                showAvatar
+                selectable={false}
+            />
+        );
+        const { container: alternative } = render(
+            <MessageRow
+                message={message({ state: 'A' })}
+                showAuthor
+                showAvatar
+                selectable={false}
+            />
+        );
+        const dimClass = [...excluded.querySelectorAll('[class]')]
+            .map((el) => el.className)
+            .find((c) => c.includes('dimmed'));
+        expect(dimClass).toBeTruthy();
+        expect(
+            [...alternative.querySelectorAll('[class]')].some((el) =>
+                el.className.includes('dimmed')
+            )
+        ).toBe(true);
+    });
+
+    it('does not dim an ordinary optional value', () => {
+        const { container } = render(
+            <MessageRow
+                message={message({ state: 'O' })}
+                showAuthor
+                showAvatar
+                selectable={false}
+            />
+        );
+        expect(
+            [...container.querySelectorAll('[class]')].some((el) => el.className.includes('dimmed'))
+        ).toBe(false);
+    });
+});

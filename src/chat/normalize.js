@@ -17,7 +17,14 @@
 import { ATTR_IDS, attrValue, buildAttrMap } from '../qix/attr-map';
 import { ROLES, resolveRoles } from '../qix/column-map';
 import * as cell from '../qix/read-cell';
-import { attrText, parseMediaRefs, qlikTimeToEpochMs, safeColor, safeUrl } from './sanitize';
+import {
+    NULL_SENTINEL,
+    attrText,
+    parseMediaRefs,
+    qlikTimeToEpochMs,
+    safeColor,
+    safeUrl,
+} from './sanitize';
 import { colorForElem, paletteFromTheme, resolveRightSide } from './participants';
 
 /** Severity levels for collected diagnostics. */
@@ -111,6 +118,13 @@ export function normalize({ layout, rows, props = {}, theme, area }) {
         const merged = typeof dupCount === 'number' && dupCount > 1;
         if (merged) mergedCount += 1;
 
+        // Only() returns NULL when the value is not unique within the group, and
+        // the engine renders that as its '-' sentinel. On a merged bubble that is
+        // exactly what happens, so the raw sentinel must not reach the bubble as
+        // if it were the message. The renderer explains the merge instead.
+        const rawBody = cell.text(textCell);
+        const body = rawBody === NULL_SENTINEL ? '' : rawBody;
+
         const avatar = safeUrl(attrValue(idCell, attrMap, ATTR_IDS.AVATAR)?.qText);
         if (avatar && !participants.get(authorKey).avatarUrl) {
             participants.get(authorKey).avatarUrl = avatar;
@@ -130,7 +144,8 @@ export function normalize({ layout, rows, props = {}, theme, area }) {
         messages.push({
             id: cell.text(idCell) || `row-${i}`,
             elem: cell.elem(idCell),
-            body: cell.text(textCell),
+            body,
+            rowCount: typeof dupCount === 'number' ? dupCount : 1,
             bodyFormat: props.bodyFormat === 'markdown' ? 'markdown' : 'text',
             authorKey,
             ts,

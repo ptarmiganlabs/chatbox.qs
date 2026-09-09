@@ -51,7 +51,10 @@ export function MessageRow({ message, showAuthor, showAvatar, selectable, onSele
         own ? styles.bubbleOwn : '',
         message.merged ? styles.bubbleMerged : '',
         selectable ? styles.selectable : '',
-        message.state === 'X' ? styles.dimmed : '',
+        // 'X' excluded and 'A' alternative are both "not currently possible".
+        // Native Sense charts grey both; dimming only 'X' left alternative-state
+        // values looking fully selectable.
+        message.state === 'X' || message.state === 'A' ? styles.dimmed : '',
     ]
         .filter(Boolean)
         .join(' ');
@@ -120,7 +123,17 @@ export function MessageRow({ message, showAuthor, showAvatar, selectable, onSele
                     tabIndex={selectable ? 0 : undefined}
                 >
                     {/* React escapes children — the body is never markup. */}
-                    <div className={styles.body}>{message.body}</div>
+                    {message.body ? (
+                        <div className={styles.body}>{message.body}</div>
+                    ) : message.merged ? (
+                        <div className={styles.bodyMissing}>
+                            {message.rowCount} messages share this Message ID, so{' '}
+                            <code>Only()</code> returns nothing. Use a unique id, or{' '}
+                            <code>Concat()</code> to show them together.
+                        </div>
+                    ) : (
+                        <div className={styles.body} />
+                    )}
                     {message.tsText || message.badge || message.merged ? (
                         <div className={styles.meta}>
                             {message.tsText ? <span>{message.tsText}</span> : null}
