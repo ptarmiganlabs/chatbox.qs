@@ -363,3 +363,47 @@ describe('message body — regression', () => {
         expect(normalize({ layout, rows: [r] }).messages[0].body).toBe('hello there');
     });
 });
+
+describe('merged bubbles — body regression', () => {
+    it("does not surface the engine's '-' as the message body", () => {
+        // Only() returns NULL when the value is not unique within the group,
+        // which is exactly what a merged bubble produces. The engine renders
+        // that as '-', and a bare dash was reaching the bubble as if it were
+        // the message text.
+        const layout = makeLayout({ qcy: 1 });
+        const r = row({ id: '900', author: 'Ada', text: '-', dup: 2 });
+        r[3] = { qText: '-', qNum: 'NaN', qIsNull: true };
+        const m = normalize({ layout, rows: [r] }).messages[0];
+
+        expect(m.body).toBe('');
+        expect(m.merged).toBe(true);
+        expect(m.rowCount).toBe(2);
+    });
+
+    it('reports how many messages a bubble combines', () => {
+        const layout = makeLayout({ qcy: 1 });
+        const m = normalize({
+            layout,
+            rows: [row({ id: '900', author: 'Ada', text: 'x', dup: 5 })],
+        }).messages[0];
+        expect(m.rowCount).toBe(5);
+    });
+
+    it('leaves an ordinary message at rowCount 1 and keeps its text', () => {
+        const m = normalize({
+            layout: makeLayout({ qcy: 1 }),
+            rows: [row({ id: '1', author: 'Ada', text: 'hello', dup: 1 })],
+        }).messages[0];
+        expect(m.rowCount).toBe(1);
+        expect(m.merged).toBe(false);
+        expect(m.body).toBe('hello');
+    });
+
+    it('keeps a message whose text legitimately contains a dash', () => {
+        const m = normalize({
+            layout: makeLayout({ qcy: 1 }),
+            rows: [row({ id: '1', author: 'Ada', text: 'well - maybe', dup: 1 })],
+        }).messages[0];
+        expect(m.body).toBe('well - maybe');
+    });
+});
