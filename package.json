@@ -1,0 +1,93 @@
+{
+    "name": "chatbox-qs",
+    "version": "0.1.0",
+    "type": "module",
+    "description": "Render chat-style conversations from the Qlik Sense data model",
+    "license": "MIT",
+    "author": "Göran Sander, Ptarmigan Labs",
+    "bugs": {
+        "url": "https://github.com/ptarmiganlabs/chatbox.qs/issues"
+    },
+    "homepage": "https://github.com/ptarmiganlabs/chatbox.qs#readme",
+    "keywords": [
+        "qlik",
+        "qliksense",
+        "nebula",
+        "stardust",
+        "chat",
+        "conversation",
+        "transcript",
+        "ptarmiganlabs"
+    ],
+    "files": [
+        "dist",
+        "chatbox-qs.js",
+        "chatbox-qs.qext"
+    ],
+    "engines": {
+        "node": ">=24.15.0"
+    },
+    "main": "dist/chatbox-qs.js",
+    "module": "dist/chatbox-qs.esm.js",
+    "scripts": {
+        "build": "cross-env BUILD_TYPE=development NODE_ENV=development nebula build --config nebula.config.cjs --sourcemap false --mode development",
+        "build:dist": "cross-env BUILD_TYPE=production NODE_ENV=production nebula build --config nebula.config.cjs --sourcemap false --mode production",
+        "lint": "eslint src scripts test",
+        "lint:fix": "eslint src scripts test --fix",
+        "format": "prettier --write \"./**/*.{js,mjs,cjs,jsx,css,json,yaml,md}\"",
+        "format:check": "prettier --check \"./**/*.{js,mjs,cjs,jsx,css,json,yaml,md}\"",
+        "start": "nebula serve",
+        "sense": "nebula sense --meta src/meta.json",
+        "post-build": "node scripts/post-build.mjs",
+        "zip": "node scripts/zip-extension.mjs",
+        "pack:dev": "cross-env BUILD_TYPE=development npm run build && npm run sense && cross-env BUILD_TYPE=development npm run post-build && npm run zip",
+        "pack:prod": "cross-env BUILD_TYPE=production npm run build:dist && cross-env BUILD_TYPE=production npm run sense && cross-env BUILD_TYPE=production npm run post-build && npm run zip",
+        "test": "vitest run",
+        "test:watch": "vitest",
+        "version:major": "npm version major --no-git-tag-version",
+        "version:minor": "npm version minor --no-git-tag-version",
+        "version:patch": "npm version patch --no-git-tag-version",
+        "prepare": "husky"
+    },
+    "lint-staged": {
+        "*.{js,mjs,cjs,jsx}": [
+            "eslint --fix",
+            "prettier --write"
+        ],
+        "*.{json,yaml,yml,md,css}": [
+            "prettier --write"
+        ]
+    },
+    "dependencies": {
+        "react": "^19.2.8",
+        "react-dom": "^19.2.8",
+        "react-markdown": "^10.1.0",
+        "react-virtuoso": "^4.18.12",
+        "remark-gfm": "^4.0.1"
+    },
+    "devDependencies": {
+        "@eslint/js": "^10.0.1",
+        "@nebula.js/cli": "^7.4.0",
+        "@nebula.js/cli-build": "^7.4.0",
+        "@nebula.js/cli-sense": "^7.4.0",
+        "@nebula.js/cli-serve": "^7.4.0",
+        "@rollup/plugin-replace": "^6.0.2",
+        "@testing-library/jest-dom": "^7.0.0",
+        "@testing-library/react": "^16.3.2",
+        "@testing-library/user-event": "^14.6.1",
+        "archiver": "^8.0.0",
+        "cross-env": "^10.1.0",
+        "eslint": "^10.8.0",
+        "eslint-config-prettier": "^10.1.8",
+        "eslint-plugin-jsdoc": "^63.3.0",
+        "globals": "^17.8.0",
+        "husky": "^9.1.7",
+        "jsdom": "^29.1.1",
+        "lint-staged": "^17.2.0",
+        "prettier": "^3.9.6",
+        "vitest": "^4.1.10"
+    },
+    "peerDependencies": {
+        "@nebula.js/stardust": ">=7.0.0"
+    }
+}

@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 200" width="256" height="200">
+  <!-- Incoming bubble: left-aligned, with the author rail that the extension
+       uses instead of a coloured fill. -->
+  <g>
+    <rect x="20" y="26" width="132" height="46" rx="12" fill="#eceff1"/>
+    <rect x="20" y="26" width="5" height="46" rx="2.5" fill="#4477aa"/>
+    <rect x="40" y="40" width="88" height="7" rx="3.5" fill="#b0bec5"/>
+    <rect x="40" y="54" width="62" height="7" rx="3.5" fill="#cfd8dc"/>
+  </g>
+  <!-- Outgoing bubble: right-aligned, own-message tint. -->
+  <g>
+    <rect x="104" y="86" width="132" height="46" rx="12" fill="#e3f1fb"/>
+    <rect x="231" y="86" width="5" height="46" rx="2.5" fill="#228833"/>
+    <rect x="124" y="100" width="88" height="7" rx="3.5" fill="#90b8d6"/>
+    <rect x="124" y="114" width="52" height="7" rx="3.5" fill="#b6d2e8"/>
+  </g>
+  <!-- A third participant, showing the rail carrying identity at 3+ parties. -->
+  <g>
+    <rect x="20" y="146" width="112" height="34" rx="12" fill="#eceff1"/>
+    <rect x="20" y="146" width="5" height="34" rx="2.5" fill="#ee6677"/>
+    <rect x="40" y="159" width="70" height="7" rx="3.5" fill="#b0bec5"/>
+  </g>
+</svg>

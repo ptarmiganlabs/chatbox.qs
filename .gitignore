@@ -1,0 +1,8 @@
+node_modules/
+dist/
+chatbox-qs-ext/
+*.zip
+coverage/
+bundle-analysis.html
+.DS_Store
+*.log

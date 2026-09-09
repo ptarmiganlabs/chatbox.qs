@@ -1,0 +1,5 @@
+dist
+chatbox-qs-ext
+node_modules
+*.zip
+coverage
