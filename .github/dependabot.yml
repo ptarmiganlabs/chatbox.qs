@@ -1,0 +1,18 @@
+version: 2
+updates:
+    - package-ecosystem: 'npm'
+      directory: '/'
+      # The local npm config sets min-release-age=7, so a package younger than a
+      # week cannot be installed here anyway. Matching that keeps Dependabot from
+      # opening pull requests nobody can merge.
+      cooldown:
+          default-days: 7
+      schedule:
+          interval: 'weekly'
+      open-pull-requests-limit: 5
+    - package-ecosystem: 'github-actions'
+      directory: '/'
+      cooldown:
+          default-days: 7
+      schedule:
+          interval: 'weekly'

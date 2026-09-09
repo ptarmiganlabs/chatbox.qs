@@ -6,3 +6,7 @@ coverage/
 bundle-analysis.html
 .DS_Store
 *.log
+
+release-staging/
+chatbox-qs-v*.zip
+*.sbom.cdx.json

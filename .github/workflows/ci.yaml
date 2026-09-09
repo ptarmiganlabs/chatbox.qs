@@ -1,0 +1,188 @@
+# Verification on every pull request, and release automation on main.
+#
+# Everything that runs repository code runs on the org's self-hosted Linux pool.
+# The `plabs-ci` label is not decoration: other self-hosted Linux runners answer
+# self-hosted/Linux/sp53 from the pve101 Docker host and do not carry the same
+# tooling, so a runs-on without it can dispatch there and fail as a broken build
+# rather than as the routing mistake it is.
+name: ci
+
+on:
+    pull_request:
+    push:
+        branches: [main]
+    workflow_dispatch:
+
+permissions: {}
+
+# A force-push should not leave the superseded run holding pool slots. The pool
+# has twelve, shared across every repository that uses it.
+concurrency:
+    group: ci-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+    cancel-in-progress: true
+
+jobs:
+    verify:
+        name: Lint, test and package
+        runs-on:
+            - self-hosted
+            - linux
+            - plabs-ci
+        timeout-minutes: 15
+        permissions:
+            contents: read
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v5.0.0
+              with:
+                  persist-credentials: false
+
+            - name: Setup Node.js
+              uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.0.0
+              with:
+                  node-version-file: .nvmrc
+                  # Self-hosted: the runner keeps its own npm cache between jobs,
+                  # so the action's cache is a slower duplicate of it.
+                  package-manager-cache: false
+
+            # @nebula.js/cli hard-enforces its Node floor and exits 1 with no
+            # message below it, so pin npm too rather than inherit whatever the
+            # runner image happens to carry.
+            - name: Pin npm
+              run: npm install -g npm@12.0.2
+
+            - name: Install dependencies
+              run: npm ci
+
+            - name: Lint
+              run: npm run lint
+
+            - name: Check formatting
+              run: npm run format:check
+
+            - name: Test
+              run: npm test
+
+            # Builds the deployable .zip. This is the step that would catch a
+            # packaging regression — including the JSX-runtime check in
+            # post-build, which fails the build if a development React runtime
+            # reaches a production bundle.
+            - name: Package extension
+              run: npm run pack:prod
+
+            # A Sense extension must be self-contained. See docs/GOTCHAS.md.
+            - name: Verify no external hosts in the bundle
+              run: npm run verify:airgap
+
+            - name: Upload extension artifact
+              uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v4.4.3
+              with:
+                  name: chatbox-qs-${{ github.sha }}
+                  path: chatbox-qs.zip
+                  retention-days: 14
+                  if-no-files-found: error
+
+    release-please:
+        name: Release please
+        needs: verify
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        runs-on:
+            - self-hosted
+            - linux
+            - plabs-ci
+        timeout-minutes: 10
+        permissions:
+            contents: write
+            pull-requests: write
+        outputs:
+            releases_created: ${{ steps.release.outputs.releases_created }}
+            release_tag_name: ${{ steps.release.outputs['tag_name'] }}
+            release_version: ${{ steps.release.outputs['version'] }}
+        steps:
+            - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+              id: release
+              if: github.repository_owner == 'ptarmiganlabs'
+              with:
+                  token: ${{ secrets.RELEASE_PLEASE_PAT }}
+                  config-file: release-please-config.json
+                  manifest-file: .release-please-manifest.json
+                  target-branch: main
+
+    build-release:
+        name: Build and attach release assets
+        needs: release-please
+        if: needs.release-please.outputs.releases_created == 'true'
+        runs-on:
+            - self-hosted
+            - linux
+            - plabs-ci
+        timeout-minutes: 20
+        permissions:
+            contents: write
+        env:
+            DIST_FILE_NAME: chatbox-qs
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v5.0.0
+              with:
+                  persist-credentials: false
+
+            - name: Setup Node.js
+              uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.0.0
+              with:
+                  node-version-file: .nvmrc
+                  package-manager-cache: false
+
+            - name: Pin npm
+              run: npm install -g npm@12.0.2
+
+            - name: Install dependencies
+              run: npm ci
+
+            - name: Package extension
+              run: npm run pack:prod
+
+            - name: Verify no external hosts in the bundle
+              run: npm run verify:airgap
+
+            # The outer archive users download: the extension zip, the licence and
+            # a readme. Built with archiver rather than the system `zip`, so the
+            # job does not depend on what happens to be installed on the runner.
+            - name: Assemble release archive
+              env:
+                  RELEASE_VERSION: ${{ needs.release-please.outputs.release_version }}
+              run: npm run release:package
+
+            - name: Generate CycloneDX SBOM
+              env:
+                  RELEASE_VERSION: ${{ needs.release-please.outputs.release_version }}
+              run: |
+                  SBOM_FILE="${DIST_FILE_NAME}-v${RELEASE_VERSION}.sbom.cdx.json"
+                  ./node_modules/.bin/cyclonedx-npm \
+                      --omit dev \
+                      --output-reproducible \
+                      --output-format JSON \
+                      --output-file "${SBOM_FILE}"
+                  test -s "${SBOM_FILE}" || { echo "SBOM missing or empty"; exit 1; }
+
+            - name: Show what is being released
+              env:
+                  RELEASE_VERSION: ${{ needs.release-please.outputs.release_version }}
+              run: |
+                  echo "=== outer archive ==="
+                  unzip -l "${DIST_FILE_NAME}-v${RELEASE_VERSION}.zip"
+                  echo "=== inner extension zip ==="
+                  unzip -l "${DIST_FILE_NAME}.zip"
+
+            - name: Upload release artifacts
+              uses: ncipollo/release-action@339a81892b84b4eeb0f6e744e4574d79d0d9b8dd # v1.21.0
+              with:
+                  allowUpdates: true
+                  omitBodyDuringUpdate: true
+                  omitNameDuringUpdate: true
+                  omitDraftDuringUpdate: true
+                  tag: ${{ needs.release-please.outputs.release_tag_name }}
+                  token: ${{ secrets.RELEASE_PLEASE_PAT }}
+                  artifacts: |
+                      ${{ env.DIST_FILE_NAME }}-v${{ needs.release-please.outputs.release_version }}.zip
+                      ${{ env.DIST_FILE_NAME }}-v${{ needs.release-please.outputs.release_version }}.sbom.cdx.json
