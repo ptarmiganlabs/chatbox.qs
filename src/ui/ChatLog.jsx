@@ -12,28 +12,13 @@
  * conversation each time.
  */
 import { useCallback, useState } from 'react';
-import { Virtuoso } from 'react-virtuoso';
+import { GroupedVirtuoso, Virtuoso } from 'react-virtuoso';
 import styles from './chat.module.css';
+import { buildDayGroups, startsCluster } from '../chat/grouping';
 import DetailReveal, { resolveRevealMode } from './DetailReveal';
+import { resolveDensity } from './density';
 import MessageRow from './render-message';
 import { Empty } from './states';
-
-/**
- * Decide whether a message continues the previous author's cluster.
- *
- * @param {object} message - The current message.
- * @param {?object} previous - The message before it, if any.
- * @param {number} gapSec - Maximum gap, in seconds, that still counts as one cluster.
- * @returns {boolean} True when the author header should be shown.
- */
-export function startsCluster(message, previous, gapSec) {
-    if (!previous) return true;
-    if (previous.authorKey !== message.authorKey) return true;
-    if (typeof message.ts === 'number' && typeof previous.ts === 'number') {
-        return Math.abs(message.ts - previous.ts) > gapSec * 1000;
-    }
-    return false;
-}
 
 /**
  * Report whether a bubble can be clicked, for the configured selection target.
@@ -72,6 +57,12 @@ export function ChatLog({ conversation, settings = {}, canSelect = false, onSele
     const [openId, setOpenId] = useState(null);
 
     const revealMode = resolveRevealMode(rect, settings.revealMode);
+    const density = resolveDensity(rect, settings.density);
+
+    // Null when nothing can be dated — also the signal to fall back to the
+    // ungrouped list rather than show a heading that means nothing.
+    const dayGroups =
+        settings.dateSeparators === false ? null : buildDayGroups(conversation.messages);
     const detailsOnClick = settings.onBubbleClick === 'showDetails';
 
     /**
@@ -110,6 +101,25 @@ export function ChatLog({ conversation, settings = {}, canSelect = false, onSele
             </div>
         );
     }
+
+    /**
+     * Day label to show before a message, for the non-virtualized path.
+     *
+     * GroupedVirtuoso renders its own sticky headers, so this is only needed
+     * where virtualization is off — the export path, which re-renders every row.
+     *
+     * @param {number} index - Index of the message.
+     * @returns {?string} The label, or null when this message continues the day.
+     */
+    const separatorBefore = (index) => {
+        if (!dayGroups) return null;
+        let seen = 0;
+        for (let g = 0; g < dayGroups.groupCounts.length; g += 1) {
+            if (index === seen) return dayGroups.labels[g] || null;
+            seen += dayGroups.groupCounts[g];
+        }
+        return null;
+    };
 
     /**
      * Render one virtualized row.
@@ -160,10 +170,16 @@ export function ChatLog({ conversation, settings = {}, canSelect = false, onSele
             />
         ) : null;
 
+    const rootClass = [
+        styles.root,
+        styles[`density${density[0].toUpperCase()}${density.slice(1)}`],
+        revealMode === 'pane' && detail ? styles.rootPaned : '',
+    ]
+        .filter(Boolean)
+        .join(' ');
+
     return (
-        <div
-            className={`${styles.root} ${revealMode === 'pane' && detail ? styles.rootPaned : ''}`}
-        >
+        <div className={rootClass} data-density={density}>
             {warnings.map((w) => (
                 <div key={w.code} className={`${styles.banner} ${styles.bannerWarning}`}>
                     {w.message}
@@ -175,7 +191,30 @@ export function ChatLog({ conversation, settings = {}, canSelect = false, onSele
                         // Export and print re-render from the layout in a headless
                         // browser, where a virtualized window would capture only the
                         // rows that happened to be visible.
-                        messages.map((_, i) => <div key={messages[i].id}>{renderRow(i)}</div>)
+                        messages.map((_, i) => (
+                            <div key={messages[i].id}>
+                                {separatorBefore(i) ? (
+                                    <div className={styles.separator}>{separatorBefore(i)}</div>
+                                ) : null}
+                                {renderRow(i)}
+                            </div>
+                        ))
+                    ) : dayGroups ? (
+                        // GroupedVirtuoso gives genuinely sticky day headers. A
+                        // separator rendered as an ordinary item cannot stick,
+                        // because the virtualizer positions items itself.
+                        <GroupedVirtuoso
+                            style={{ height: '100%' }}
+                            groupCounts={dayGroups.groupCounts}
+                            groupContent={(groupIndex) => (
+                                <div className={styles.separator}>
+                                    {dayGroups.labels[groupIndex]}
+                                </div>
+                            )}
+                            itemContent={renderRow}
+                            followOutput="smooth"
+                            increaseViewportBy={200}
+                        />
                     ) : (
                         <Virtuoso
                             style={{ height: '100%' }}
