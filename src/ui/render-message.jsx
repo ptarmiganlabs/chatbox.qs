@@ -38,6 +38,9 @@ function initials(label) {
  * @param {boolean} props.showAuthor - Whether to show the author header.
  * @param {boolean} props.showAvatar - Whether to render the avatar column.
  * @param {boolean} props.selectable - Whether clicking should act on the message.
+ * @param {number} [props.index] - Position in the conversation, for focus management.
+ * @param {boolean} [props.focused] - Whether this row currently holds roving focus.
+ * @param {boolean} [props.tabbable] - Whether this row is the list's single tab stop.
  * @param {boolean} [props.expanded] - Whether this message's detail is open.
  * @param {Function} [props.onSelect] - Click handler receiving the message.
  * @param {Function} [props.onShowDetails] - Opens the detail view, when clicking selects instead.
@@ -45,6 +48,9 @@ function initials(label) {
  */
 export function MessageRow({
     message,
+    index,
+    focused,
+    tabbable,
     showAuthor,
     showAvatar,
     selectable,
@@ -62,6 +68,7 @@ export function MessageRow({
         message.merged ? styles.bubbleMerged : '',
         selectable || onShowDetails ? styles.selectable : '',
         expanded ? styles.bubbleOpen : '',
+        focused ? styles.bubbleFocused : '',
         // 'X' excluded and 'A' alternative are both "not currently possible".
         // Native Sense charts grey both; dimming only 'X' left alternative-state
         // values looking fully selectable.
@@ -87,7 +94,10 @@ export function MessageRow({
      */
     const handleKeyDown = (event) => {
         if (!selectable) return;
-        if (event.key === 'Enter' || event.key === ' ') {
+        // Only when the list is not driving navigation. With roving focus the
+        // container owns Enter and Space, and handling them here as well would
+        // fire the action twice.
+        if (tabbable === undefined && (event.key === 'Enter' || event.key === ' ')) {
             event.preventDefault();
             onSelect?.(message);
         }
@@ -130,8 +140,13 @@ export function MessageRow({
                     className={bubbleClass}
                     onClick={handleClick}
                     onKeyDown={handleKeyDown}
+                    data-message-index={index}
                     role={selectable ? 'button' : undefined}
-                    tabIndex={selectable ? 0 : undefined}
+                    // Roving tabindex: only one row in the whole conversation is
+                    // reachable by Tab; the rest are reachable by arrow key.
+                    // Tabbing through hundreds of messages would otherwise make
+                    // the entire sheet unnavigable.
+                    tabIndex={tabbable ? 0 : -1}
                     aria-expanded={
                         onShowDetails || expanded !== undefined ? Boolean(expanded) : undefined
                     }

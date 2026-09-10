@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { VirtuosoMockContext } from 'react-virtuoso';
 import ChatLog from '../../src/ui/ChatLog';
 
@@ -124,5 +124,124 @@ describe('ChatLog density', () => {
             />
         );
         expect(container.querySelector('[data-density="comfortable"]')).toBeTruthy();
+    });
+});
+
+describe('ChatLog keyboard navigation', () => {
+    const five = Array.from({ length: 5 }, (_, i) =>
+        message({ id: String(i + 1), body: `msg ${i + 1}` })
+    );
+
+    /** Sense manages keyboard handling and has handed focus to this object. */
+    const active = { enabled: true, active: true, blur: () => {} };
+    /** Sense manages keyboard handling and has NOT handed focus over. */
+    const inactive = { enabled: true, active: false, blur: () => {} };
+
+    it('exposes exactly ONE tab stop for the whole conversation', () => {
+        // The point of roving tabindex. One stop, not one per message.
+        const { container } = renderList(
+            <ChatLog conversation={conversation(five)} settings={{}} keyboard={active} />
+        );
+        const stops = container.querySelectorAll('[tabindex="0"]');
+        expect(stops).toHaveLength(1);
+    });
+
+    it("makes the virtualizer's own scroller non-tabbable", () => {
+        // react-virtuoso sets tabIndex=0 on its scroller by default. Left alone
+        // that is a second tab stop for the list, present even when Sense has
+        // not handed focus over — so the roving tabindex would not be the only
+        // one. Pinned here because a virtuoso upgrade could reintroduce it.
+        const { container } = renderList(
+            <ChatLog conversation={conversation(five)} settings={{}} keyboard={active} />
+        );
+        const zeros = [...container.querySelectorAll('[tabindex="0"]')];
+        expect(zeros).toHaveLength(1);
+        expect(zeros[0].getAttribute('data-message-index')).not.toBeNull();
+    });
+
+    it('exposes NO tab stop when Sense has not handed focus over', () => {
+        const { container } = renderList(
+            <ChatLog conversation={conversation(five)} settings={{}} keyboard={inactive} />
+        );
+        expect(container.querySelectorAll('[tabindex="0"]')).toHaveLength(0);
+    });
+
+    it('moves focus with arrow keys', () => {
+        const { container } = renderList(
+            <ChatLog conversation={conversation(five)} settings={{}} keyboard={active} />
+        );
+        const list = container.querySelector('[role="list"]');
+
+        fireEvent.keyDown(list, { key: 'ArrowDown' });
+        expect(container.querySelector('[data-message-index="0"][tabindex="0"]')).toBeTruthy();
+
+        fireEvent.keyDown(list, { key: 'ArrowDown' });
+        expect(container.querySelector('[data-message-index="1"][tabindex="0"]')).toBeTruthy();
+
+        fireEvent.keyDown(list, { key: 'ArrowUp' });
+        expect(container.querySelector('[data-message-index="0"][tabindex="0"]')).toBeTruthy();
+    });
+
+    it('jumps to either end with Home and End', () => {
+        const { container } = renderList(
+            <ChatLog conversation={conversation(five)} settings={{}} keyboard={active} />
+        );
+        const list = container.querySelector('[role="list"]');
+        fireEvent.keyDown(list, { key: 'End' });
+        expect(container.querySelector('[data-message-index="4"][tabindex="0"]')).toBeTruthy();
+        fireEvent.keyDown(list, { key: 'Home' });
+        expect(container.querySelector('[data-message-index="0"][tabindex="0"]')).toBeTruthy();
+    });
+
+    it('opens and closes the detail with Enter and Escape', () => {
+        const { container } = renderList(
+            <ChatLog
+                conversation={conversation(five)}
+                settings={{}}
+                rect={{ width: 900, height: 600 }}
+                keyboard={active}
+            />
+        );
+        const list = container.querySelector('[role="list"]');
+        fireEvent.keyDown(list, { key: 'ArrowDown' });
+        fireEvent.keyDown(list, { key: 'Enter' });
+        expect(screen.getByLabelText('Message details')).toBeInTheDocument();
+
+        fireEvent.keyDown(list, { key: 'Escape' });
+        expect(screen.queryByLabelText('Message details')).not.toBeInTheDocument();
+    });
+
+    it('hands focus back to Sense on Escape when no detail is open', () => {
+        // Otherwise the reader is trapped in the conversation and cannot tab on
+        // to the rest of the sheet.
+        let blurred = null;
+        const keyboard = {
+            enabled: true,
+            active: true,
+            blur: (v) => {
+                blurred = v;
+            },
+        };
+        const { container } = renderList(
+            <ChatLog conversation={conversation(five)} settings={{}} keyboard={keyboard} />
+        );
+        const list = container.querySelector('[role="list"]');
+        fireEvent.keyDown(list, { key: 'ArrowDown' });
+        fireEvent.keyDown(list, { key: 'Escape' });
+        expect(blurred).toBe(true);
+    });
+
+    it('ignores keys entirely when it may not hold focus', () => {
+        const { container } = renderList(
+            <ChatLog conversation={conversation(five)} settings={{}} keyboard={inactive} />
+        );
+        const list = container.querySelector('[role="list"]');
+        fireEvent.keyDown(list, { key: 'ArrowDown' });
+        expect(container.querySelectorAll('[tabindex="0"]')).toHaveLength(0);
+    });
+
+    it('announces how many messages the list holds', () => {
+        renderList(<ChatLog conversation={conversation(five)} settings={{}} keyboard={active} />);
+        expect(screen.getByLabelText('Conversation, 5 messages')).toBeInTheDocument();
     });
 });

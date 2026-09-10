@@ -11,12 +11,13 @@
  * every selection change, and a polite live region would announce the entire
  * conversation each time.
  */
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { GroupedVirtuoso, Virtuoso } from 'react-virtuoso';
 import styles from './chat.module.css';
 import { buildDayGroups, startsCluster } from '../chat/grouping';
 import DetailReveal, { resolveRevealMode } from './DetailReveal';
 import { resolveDensity } from './density';
+import { canReceiveTabStop, keyAction, nextFocusIndex } from './keyboard';
 import MessageRow from './render-message';
 import { Empty } from './states';
 
@@ -46,9 +47,17 @@ export function isSelectable(message, mode) {
  * @param {boolean} [props.canSelect] - Whether selections are permitted.
  * @param {Function} [props.onSelect] - Called with a message on click.
  * @param {object} [props.rect] - The object's rect, for choosing a detail presentation.
+ * @param {object} [props.keyboard] - The object returned by useKeyboard().
  * @returns {object} The rendered conversation.
  */
-export function ChatLog({ conversation, settings = {}, canSelect = false, onSelect, rect }) {
+export function ChatLog({
+    conversation,
+    settings = {},
+    canSelect = false,
+    onSelect,
+    rect,
+    keyboard,
+}) {
     const { messages, diagnostics } = conversation;
 
     // Which message's detail is open, by id. Held here rather than per-row so
@@ -82,6 +91,27 @@ export function ChatLog({ conversation, settings = {}, canSelect = false, onSele
      */
     const closeDetail = useCallback(() => setOpenId(null), []);
 
+    // Roving tabindex: exactly one message is tabbable at a time, so the whole
+    // conversation costs the sheet a single tab stop instead of one per message.
+    const [focusIndex, setFocusIndex] = useState(-1);
+    const listRef = useRef(null);
+    const virtuosoRef = useRef(null);
+    const tabbable = canReceiveTabStop(keyboard);
+
+    // Move real DOM focus after the index changes. In a virtualized list the
+    // target may not be mounted yet, so scroll it into view first and focus on
+    // the next frame once it exists.
+    useEffect(() => {
+        if (focusIndex < 0 || !tabbable) return undefined;
+        let frame = 0;
+        virtuosoRef.current?.scrollIntoView?.({ index: focusIndex });
+        frame = requestAnimationFrame(() => {
+            const node = listRef.current?.querySelector(`[data-message-index="${focusIndex}"]`);
+            node?.focus?.();
+        });
+        return () => cancelAnimationFrame(frame);
+    }, [focusIndex, tabbable]);
+
     // Every warning is rendered, not just the first. Truncation and merged
     // bubbles can both be live at once, and showing only one silently hides
     // the fact that messages were dropped.
@@ -101,6 +131,45 @@ export function ChatLog({ conversation, settings = {}, canSelect = false, onSele
             </div>
         );
     }
+
+    /**
+     * Handle keyboard navigation for the whole list.
+     *
+     * Bound on the container rather than per row, so it keeps working while
+     * focus is on a row that virtualization is about to unmount.
+     *
+     * @param {object} event - The React keyboard event.
+     * @returns {void}
+     */
+    const handleKeyDown = (event) => {
+        if (!tabbable) return;
+
+        const moved = nextFocusIndex(event.key, focusIndex, messages.length);
+        if (moved !== null) {
+            event.preventDefault();
+            setFocusIndex(moved);
+            return;
+        }
+
+        const action = keyAction(event.key);
+        if (action === 'activate' && focusIndex >= 0) {
+            event.preventDefault();
+            toggleDetail(messages[focusIndex]);
+            return;
+        }
+        if (action === 'dismiss') {
+            event.preventDefault();
+            // Escape closes the detail if one is open; a second Escape hands
+            // focus back to Sense so the reader can carry on tabbing the sheet
+            // rather than being trapped in the conversation.
+            if (openId) {
+                closeDetail();
+            } else {
+                setFocusIndex(-1);
+                keyboard?.blur?.(true);
+            }
+        }
+    };
 
     /**
      * Day label to show before a message, for the non-virtualized path.
@@ -136,6 +205,9 @@ export function ChatLog({ conversation, settings = {}, canSelect = false, onSele
             <>
                 <MessageRow
                     message={message}
+                    index={index}
+                    focused={index === focusIndex}
+                    tabbable={tabbable && (focusIndex === -1 ? index === 0 : index === focusIndex)}
                     showAuthor={showAuthor}
                     showAvatar={showAvatars}
                     selectable={
@@ -186,7 +258,13 @@ export function ChatLog({ conversation, settings = {}, canSelect = false, onSele
                 </div>
             ))}
             <div className={styles.main}>
-                <div className={styles.list} role="list" aria-label="Conversation">
+                <div
+                    className={styles.list}
+                    role="list"
+                    aria-label={`Conversation, ${messages.length} messages`}
+                    ref={listRef}
+                    onKeyDown={handleKeyDown}
+                >
                     {settings.virtualize === false ? (
                         // Export and print re-render from the layout in a headless
                         // browser, where a virtualized window would capture only the
@@ -204,6 +282,13 @@ export function ChatLog({ conversation, settings = {}, canSelect = false, onSele
                         // separator rendered as an ordinary item cannot stick,
                         // because the virtualizer positions items itself.
                         <GroupedVirtuoso
+                            ref={virtuosoRef}
+                            // react-virtuoso makes its scroller tabbable by
+                            // default. Left alone that is a second tab stop for
+                            // the list, and it exists even when Sense has not
+                            // handed focus to this object — so the roving
+                            // tabindex below would not actually be the only one.
+                            tabIndex={-1}
                             style={{ height: '100%' }}
                             groupCounts={dayGroups.groupCounts}
                             groupContent={(groupIndex) => (
@@ -217,6 +302,13 @@ export function ChatLog({ conversation, settings = {}, canSelect = false, onSele
                         />
                     ) : (
                         <Virtuoso
+                            ref={virtuosoRef}
+                            // react-virtuoso makes its scroller tabbable by
+                            // default. Left alone that is a second tab stop for
+                            // the list, and it exists even when Sense has not
+                            // handed focus to this object — so the roving
+                            // tabindex below would not actually be the only one.
+                            tabIndex={-1}
                             style={{ height: '100%' }}
                             totalCount={messages.length}
                             itemContent={renderRow}
