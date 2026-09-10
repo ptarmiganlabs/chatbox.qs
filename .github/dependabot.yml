@@ -16,3 +16,13 @@ updates:
           default-days: 7
       schedule:
           interval: 'weekly'
+      groups:
+          # Every github/codeql-action/* step must run the SAME version: init,
+          # analyze and upload-sarif share a configuration file, and a mismatch
+          # fails with "Loaded a configuration file for version X, but running
+          # version Y". Ungrouped, Dependabot opens one pull request per step,
+          # and each one is unmergeable on its own because it leaves the others
+          # behind. PRs #18 and #19 were exactly that.
+          codeql-action:
+              patterns:
+                  - 'github/codeql-action*'
