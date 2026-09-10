@@ -308,6 +308,56 @@
     white-space: pre-wrap;
 }
 
+/* Markdown produces block elements; the surrounding bubble is already tight, so
+   strip the outer margins rather than letting a paragraph add its own. */
+.bodyMarkdown {
+    white-space: normal;
+}
+
+.bodyMarkdown > :first-child {
+    margin-top: 0;
+}
+
+.bodyMarkdown > :last-child {
+    margin-bottom: 0;
+}
+
+.bodyMarkdown p {
+    margin: 0 0 0.4em;
+}
+
+.bodyMarkdown ul,
+.bodyMarkdown ol {
+    margin: 0 0 0.4em;
+    padding-inline-start: 1.2em;
+}
+
+.bodyMarkdown code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.92em;
+    padding: 0 3px;
+    border-radius: 3px;
+    background: rgb(0 0 0 / 6%);
+}
+
+.bodyMarkdown pre {
+    margin: 0 0 0.4em;
+    padding: 6px 8px;
+    border-radius: 4px;
+    overflow-x: auto;
+    background: rgb(0 0 0 / 6%);
+}
+
+.bodyMarkdown table {
+    border-collapse: collapse;
+}
+
+.bodyMarkdown th,
+.bodyMarkdown td {
+    border: 1px solid var(--cqs-border, #d9d9d9);
+    padding: 2px 6px;
+}
+
 .bodyMissing {
     font-style: italic;
     color: var(--cqs-muted, #6c6c6c);

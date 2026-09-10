@@ -165,5 +165,11 @@ export function qlikTimeToEpochMs(value) {
     if (typeof value !== 'number' || !Number.isFinite(value)) return null;
     if (Math.abs(value) >= 1e11) return value;
     // 25569 is the Qlik/Excel day serial for 1970-01-01.
-    return (value - 25569) * 86400000;
+    //
+    // Rounded, because the multiplication does not land on a whole millisecond:
+    // a serial for midnight came back as ...999.9995, which Date truncates to
+    // one millisecond BEFORE midnight — putting the message under the previous
+    // day's separator. Sub-millisecond error is invisible until something groups
+    // by day, and then it is wrong only for messages exactly on the boundary.
+    return Math.round((value - 25569) * 86400000);
 }

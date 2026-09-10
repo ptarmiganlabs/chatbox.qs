@@ -245,3 +245,52 @@ describe('ChatLog keyboard navigation', () => {
         expect(screen.getByLabelText('Conversation, 5 messages')).toBeInTheDocument();
     });
 });
+
+describe('ChatLog snapshot rendering', () => {
+    const ten = Array.from({ length: 10 }, (_, i) => message({ id: String(i), body: `msg ${i}` }));
+
+    /** A layout as it arrives when Sense re-renders a snapshot. */
+    const snapLayout = (state) => ({
+        snapshotData: { chatbox: { firstVisibleIndex: 0, openId: null, ...state } },
+    });
+
+    it('renders EVERY message for a snapshot, ignoring the virtualize setting', () => {
+        // The export browser photographs whatever it is given. A virtualized
+        // render captures one screen and drops the rest, which reads as data
+        // loss rather than a rendering choice.
+        renderList(
+            <ChatLog
+                conversation={conversation(ten)}
+                settings={{ virtualize: true }}
+                layout={snapLayout()}
+            />
+        );
+        for (let i = 0; i < 10; i += 1) {
+            expect(screen.getByText(`msg ${i}`)).toBeInTheDocument();
+        }
+    });
+
+    it('restores the detail that was open when the snapshot was taken', () => {
+        renderList(
+            <ChatLog
+                conversation={conversation(ten)}
+                settings={{}}
+                rect={{ width: 900, height: 600 }}
+                layout={snapLayout({ openId: '3' })}
+            />
+        );
+        expect(screen.getByLabelText('Message details')).toBeInTheDocument();
+    });
+
+    it('opens nothing on an ordinary render', () => {
+        renderList(
+            <ChatLog
+                conversation={conversation(ten)}
+                settings={{}}
+                rect={{ width: 900, height: 600 }}
+                layout={{}}
+            />
+        );
+        expect(screen.queryByLabelText('Message details')).not.toBeInTheDocument();
+    });
+});

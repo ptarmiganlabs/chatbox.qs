@@ -122,9 +122,14 @@ async function assertNoDevJsxRuntime() {
     } catch {
         return;
     }
-    if (source.includes('jsxDEV')) {
+    // Match an INVOCATION, `jsxDEV(`, not the bare identifier. Libraries that
+    // support both runtimes — hast-util-to-jsx-runtime, via react-markdown —
+    // legitimately name jsxDEV as an option and guard it behind a development
+    // flag, so `source.includes('jsxDEV')` reports them as a broken build.
+    // The defect this exists to catch produces real call sites: `rl.jsxDEV("img", …)`.
+    if (/jsxDEV\s*\(/.test(source)) {
         console.error(
-            `post-build: FAILED — ${bundle} contains jsxDEV calls.\n` +
+            `post-build: FAILED — ${bundle} contains jsxDEV CALL sites.\n` +
                 '  Babel compiled JSX in development mode while Rollup bundled the production\n' +
                 '  React runtime, where jsxDEV is undefined. The extension would render nothing.\n' +
                 '  Fix: ensure NODE_ENV matches the nebula --mode in the build script.'

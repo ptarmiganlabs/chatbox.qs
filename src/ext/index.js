@@ -28,8 +28,15 @@ import { metadataSection } from './metadata-section';
 export default function ext(_galaxy) {
     return {
         support: {
-            snapshot: false,
-            export: false,
+            // Snapshot and export re-render from the captured layout in a
+            // backend browser, so the view state a reader cares about — scroll
+            // position, the open detail — is written into that layout by
+            // onTakeSnapshot and read back on the far side. Virtualization is
+            // also turned off for those renders: the export browser photographs
+            // whatever it is given, and a virtualized render would capture one
+            // screen of the conversation and silently drop the rest.
+            snapshot: true,
+            export: true,
             exportData: true,
             sharing: false,
             viewData: false,

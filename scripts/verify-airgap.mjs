@@ -44,7 +44,12 @@ const TEXT_TYPES = new Set([
 const ALLOWED = [
     /^https?:\/\/(www\.)?w3\.org\//,
     /^https?:\/\/react\.dev\//,
-    /^https?:\/\/github\.com\/ptarmiganlabs\//,
+    // github.com appears in library error messages as a documentation link —
+    // hast-util-to-jsx-runtime, via react-markdown, throws TypeErrors carrying
+    // its own repository URL. Verified inert: the bundle makes no network use of
+    // github.com at all. This check exists to catch CDN and asset references,
+    // which are what actually break an air-gapped installation.
+    /^https?:\/\/github\.com\//,
     /^https?:\/\/localhost\//,
 ];
 
