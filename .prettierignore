@@ -3,3 +3,11 @@ chatbox-qs-ext
 node_modules
 *.zip
 coverage
+release-staging
+
+# Generated and owned by release-please, which rewrites them in its own format
+# on every release. Formatting them here does not stick — the next release
+# regenerates them — so `npm run format:check` would fail on every release pull
+# request, permanently, and the only fix would be to stop checking formatting.
+CHANGELOG.md
+.release-please-manifest.json
