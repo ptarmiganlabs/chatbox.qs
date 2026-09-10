@@ -18,6 +18,7 @@ import { buildDayGroups, startsCluster } from '../chat/grouping';
 import DetailReveal, { resolveRevealMode } from './DetailReveal';
 import { resolveDensity } from './density';
 import { canReceiveTabStop, keyAction, nextFocusIndex } from './keyboard';
+import { readSnapshot, shouldRenderAll } from './snapshot';
 import MessageRow from './render-message';
 import { Empty } from './states';
 
@@ -48,6 +49,8 @@ export function isSelectable(message, mode) {
  * @param {Function} [props.onSelect] - Called with a message on click.
  * @param {object} [props.rect] - The object's rect, for choosing a detail presentation.
  * @param {object} [props.keyboard] - The object returned by useKeyboard().
+ * @param {object} [props.layout] - The object layout, for snapshot state.
+ * @param {Function} [props.onViewState] - Reports { firstVisibleIndex, openId } as it changes.
  * @returns {object} The rendered conversation.
  */
 export function ChatLog({
@@ -57,13 +60,18 @@ export function ChatLog({
     onSelect,
     rect,
     keyboard,
+    layout,
+    onViewState,
 }) {
+    // State captured when a snapshot was taken. Null for a normal render.
+    const snapshot = readSnapshot(layout);
+    const renderAll = shouldRenderAll(layout, settings);
     const { messages, diagnostics } = conversation;
 
     // Which message's detail is open, by id. Held here rather than per-row so
     // opening one closes any other, and so the pane and overlay presentations
     // have somewhere to read from.
-    const [openId, setOpenId] = useState(null);
+    const [openId, setOpenId] = useState(snapshot?.openId ?? null);
 
     const revealMode = resolveRevealMode(rect, settings.revealMode);
     const density = resolveDensity(rect, settings.density);
@@ -90,6 +98,29 @@ export function ChatLog({
      * @returns {void}
      */
     const closeDetail = useCallback(() => setOpenId(null), []);
+
+    // The first visible row, reported upward so a snapshot can capture where the
+    // reader was. Kept in a ref as well: the snapshot callback runs outside
+    // React and needs the current value, not the one from its closure.
+    const firstVisibleRef = useRef(0);
+
+    /**
+     * Record the visible range and report it upward.
+     *
+     * @param {object} range - Virtuoso's { startIndex, endIndex }.
+     * @returns {void}
+     */
+    const handleRangeChanged = useCallback(
+        (range) => {
+            firstVisibleRef.current = range?.startIndex ?? 0;
+            onViewState?.({ firstVisibleIndex: firstVisibleRef.current, openId });
+        },
+        [onViewState, openId]
+    );
+
+    useEffect(() => {
+        onViewState?.({ firstVisibleIndex: firstVisibleRef.current, openId });
+    }, [onViewState, openId]);
 
     // Roving tabindex: exactly one message is tabbable at a time, so the whole
     // conversation costs the sheet a single tab stop instead of one per message.
@@ -265,7 +296,7 @@ export function ChatLog({
                     ref={listRef}
                     onKeyDown={handleKeyDown}
                 >
-                    {settings.virtualize === false ? (
+                    {renderAll ? (
                         // Export and print re-render from the layout in a headless
                         // browser, where a virtualized window would capture only the
                         // rows that happened to be visible.
@@ -283,6 +314,8 @@ export function ChatLog({
                         // because the virtualizer positions items itself.
                         <GroupedVirtuoso
                             ref={virtuosoRef}
+                            initialTopMostItemIndex={snapshot?.firstVisibleIndex ?? 0}
+                            rangeChanged={handleRangeChanged}
                             // react-virtuoso makes its scroller tabbable by
                             // default. Left alone that is a second tab stop for
                             // the list, and it exists even when Sense has not
@@ -303,6 +336,8 @@ export function ChatLog({
                     ) : (
                         <Virtuoso
                             ref={virtuosoRef}
+                            initialTopMostItemIndex={snapshot?.firstVisibleIndex ?? 0}
+                            rangeChanged={handleRangeChanged}
                             // react-virtuoso makes its scroller tabbable by
                             // default. Left alone that is a second tab stop for
                             // the list, and it exists even when Sense has not

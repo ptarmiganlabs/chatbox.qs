@@ -106,3 +106,12 @@ describe('appearance: density', () => {
         expect(definition.items.appearance.items.dateSeparators.defaultValue).toBe(true);
     });
 });
+
+describe('support flags', () => {
+    it('declares snapshot and export support', () => {
+        const support = ext({}).support;
+        expect(support.snapshot).toBe(true);
+        expect(support.export).toBe(true);
+        expect(support.exportData).toBe(true);
+    });
+});

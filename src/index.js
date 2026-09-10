@@ -11,6 +11,7 @@ import {
     useElement,
     useInteractionState,
     useKeyboard,
+    onTakeSnapshot,
     useLayout,
     useModel,
     useRect,
@@ -29,6 +30,7 @@ import { normalize } from './chat/normalize';
 import { fetchAllRows } from './qix/paging';
 import { ROLES, dimensionIndex, resolveRoles } from './qix/column-map';
 import { syncAttributeExpressions } from './qix/sync-attrs';
+import { isSnapshot, writeSnapshot } from './ui/snapshot';
 import { render, destroy } from './ui/chat-renderer';
 import ChatLog from './ui/ChatLog';
 import { Empty, Failed, Loading, NotConfigured } from './ui/states';
@@ -75,6 +77,29 @@ export default function supernova(galaxy) {
             // per message into the sheet.
             const keyboard = useKeyboard();
 
+            // Where the reader is in the conversation. Held in a ref because
+            // the snapshot callback runs outside React's render and must read
+            // the value as it is now, not as it was when the callback was made.
+            const viewStateRef = useRef({ firstVisibleIndex: 0, openId: null });
+
+            /**
+             * Record the view state reported by the conversation.
+             *
+             * @param {object} state - { firstVisibleIndex, openId }.
+             * @returns {void}
+             */
+            const handleViewState = (state) => {
+                viewStateRef.current = state;
+            };
+
+            // Sense does not photograph the live DOM: it captures this layout,
+            // re-renders from it in a backend browser and photographs that. So
+            // anything that must survive — scroll position, the open detail —
+            // has to be written into the layout copy here.
+            onTakeSnapshot(async (snapshotLayout) =>
+                writeSnapshot(snapshotLayout, viewStateRef.current)
+            );
+
             // Page against the STALE layout: it is pinned while a selection is
             // in progress, so an in-flight brush cannot restart a multi-round-trip
             // paging loop. The live layout is only used for the qState highlight.
@@ -113,7 +138,10 @@ export default function supernova(galaxy) {
                 syncAttributeExpressions({
                     model,
                     layout: staleLayout,
-                    canEdit: Boolean(interactions?.edit),
+                    // Never during a snapshot render. Edit mode should already
+                    // be false there, but a render that patches properties is
+                    // export-hostile enough to be worth guarding twice.
+                    canEdit: Boolean(interactions?.edit) && !isSnapshot(staleLayout),
                 });
             }, [model, staleLayout, interactions]);
 
@@ -247,6 +275,8 @@ export default function supernova(galaxy) {
                     onSelect,
                     rect,
                     keyboard,
+                    layout: staleLayout,
+                    onViewState: handleViewState,
                 });
                 return undefined;
             }, [
