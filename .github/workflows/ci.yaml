@@ -1,10 +1,13 @@
 # Verification on every pull request, and release automation on main.
 #
-# Everything that runs repository code runs on the org's self-hosted Linux pool.
-# The `plabs-ci` label is not decoration: other self-hosted Linux runners answer
-# self-hosted/Linux/sp53 from the pve101 Docker host and do not carry the same
-# tooling, so a runs-on without it can dispatch there and fail as a broken build
-# rather than as the routing mistake it is.
+# GitHub-hosted runners, matching onboard.qs and help-button.qs.
+#
+# This repository is public, and a public repository must not run pull-request
+# code on self-hosted runners: anyone can open a pull request from a fork, and
+# the job would then execute their code on the plabs-ci pool, which is shared
+# with every other repository that uses it. Hosted runners are free for public
+# repositories and are destroyed after each job, so an untrusted pull request
+# gets a clean throwaway machine instead of ours.
 name: ci
 
 on:
@@ -15,8 +18,8 @@ on:
 
 permissions: {}
 
-# A force-push should not leave the superseded run holding pool slots. The pool
-# has twelve, shared across every repository that uses it.
+# A force-push should not leave a superseded run burning minutes. Keyed on
+# run_id for pushes so a release run can never cancel itself mid-flight.
 concurrency:
     group: ci-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
     cancel-in-progress: true
@@ -24,29 +27,24 @@ concurrency:
 jobs:
     verify:
         name: Lint, test and package
-        runs-on:
-            - self-hosted
-            - linux
-            - plabs-ci
+        runs-on: ubuntu-latest
         timeout-minutes: 15
         permissions:
             contents: read
         steps:
             - name: Checkout repository
-              uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v5.0.0
+              uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
               with:
                   persist-credentials: false
 
             - name: Setup Node.js
-              uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.0.0
+              uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
               with:
                   node-version-file: .nvmrc
-                  # Self-hosted: the runner keeps its own npm cache between jobs,
-                  # so the action's cache is a slower duplicate of it.
                   package-manager-cache: false
 
             # @nebula.js/cli hard-enforces its Node floor and exits 1 with no
-            # message below it, so pin npm too rather than inherit whatever the
+            # message below it, so pin npm rather than inherit whatever the
             # runner image happens to carry.
             - name: Pin npm
               run: npm install -g npm@12.0.2
@@ -75,7 +73,7 @@ jobs:
               run: npm run verify:airgap
 
             - name: Upload extension artifact
-              uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v4.4.3
+              uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
               with:
                   name: chatbox-qs-${{ github.sha }}
                   path: chatbox-qs.zip
@@ -86,10 +84,7 @@ jobs:
         name: Release please
         needs: verify
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        runs-on:
-            - self-hosted
-            - linux
-            - plabs-ci
+        runs-on: ubuntu-latest
         timeout-minutes: 10
         permissions:
             contents: write
@@ -112,10 +107,7 @@ jobs:
         name: Build and attach release assets
         needs: release-please
         if: needs.release-please.outputs.releases_created == 'true'
-        runs-on:
-            - self-hosted
-            - linux
-            - plabs-ci
+        runs-on: ubuntu-latest
         timeout-minutes: 20
         permissions:
             contents: write
@@ -123,12 +115,12 @@ jobs:
             DIST_FILE_NAME: chatbox-qs
         steps:
             - name: Checkout repository
-              uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v5.0.0
+              uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
               with:
                   persist-credentials: false
 
             - name: Setup Node.js
-              uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.0.0
+              uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
               with:
                   node-version-file: .nvmrc
                   package-manager-cache: false
