@@ -15,7 +15,7 @@
  *    warning renders a badge beside the conversation; it never blanks the chart.
  */
 import { ATTR_IDS, attrValue, buildAttrMap } from '../qix/attr-map';
-import { ROLES, resolveRoles } from '../qix/column-map';
+import { ROLES, kpiColumns, resolveRoles } from '../qix/column-map';
 import * as cell from '../qix/read-cell';
 import {
     NULL_SENTINEL,
@@ -63,7 +63,7 @@ export function normalize({ layout, rows, props = {}, theme, area }) {
 
     if (!hc) return emptyConversation(diagnostics);
 
-    const { byRole, missing } = resolveRoles(layout, props.roles);
+    const { columns, byRole, missing } = resolveRoles(layout, props.roles);
     if (missing.length) {
         diagnostics.push({
             severity: SEVERITY.ERROR,
@@ -82,6 +82,9 @@ export function normalize({ layout, rows, props = {}, theme, area }) {
     // Attribute expressions ride on the message-id dimension. Build the
     // id -> index map once per layout; never index into qValues by a literal.
     const attrMap = buildAttrMap(idCol.info);
+
+    // Measures beyond the text and the integrity probe are per-message KPIs.
+    const kpiCols = kpiColumns(columns, byRole);
 
     const palette = paletteFromTheme(theme);
     const participants = new Map();
@@ -156,7 +159,12 @@ export function normalize({ layout, rows, props = {}, theme, area }) {
             accent: safeColor(attrValue(idCell, attrMap, ATTR_IDS.ACCENT)),
             badge: attrText(attrValue(idCell, attrMap, ATTR_IDS.BADGE)),
             sideHint: attrValue(idCell, attrMap, ATTR_IDS.SIDE)?.qNum ?? null,
-            kpis: [],
+            kpis: kpiCols.map((column) => ({
+                key: column.cId || `msr-${column.col}`,
+                label: column.label,
+                text: cell.text(row[column.col]),
+                num: cell.num(row[column.col]),
+            })),
             state: cell.state(authorCell),
             rowIdx: cell.absoluteRow(area, i),
             merged,

@@ -407,3 +407,52 @@ describe('merged bubbles — body regression', () => {
         expect(m.body).toBe('well - maybe');
     });
 });
+
+describe('per-message KPIs', () => {
+    function kpiLayout() {
+        return {
+            qHyperCube: {
+                qSize: { qcx: 6, qcy: 1 },
+                qDimensionInfo: [{ cId: 'd_msgid' }, { cId: 'd_author' }, { cId: 'd_thread' }],
+                qMeasureInfo: [
+                    { cId: 'm_text' },
+                    { cId: 'm_dupcheck' },
+                    { cId: 'm_sent', qFallbackTitle: 'Sentiment' },
+                ],
+            },
+        };
+    }
+
+    it('exposes measures beyond the role measures as KPIs', () => {
+        const r = row({ id: '1', author: 'Ada', text: 'hi' });
+        r.push({ qText: '0.82', qNum: 0.82 });
+        const m = normalize({ layout: kpiLayout(), rows: [r] }).messages[0];
+
+        expect(m.kpis).toHaveLength(1);
+        expect(m.kpis[0]).toMatchObject({ label: 'Sentiment', text: '0.82', num: 0.82 });
+    });
+
+    it('does NOT expose the integrity probe as a KPI', () => {
+        // It is an internal correctness signal, not something to show a user.
+        const r = row({ id: '1', author: 'Ada', text: 'hi' });
+        r.push({ qText: '0.82', qNum: 0.82 });
+        const m = normalize({ layout: kpiLayout(), rows: [r] }).messages[0];
+        expect(m.kpis.map((k) => k.label)).not.toContain('_rows');
+    });
+
+    it('gives every message an empty KPI list when there are no extra measures', () => {
+        const m = normalize({
+            layout: makeLayout({ qcy: 1 }),
+            rows: [row({ id: '1', author: 'Ada', text: 'hi' })],
+        }).messages[0];
+        expect(m.kpis).toEqual([]);
+    });
+
+    it('keeps a non-numeric KPI readable rather than dropping it', () => {
+        const r = row({ id: '1', author: 'Ada', text: 'hi' });
+        r.push({ qText: 'high', qNum: 'NaN' });
+        const m = normalize({ layout: kpiLayout(), rows: [r] }).messages[0];
+        expect(m.kpis[0].text).toBe('high');
+        expect(m.kpis[0].num).toBeNull();
+    });
+});

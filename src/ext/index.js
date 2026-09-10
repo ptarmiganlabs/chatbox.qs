@@ -16,6 +16,7 @@
 import { aboutSection } from './about-section';
 import { appearanceSection } from './appearance-section';
 import { behaviourSection } from './behaviour-section';
+import { detailSection } from './detail-section';
 import { metadataSection } from './metadata-section';
 
 /**
@@ -44,6 +45,7 @@ export default function ext(_galaxy) {
                 data: { uses: 'data' },
                 appearance: appearanceSection(),
                 metadata: metadataSection(),
+                detail: detailSection(),
                 behaviour: behaviourSection(),
                 addons: { uses: 'addons', items: { dataHandling: { uses: 'dataHandling' } } },
                 about: aboutSection(),

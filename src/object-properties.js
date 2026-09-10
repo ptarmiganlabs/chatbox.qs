@@ -92,6 +92,7 @@ export default {
         bodyFormat: 'text', // 'text' | 'markdown'  — markdown is opt-in
         maxMessages: 5000,
         onBubbleClick: 'selectAuthor',
+        revealMode: 'auto', // 'auto' | 'pane' | 'overlay' | 'inline'
         virtualize: true,
     },
 };
