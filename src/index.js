@@ -82,15 +82,23 @@ export default function supernova(galaxy) {
             // the value as it is now, not as it was when the callback was made.
             const viewStateRef = useRef({ firstVisibleIndex: 0, openId: null });
 
-            /**
-             * Record the view state reported by the conversation.
-             *
-             * @param {object} state - { firstVisibleIndex, openId }.
-             * @returns {void}
-             */
-            const handleViewState = (state) => {
-                viewStateRef.current = state;
-            };
+            // Held in a ref so its identity is stable across renders. A fresh
+            // function each render would change the `rangeChanged` prop on the
+            // virtualizer every time, and re-run the effect that reports view
+            // state — needless work on every frame of a drag-resize, which is
+            // precisely when a long conversation can least afford it.
+            const handleViewStateRef = useRef(null);
+            if (!handleViewStateRef.current) {
+                /**
+                 * Record the view state reported by the conversation.
+                 *
+                 * @param {object} state - { firstVisibleIndex, openId }.
+                 * @returns {void}
+                 */
+                handleViewStateRef.current = (state) => {
+                    viewStateRef.current = state;
+                };
+            }
 
             // Sense does not photograph the live DOM: it captures this layout,
             // re-renders from it in a backend browser and photographs that. So
@@ -276,7 +284,7 @@ export default function supernova(galaxy) {
                     rect,
                     keyboard,
                     layout: staleLayout,
-                    onViewState: handleViewState,
+                    onViewState: handleViewStateRef.current,
                 });
                 return undefined;
             }, [

@@ -155,3 +155,32 @@ describe('qlikTimeToEpochMs', () => {
         expect(Math.round((b - a) / 1000)).toBe(76);
     });
 });
+
+describe('qlikTimeToEpochMs — day-boundary precision', () => {
+    it('lands exactly on midnight rather than one millisecond before it', () => {
+        // Regression: (serial - 25569) * 86400000 does not produce a whole
+        // millisecond. Midnight came back as ...999.9995, which Date truncates
+        // to 23:59:59.999 of the previous day — so a message sent at midnight
+        // appeared under the previous day's separator.
+        const midnight = new Date(2026, 0, 1).getTime();
+        const serial = midnight / 86400000 + 25569;
+        expect(qlikTimeToEpochMs(serial)).toBe(midnight);
+    });
+
+    it('always returns a whole number of milliseconds', () => {
+        for (const serial of [46022.95833333333, 46273.341712963, 25569.5, 1.25]) {
+            expect(Number.isInteger(qlikTimeToEpochMs(serial))).toBe(true);
+        }
+    });
+
+    it('still round-trips a range of times exactly', () => {
+        for (const iso of [
+            '2026-01-01T00:00:00Z',
+            '2026-09-08T08:12:04Z',
+            '2024-02-29T23:59:59Z',
+        ]) {
+            const ms = Date.parse(iso);
+            expect(qlikTimeToEpochMs(ms / 86400000 + 25569)).toBe(ms);
+        }
+    });
+});
