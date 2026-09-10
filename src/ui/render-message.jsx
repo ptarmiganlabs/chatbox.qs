@@ -12,6 +12,7 @@
  * DOM; since an extension runs on the hub's own origin inside the user's
  * session, that is a session-stealing XSS vector rather than a style choice.
  */
+import BubbleBody from './BubbleBody';
 import styles from './chat.module.css';
 
 /**
@@ -151,9 +152,8 @@ export function MessageRow({
                         onShowDetails || expanded !== undefined ? Boolean(expanded) : undefined
                     }
                 >
-                    {/* React escapes children — the body is never markup. */}
                     {message.body ? (
-                        <div className={styles.body}>{message.body}</div>
+                        <BubbleBody body={message.body} format={message.bodyFormat} />
                     ) : message.merged ? (
                         <div className={styles.bodyMissing}>
                             {message.rowCount} messages share this Message ID, so{' '}
