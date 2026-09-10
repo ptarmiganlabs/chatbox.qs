@@ -46,6 +46,23 @@ export function appearanceSection() {
                  */
                 show: (data) => data?.chatbox?.layoutMode === 'sided',
             },
+            density: {
+                ref: 'chatbox.density',
+                type: 'string',
+                component: 'dropdown',
+                label: 'Density',
+                description:
+                    'Automatic tightens spacing as the object gets smaller. A Sense object is ' +
+                    'often a small dashboard tile and occasionally full screen, so one fixed ' +
+                    'spacing is wrong at one end.',
+                defaultValue: 'auto',
+                options: [
+                    { value: 'auto', label: 'Automatic (recommended)' },
+                    { value: 'comfortable', label: 'Comfortable' },
+                    { value: 'compact', label: 'Compact' },
+                    { value: 'ultra', label: 'Ultra compact' },
+                ],
+            },
             showAvatars: {
                 ref: 'chatbox.showAvatars',
                 type: 'boolean',

@@ -10,6 +10,32 @@
  * fallbacks so the extension still renders if the theme resolves nothing.
  */
 
+/* Density scale. Comfortable is the baseline; the other two tighten spacing and
+   shrink the avatar, so a small dashboard tile still shows several messages. */
+.densityComfortable {
+    --cqs-row-pad: 3px 12px;
+    --cqs-bubble-pad: 6px 10px;
+    --cqs-avatar: 26px;
+    --cqs-gap: 8px;
+    --cqs-font: 13px;
+}
+
+.densityCompact {
+    --cqs-row-pad: 2px 8px;
+    --cqs-bubble-pad: 4px 8px;
+    --cqs-avatar: 20px;
+    --cqs-gap: 6px;
+    --cqs-font: 12px;
+}
+
+.densityUltra {
+    --cqs-row-pad: 1px 6px;
+    --cqs-bubble-pad: 3px 6px;
+    --cqs-avatar: 0px;
+    --cqs-gap: 4px;
+    --cqs-font: 11px;
+}
+
 .root {
     display: flex;
     flex-direction: column;
@@ -19,7 +45,7 @@
     color: var(--cqs-text, #404040);
     background: var(--cqs-bg, #ffffff);
     font-family: var(--cqs-font, 'Segoe UI', Tahoma, sans-serif);
-    font-size: 13px;
+    font-size: var(--cqs-font, 13px);
     line-height: 1.45;
 }
 
@@ -197,8 +223,8 @@
 
 .row {
     display: flex;
-    gap: 8px;
-    padding: 3px 12px;
+    gap: var(--cqs-gap, 8px);
+    padding: var(--cqs-row-pad, 3px 12px);
     align-items: flex-start;
 }
 
@@ -208,8 +234,8 @@
 
 .avatar {
     flex: 0 0 auto;
-    width: 26px;
-    height: 26px;
+    width: var(--cqs-avatar, 26px);
+    height: var(--cqs-avatar, 26px);
     border-radius: 50%;
     object-fit: cover;
     border: 2px solid var(--cqs-accent, transparent);
@@ -228,7 +254,14 @@
 
 .avatarSpacer {
     flex: 0 0 auto;
-    width: 26px;
+    width: var(--cqs-avatar, 26px);
+}
+
+/* At ultra density the avatar collapses to nothing; the author rail on the
+   bubble still carries identity, which is why it was never the bubble fill. */
+.densityUltra .avatar,
+.densityUltra .avatarSpacer {
+    display: none;
 }
 
 .bubbleWrap {
@@ -240,7 +273,7 @@
 
 .bubble {
     position: relative;
-    padding: 6px 10px;
+    padding: var(--cqs-bubble-pad, 6px 10px);
     border-radius: var(--cqs-radius, 10px);
     background: var(--cqs-bubble-bg, #f2f2f2);
     /* Author identity is a rail, never the bubble fill: the fill colour is
@@ -305,9 +338,14 @@
 .separator {
     display: flex;
     justify-content: center;
-    padding: 6px 0 2px;
+    padding: 6px 0 4px;
     font-size: 10px;
+    font-weight: 600;
     color: var(--cqs-muted, #6c6c6c);
+    /* GroupedVirtuoso positions the group header itself; the background keeps
+       messages from showing through as they scroll underneath it. */
+    background: var(--cqs-bg, #ffffff);
+    border-bottom: 1px solid var(--cqs-border, #d9d9d9);
 }
 
 .state {

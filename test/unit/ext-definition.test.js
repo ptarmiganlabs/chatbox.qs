@@ -89,3 +89,20 @@ describe('property panel definition', () => {
         expect(refs).toEqual(ATTR_ORDER.map((id) => `chatbox.attrs.${id}`));
     });
 });
+
+describe('appearance: density', () => {
+    it('offers density with automatic as the default', () => {
+        const density = definition.items.appearance.items.density;
+        expect(density.defaultValue).toBe('auto');
+        expect(density.options.map((o) => o.value)).toEqual([
+            'auto',
+            'comfortable',
+            'compact',
+            'ultra',
+        ]);
+    });
+
+    it('keeps date separators switchable', () => {
+        expect(definition.items.appearance.items.dateSeparators.defaultValue).toBe(true);
+    });
+});
