@@ -68,6 +68,13 @@
     flex: 1 1 68%;
 }
 
+/* Roving focus needs a visible ring of its own: the row is reachable by arrow
+   key, where the browser's own :focus-visible heuristics do not always fire. */
+.bubbleFocused {
+    outline: 2px solid var(--cqs-accent, #4477aa);
+    outline-offset: 2px;
+}
+
 .bubbleOpen {
     outline: 2px solid var(--cqs-accent, #4477aa);
     outline-offset: 1px;

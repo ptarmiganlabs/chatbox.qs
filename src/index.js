@@ -10,6 +10,7 @@ import {
     useEffect,
     useElement,
     useInteractionState,
+    useKeyboard,
     useLayout,
     useModel,
     useRect,
@@ -69,6 +70,10 @@ export default function supernova(galaxy) {
             const rect = useRect();
             const selections = useSelections();
             const interactions = useInteractionState();
+            // Governs whether the conversation may hold a tab stop at all — see
+            // canReceiveTabStop. A long list that ignores this puts one tab stop
+            // per message into the sheet.
+            const keyboard = useKeyboard();
 
             // Page against the STALE layout: it is pinned while a selection is
             // in progress, so an in-flight brush cannot restart a multi-round-trip
@@ -235,7 +240,14 @@ export default function supernova(galaxy) {
                     return undefined;
                 }
 
-                render(element, ChatLog, { conversation, settings, canSelect, onSelect, rect });
+                render(element, ChatLog, {
+                    conversation,
+                    settings,
+                    canSelect,
+                    onSelect,
+                    rect,
+                    keyboard,
+                });
                 return undefined;
             }, [
                 element,
@@ -249,6 +261,8 @@ export default function supernova(galaxy) {
                 theme?.name?.(),
                 rect?.width,
                 rect?.height,
+                keyboard?.active,
+                keyboard?.enabled,
                 interactions,
                 selections,
             ]);
