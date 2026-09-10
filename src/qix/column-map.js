@@ -106,6 +106,26 @@ export function resolveRoles(layout, roleCIds = DEFAULT_CIDS) {
 }
 
 /**
+ * Collect the measure columns not claimed by a named role.
+ *
+ * Measures beyond the message text and the integrity probe are per-message KPIs,
+ * shown in the detail view. They are identified by exclusion rather than by
+ * position, so inserting a role measure later cannot turn it into a KPI.
+ *
+ * @param {object[]} columns - Column descriptors from {@link buildColumns}.
+ * @param {object} byRole - Role map from {@link resolveRoles}.
+ * @returns {object[]} Unclaimed measure columns, in cube order.
+ */
+export function kpiColumns(columns, byRole) {
+    const claimed = new Set(
+        Object.values(byRole ?? {})
+            .filter(Boolean)
+            .map((c) => c.col)
+    );
+    return columns.filter((c) => c.kind === 'msr' && !claimed.has(c.col));
+}
+
+/**
  * Find a dimension's index among dimensions only.
  *
  * `selectHyperCubeValues` addresses a dimension by its index in the dimension

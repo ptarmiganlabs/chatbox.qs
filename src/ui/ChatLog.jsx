@@ -11,8 +11,10 @@
  * every selection change, and a polite live region would announce the entire
  * conversation each time.
  */
+import { useCallback, useState } from 'react';
 import { Virtuoso } from 'react-virtuoso';
 import styles from './chat.module.css';
+import DetailReveal, { resolveRevealMode } from './DetailReveal';
 import MessageRow from './render-message';
 import { Empty } from './states';
 
@@ -58,10 +60,36 @@ export function isSelectable(message, mode) {
  * @param {object} [props.settings] - The `chatbox` property bag.
  * @param {boolean} [props.canSelect] - Whether selections are permitted.
  * @param {Function} [props.onSelect] - Called with a message on click.
+ * @param {object} [props.rect] - The object's rect, for choosing a detail presentation.
  * @returns {object} The rendered conversation.
  */
-export function ChatLog({ conversation, settings = {}, canSelect = false, onSelect }) {
+export function ChatLog({ conversation, settings = {}, canSelect = false, onSelect, rect }) {
     const { messages, diagnostics } = conversation;
+
+    // Which message's detail is open, by id. Held here rather than per-row so
+    // opening one closes any other, and so the pane and overlay presentations
+    // have somewhere to read from.
+    const [openId, setOpenId] = useState(null);
+
+    const revealMode = resolveRevealMode(rect, settings.revealMode);
+    const detailsOnClick = settings.onBubbleClick === 'showDetails';
+
+    /**
+     * Open, close or toggle the detail for a message.
+     *
+     * @param {object} message - The message that was activated.
+     * @returns {void}
+     */
+    const toggleDetail = useCallback((message) => {
+        setOpenId((current) => (current === message.id ? null : message.id));
+    }, []);
+
+    /**
+     * Dismiss the open detail.
+     *
+     * @returns {void}
+     */
+    const closeDetail = useCallback(() => setOpenId(null), []);
 
     // Every warning is rendered, not just the first. Truncation and merged
     // bubbles can both be live at once, and showing only one silently hides
@@ -69,6 +97,11 @@ export function ChatLog({ conversation, settings = {}, canSelect = false, onSele
     const warnings = (diagnostics ?? []).filter((d) => d.severity === 'warning');
     const gapSec = Number(settings.groupGapSec) >= 0 ? Number(settings.groupGapSec) : 120;
     const showAvatars = settings.showAvatars !== false;
+
+    const openIndex = openId ? messages.findIndex((m) => m.id === openId) : -1;
+    // A selection can remove the open message from the cube entirely, which
+    // would otherwise leave a pane rendering a stale bubble.
+    const openMessage = openIndex >= 0 ? messages[openIndex] : null;
 
     if (!messages.length) {
         return (
@@ -88,39 +121,72 @@ export function ChatLog({ conversation, settings = {}, canSelect = false, onSele
         const message = messages[index];
         const previous = index > 0 ? messages[index - 1] : null;
         const showAuthor = startsCluster(message, previous, gapSec);
+        const isOpen = message.id === openId;
         return (
-            <MessageRow
-                message={message}
-                showAuthor={showAuthor}
-                showAvatar={showAvatars}
-                selectable={canSelect && isSelectable(message, settings.onBubbleClick)}
-                onSelect={onSelect}
-            />
+            <>
+                <MessageRow
+                    message={message}
+                    showAuthor={showAuthor}
+                    showAvatar={showAvatars}
+                    selectable={
+                        detailsOnClick ||
+                        (canSelect && isSelectable(message, settings.onBubbleClick))
+                    }
+                    expanded={isOpen}
+                    onSelect={detailsOnClick ? toggleDetail : onSelect}
+                    onShowDetails={detailsOnClick ? undefined : toggleDetail}
+                />
+                {isOpen && revealMode === 'inline' ? (
+                    <DetailReveal
+                        message={message}
+                        messages={messages}
+                        index={index}
+                        mode="inline"
+                        onClose={closeDetail}
+                    />
+                ) : null}
+            </>
         );
     };
 
+    const detail =
+        openMessage && revealMode !== 'inline' ? (
+            <DetailReveal
+                message={openMessage}
+                messages={messages}
+                index={openIndex}
+                mode={revealMode}
+                onClose={closeDetail}
+            />
+        ) : null;
+
     return (
-        <div className={styles.root}>
+        <div
+            className={`${styles.root} ${revealMode === 'pane' && detail ? styles.rootPaned : ''}`}
+        >
             {warnings.map((w) => (
                 <div key={w.code} className={`${styles.banner} ${styles.bannerWarning}`}>
                     {w.message}
                 </div>
             ))}
-            <div className={styles.list} role="list" aria-label="Conversation">
-                {settings.virtualize === false ? (
-                    // Export and print re-render from the layout in a headless
-                    // browser, where a virtualized window would capture only the
-                    // rows that happened to be visible.
-                    messages.map((_, i) => <div key={messages[i].id}>{renderRow(i)}</div>)
-                ) : (
-                    <Virtuoso
-                        style={{ height: '100%' }}
-                        totalCount={messages.length}
-                        itemContent={renderRow}
-                        followOutput="smooth"
-                        increaseViewportBy={200}
-                    />
-                )}
+            <div className={styles.main}>
+                <div className={styles.list} role="list" aria-label="Conversation">
+                    {settings.virtualize === false ? (
+                        // Export and print re-render from the layout in a headless
+                        // browser, where a virtualized window would capture only the
+                        // rows that happened to be visible.
+                        messages.map((_, i) => <div key={messages[i].id}>{renderRow(i)}</div>)
+                    ) : (
+                        <Virtuoso
+                            style={{ height: '100%' }}
+                            totalCount={messages.length}
+                            itemContent={renderRow}
+                            followOutput="smooth"
+                            increaseViewportBy={200}
+                        />
+                    )}
+                </div>
+                {detail}
             </div>
         </div>
     );

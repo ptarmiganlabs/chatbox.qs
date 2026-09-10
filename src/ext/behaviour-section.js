@@ -41,6 +41,7 @@ export function behaviourSection() {
                 options: [
                     { value: 'selectAuthor', label: 'Selects the participant' },
                     { value: 'selectMessage', label: 'Selects the message' },
+                    { value: 'showDetails', label: 'Opens the details' },
                     { value: 'none', label: 'Does nothing' },
                 ],
             },

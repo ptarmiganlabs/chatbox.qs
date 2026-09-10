@@ -19,7 +19,14 @@ describe('property panel definition', () => {
     it('is an accordion of named sections', () => {
         expect(definition.component).toBe('accordion');
         expect(Object.keys(definition.items)).toEqual(
-            expect.arrayContaining(['data', 'appearance', 'metadata', 'behaviour', 'about'])
+            expect.arrayContaining([
+                'data',
+                'appearance',
+                'metadata',
+                'detail',
+                'behaviour',
+                'about',
+            ])
         );
     });
 
@@ -52,6 +59,18 @@ describe('property panel definition', () => {
         expect(definition.items.data).toEqual({ uses: 'data' });
         expect(definition.items.dimensions).toBeUndefined();
         expect(definition.items.measures).toBeUndefined();
+    });
+
+    it('offers showDetails as a click action', () => {
+        const opts = definition.items.behaviour.items.onBubbleClick.options.map((o) => o.value);
+        expect(opts).toContain('showDetails');
+        expect(opts).toContain('none');
+    });
+
+    it('defaults the detail presentation to automatic', () => {
+        // A Sense object spans roughly 300 to 4000 px, so a fixed presentation
+        // is wrong at one end of that range.
+        expect(definition.items.detail.items.revealMode.defaultValue).toBe('auto');
     });
 
     it('does not expose the generic sorting section', () => {

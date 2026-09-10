@@ -37,11 +37,21 @@ function initials(label) {
  * @param {object} props.message - A normalized Message.
  * @param {boolean} props.showAuthor - Whether to show the author header.
  * @param {boolean} props.showAvatar - Whether to render the avatar column.
- * @param {boolean} props.selectable - Whether clicking should select.
+ * @param {boolean} props.selectable - Whether clicking should act on the message.
+ * @param {boolean} [props.expanded] - Whether this message's detail is open.
  * @param {Function} [props.onSelect] - Click handler receiving the message.
+ * @param {Function} [props.onShowDetails] - Opens the detail view, when clicking selects instead.
  * @returns {object} The rendered row.
  */
-export function MessageRow({ message, showAuthor, showAvatar, selectable, onSelect }) {
+export function MessageRow({
+    message,
+    showAuthor,
+    showAvatar,
+    selectable,
+    expanded,
+    onSelect,
+    onShowDetails,
+}) {
     const own = message.side === 'right';
     const accent = message.accent || message.author?.color || 'transparent';
 
@@ -50,7 +60,8 @@ export function MessageRow({ message, showAuthor, showAvatar, selectable, onSele
         styles.bubble,
         own ? styles.bubbleOwn : '',
         message.merged ? styles.bubbleMerged : '',
-        selectable ? styles.selectable : '',
+        selectable || onShowDetails ? styles.selectable : '',
+        expanded ? styles.bubbleOpen : '',
         // 'X' excluded and 'A' alternative are both "not currently possible".
         // Native Sense charts grey both; dimming only 'X' left alternative-state
         // values looking fully selectable.
@@ -121,6 +132,9 @@ export function MessageRow({ message, showAuthor, showAvatar, selectable, onSele
                     onKeyDown={handleKeyDown}
                     role={selectable ? 'button' : undefined}
                     tabIndex={selectable ? 0 : undefined}
+                    aria-expanded={
+                        onShowDetails || expanded !== undefined ? Boolean(expanded) : undefined
+                    }
                 >
                     {/* React escapes children — the body is never markup. */}
                     {message.body ? (
@@ -134,7 +148,7 @@ export function MessageRow({ message, showAuthor, showAvatar, selectable, onSele
                     ) : (
                         <div className={styles.body} />
                     )}
-                    {message.tsText || message.badge || message.merged ? (
+                    {message.tsText || message.badge || message.merged || onShowDetails ? (
                         <div className={styles.meta}>
                             {message.tsText ? <span>{message.tsText}</span> : null}
                             {message.badge ? (
@@ -144,6 +158,20 @@ export function MessageRow({ message, showAuthor, showAvatar, selectable, onSele
                                 <span className={styles.badge} title="Message ID is not unique">
                                     merged
                                 </span>
+                            ) : null}
+                            {onShowDetails ? (
+                                <button
+                                    type="button"
+                                    className={styles.detailsLink}
+                                    aria-expanded={Boolean(expanded)}
+                                    onClick={(event) => {
+                                        // The bubble itself is bound to selection.
+                                        event.stopPropagation();
+                                        onShowDetails(message);
+                                    }}
+                                >
+                                    {expanded ? 'Hide details' : 'Details'}
+                                </button>
                             ) : null}
                         </div>
                     ) : null}

@@ -12,6 +12,7 @@ import {
     useInteractionState,
     useLayout,
     useModel,
+    useRect,
     usePromise,
     useRef,
     useSelections,
@@ -63,6 +64,9 @@ export default function supernova(galaxy) {
             const model = useModel();
             const app = useApp();
             const theme = useTheme();
+            // Drives which detail presentation fits — a Sense object spans
+            // roughly 300 to 4000 px, so this cannot be a fixed choice.
+            const rect = useRect();
             const selections = useSelections();
             const interactions = useInteractionState();
 
@@ -231,7 +235,7 @@ export default function supernova(galaxy) {
                     return undefined;
                 }
 
-                render(element, ChatLog, { conversation, settings, canSelect, onSelect });
+                render(element, ChatLog, { conversation, settings, canSelect, onSelect, rect });
                 return undefined;
             }, [
                 element,
@@ -243,6 +247,8 @@ export default function supernova(galaxy) {
                 // theme.name(), not theme: the theme object identity is stable
                 // across an app theme switch, so depending on it never re-renders.
                 theme?.name?.(),
+                rect?.width,
+                rect?.height,
                 interactions,
                 selections,
             ]);
