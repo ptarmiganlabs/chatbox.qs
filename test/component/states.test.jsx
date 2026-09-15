@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { NotConfigured } from '../../src/ui/states';
+import { NotConfigured, emptyStateMessage } from '../../src/ui/states';
 
 describe('NotConfigured', () => {
     it('asks for a Participant dimension in the participant model', () => {
@@ -30,5 +30,26 @@ describe('NotConfigured', () => {
         expect(
             screen.getByText('Assigned: Message ID = MsgId · Conversation = ChatId')
         ).toBeInTheDocument();
+    });
+});
+
+describe('emptyStateMessage', () => {
+    const conversation = (meta) => ({ messages: [], meta });
+
+    it('prefers the app author’s calculation-condition message', () => {
+        expect(
+            emptyStateMessage(conversation({ phantomRows: 3, rowsLoaded: 3 }), 'Pick a chat')
+        ).toBe('Pick a chat');
+    });
+
+    it('explains a cube whose every row was a phantom', () => {
+        expect(emptyStateMessage(conversation({ phantomRows: 3, rowsLoaded: 3 }), null)).toMatch(
+            /3 row\(s\), but none of them is a message/
+        );
+    });
+
+    it('falls back to the default text otherwise', () => {
+        expect(emptyStateMessage(conversation({ phantomRows: 0, rowsLoaded: 0 }), null)).toBeNull();
+        expect(emptyStateMessage(undefined, null)).toBeNull();
     });
 });

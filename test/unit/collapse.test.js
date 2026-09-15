@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { assignBubbleKeys, collapseKey, collapseRecords } from '../../src/chat/collapse';
+import {
+    assignBubbleKeys,
+    collapseKey,
+    collapseRecords,
+    isPhantomRecord,
+} from '../../src/chat/collapse';
 
 const record = (over = {}) => ({
     id: '7',
@@ -67,5 +72,17 @@ describe('assignBubbleKeys', () => {
         const messages = assignBubbleKeys([{ id: '5' }, { id: '5' }, { id: '5#2' }]);
         expect(messages.map((m) => m.key)).toEqual(['5', '5#3', '5#2']);
         expect(new Set(messages.map((m) => m.key)).size).toBe(3);
+    });
+});
+
+describe('isPhantomRecord', () => {
+    const phantom = { elem: -2, body: '', probe: 0 };
+
+    it('matches only a null id with no text and no counted records', () => {
+        expect(isPhantomRecord(phantom)).toBe(true);
+        expect(isPhantomRecord({ ...phantom, probe: null })).toBe(true);
+        expect(isPhantomRecord({ ...phantom, body: 'text' })).toBe(false);
+        expect(isPhantomRecord({ ...phantom, probe: 2 })).toBe(false);
+        expect(isPhantomRecord({ ...phantom, elem: 4 })).toBe(false);
     });
 });

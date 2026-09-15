@@ -140,3 +140,19 @@ numbers read from the field being selected: participants carry From-field elemen
 `conversation.recipientElems` carries To-field elements.
 
 _See `src/chat/recipients.js` and `collectRecipientElems` in `src/chat/normalize.js`._
+
+## 13. Null suppression off turns every silent linked value into a row
+
+Null suppression is pinned off on every dimension, so that a message whose thread or recipient is
+null still renders. The price: a value of a table linked to one of those dimensions that has **no**
+message still becomes a row — a person nobody wrote to, a thread with nothing in it — with a null
+message id, no text and a probe of 0. On PTLAB, a cube over 1000 orders returned 1035 rows; the extra
+35 were exactly the employees with no orders. Each rendered as an empty bubble, and its person counted
+as a participant, which silently switched two-sided layout off.
+
+**Rule:** a row is dropped as a phantom only when its message-id element is negative **and** it has no
+text **and** its probe is 0 or absent — a null id with text or a positive probe is a real, broken
+message and is kept and reported. Phantoms still count as loaded rows, and are only reported when they
+used up the row limit.
+
+_See `isPhantomRecord` in `src/chat/collapse.js`._

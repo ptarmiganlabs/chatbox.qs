@@ -23,6 +23,31 @@ import { addRecipients } from './recipients';
 const SEP = String.fromCharCode(0);
 
 /**
+ * Report whether a record is a phantom row rather than a message.
+ *
+ * Null suppression is pinned off on every dimension, so that a message whose
+ * thread or recipient is null still renders. The price: every value of a table
+ * linked to one of those dimensions that has NO message still becomes a row —
+ * a person nobody wrote to, a thread with no messages — with a null message id,
+ * no text and a probe of 0. Rendered, each is an empty bubble; worse, its person
+ * counts as a participant and silently disables two-sided layout.
+ *
+ * A row is a phantom only when all three hold. A null id with text, or with a
+ * probe above zero, is a real — if broken — message, and is kept and reported.
+ *
+ * @param {object} record - A record from normalize's row reader.
+ * @returns {boolean} True when the row carries no message at all.
+ */
+export function isPhantomRecord(record) {
+    return (
+        typeof record?.elem === 'number' &&
+        record.elem < 0 &&
+        !record.body &&
+        (record.probe === null || record.probe === undefined || record.probe === 0)
+    );
+}
+
+/**
  * Build the grouping key for a record.
  *
  * Only rows whose message id is a real field value can belong together. Null,

@@ -34,7 +34,7 @@ import { syncAttributeExpressions } from './qix/sync-attrs';
 import { isSnapshot, writeSnapshot } from './ui/snapshot';
 import { render, destroy } from './ui/chat-renderer';
 import ChatLog from './ui/ChatLog';
-import { Empty, Failed, Loading, NotConfigured } from './ui/states';
+import { Empty, Failed, Loading, NotConfigured, emptyStateMessage } from './ui/states';
 import { themeVars } from './ui/theme-vars';
 import { extensionState } from './util/extension-state';
 import logger from './util/logger';
@@ -280,7 +280,7 @@ export default function supernova(galaxy) {
                         liveLayout?.qHyperCube?.qCalcCondMsg ||
                         staleLayout?.qHyperCube?.qCalcCondMsg ||
                         null;
-                    render(element, Empty, { message: calcMsg });
+                    render(element, Empty, { message: emptyStateMessage(conversation, calcMsg) });
                     return undefined;
                 }
 

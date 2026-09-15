@@ -812,3 +812,93 @@ describe('the From → To model', () => {
         expect(c.messages[0].recipients).toBeNull();
     });
 });
+
+describe('phantom rows from linked tables', () => {
+    // With null suppression off, a value of a linked table that has no message —
+    // Carol in a People table, who never wrote anything — still becomes a row:
+    // null message id, no text, probe 0. On PTLAB a 1000-order cube returned 1035.
+    const phantom = (over = {}) =>
+        row({ id: '-', elemId: -2, author: 'Carol', authorElem: 12, text: '-', dup: 0, ...over });
+
+    it('drops a row with a null id, no text and a zero probe', () => {
+        const c = normalize({
+            layout: makeLayout({ qcy: 2 }),
+            rows: [row({ id: '1', elemId: 1, author: 'Ada', text: 'hi' }), phantom()],
+        });
+        expect(c.messages.map((m) => m.body)).toEqual(['hi']);
+        expect(c.participants.has('Carol')).toBe(false);
+        expect(c.meta.phantomRows).toBe(1);
+    });
+
+    it('keeps a two-person chat two-sided when a People table adds a phantom — regression', () => {
+        // The phantom's person used to count as a third participant, which
+        // silently switched sided layout off.
+        const c = normalize({
+            layout: makeLayout({ qcy: 3 }),
+            rows: [
+                row({ id: '1', elemId: 1, author: 'Ada', authorElem: 10, text: 'a' }),
+                row({ id: '2', elemId: 2, author: 'Bob', authorElem: 11, text: 'b' }),
+                phantom(),
+            ],
+            props: { layoutMode: 'sided' },
+        });
+        expect(c.participants.size).toBe(2);
+        expect(c.participants.get('Bob').side).toBe('right');
+    });
+
+    it('drops a phantom when there is no probe to ask', () => {
+        const layout = {
+            qHyperCube: {
+                qSize: { qcx: 4, qcy: 1 },
+                qDimensionInfo: [{ cId: 'd_msgid' }, { cId: 'd_author' }, { cId: 'd_thread' }],
+                qMeasureInfo: [{ cId: 'm_text' }],
+            },
+        };
+        const r = phantom().slice(0, 4);
+        expect(normalize({ layout, rows: [r] }).messages).toEqual([]);
+    });
+
+    it('keeps a null-id row that has text, and says it has no id', () => {
+        const c = normalize({
+            layout: makeLayout({ qcy: 1 }),
+            rows: [phantom({ text: 'I am a real message', dup: 1 })],
+        });
+        expect(c.messages).toHaveLength(1);
+        expect(c.diagnostics.find((d) => d.code === 'null-message-id')).toBeTruthy();
+    });
+
+    it('keeps a null-id row whose probe reports merged messages', () => {
+        // Only() over several texts is null, so the body is empty — but the probe
+        // says real messages are in there.
+        const c = normalize({ layout: makeLayout({ qcy: 1 }), rows: [phantom({ dup: 3 })] });
+        expect(c.messages).toHaveLength(1);
+        expect(c.messages[0].merged).toBe(true);
+    });
+
+    it('keeps a message with a real id even when it has no text and a zero probe', () => {
+        const c = normalize({
+            layout: makeLayout({ qcy: 1 }),
+            rows: [row({ id: '5', elemId: 5, author: 'Ada', text: '', dup: 0 })],
+        });
+        expect(c.messages).toHaveLength(1);
+    });
+
+    it('counts phantoms as loaded rows, so a complete load is not reported truncated', () => {
+        const c = normalize({
+            layout: makeLayout({ qcy: 2 }),
+            rows: [row({ id: '1', elemId: 1, author: 'Ada', text: 'hi' }), phantom()],
+        });
+        expect(c.meta.rowsLoaded).toBe(2);
+        expect(c.meta.truncated).toBe(false);
+        expect(c.diagnostics.find((d) => d.code === 'phantom-rows')).toBeUndefined();
+    });
+
+    it('warns about phantoms only when they used up the row limit', () => {
+        const c = normalize({
+            layout: makeLayout({ qcy: 50 }),
+            rows: [row({ id: '1', elemId: 1, author: 'Ada', text: 'hi' }), phantom()],
+        });
+        expect(c.meta.truncated).toBe(true);
+        expect(c.diagnostics.find((d) => d.code === 'phantom-rows')).toBeTruthy();
+    });
+});

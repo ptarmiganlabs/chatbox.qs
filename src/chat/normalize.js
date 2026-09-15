@@ -35,7 +35,7 @@ import {
     safeColor,
     safeUrl,
 } from './sanitize';
-import { assignBubbleKeys, collapseRecords } from './collapse';
+import { assignBubbleKeys, collapseRecords, isPhantomRecord } from './collapse';
 import { colorForElem, paletteFromTheme, resolveRightSide } from './participants';
 
 /** Severity levels for collected diagnostics. */
@@ -57,6 +57,7 @@ function emptyConversation(diagnostics = [], meta = {}) {
             total: 0,
             loaded: 0,
             rowsLoaded: 0,
+            phantomRows: 0,
             truncated: false,
             mergedCount: 0,
             conflictCount: 0,
@@ -122,6 +123,8 @@ function readRecord(row, i, ctx) {
         id: cell.text(idCell) || `row-${i}`,
         elem: cell.elem(idCell),
         body: rawBody === NULL_SENTINEL ? '' : rawBody,
+        // The raw probe value, kept so a phantom row (probe 0) can be told apart.
+        probe: dupCount,
         rowCount: typeof dupCount === 'number' ? dupCount : 1,
         merged: typeof dupCount === 'number' && dupCount > 1,
         bodyFormat: ctx.bodyFormat,
@@ -256,9 +259,14 @@ export function normalize({ layout, rows, props = {}, theme, area }) {
         if (Array.isArray(row)) records.push(readRecord(row, i, ctx));
     });
 
-    const participants = registerParticipants(records, paletteFromTheme(theme));
-    const recipientElems = collectRecipientElems(records);
-    const { messages, conflictCount, lastBubble } = collapseRecords(records);
+    // Phantom rows go before anything else looks at the records: a phantom's
+    // person must never be registered as a participant.
+    const kept = records.filter((record) => !isPhantomRecord(record));
+    const phantomRows = records.length - kept.length;
+
+    const participants = registerParticipants(kept, paletteFromTheme(theme));
+    const recipientElems = collectRecipientElems(kept);
+    const { messages, conflictCount, lastBubble } = collapseRecords(kept);
     assignBubbleKeys(messages);
     const mergedCount = messages.filter((m) => m.merged).length;
 
@@ -309,6 +317,17 @@ export function normalize({ layout, rows, props = {}, theme, area }) {
         });
     }
 
+    const nullIds = messages.filter((m) => m.elem < 0).length;
+    if (nullIds > 0) {
+        diagnostics.push({
+            severity: SEVERITY.WARNING,
+            code: 'null-message-id',
+            message:
+                `${nullIds} message(s) have no Message ID, so they cannot be selected or told ` +
+                'apart. Every message needs an id.',
+        });
+    }
+
     const unassigned = unassignedDimensions(columns, byRole);
     if (unassigned.length) {
         const names = unassigned.map((c) => c.label || `Dimension ${c.col + 1}`).join(', ');
@@ -324,6 +343,7 @@ export function normalize({ layout, rows, props = {}, theme, area }) {
     // Truncation is a question about ROWS: the engine counts rows, and once rows
     // are collapsed a fully loaded cube holds fewer bubbles than qcy. Comparing
     // bubbles with qcy would report messages missing that are all on screen.
+    // Phantom rows are loaded rows too — the engine counts them in qcy.
     const rowsLoaded = records.length;
     const total = hc.qSize?.qcy ?? rowsLoaded;
     const truncated = total > rowsLoaded;
@@ -336,6 +356,18 @@ export function normalize({ layout, rows, props = {}, theme, area }) {
                     ? `Showing ${messages.length} of ${total} messages. Filter to see the rest.`
                     : `Showing ${messages.length} messages from ${rowsLoaded} of ${total} rows. ` +
                       'Filter to see the rest.',
+        });
+    }
+
+    // Phantoms only cost something when the cap cut the load short: then they
+    // used up budget that real messages needed.
+    if (truncated && phantomRows > 0) {
+        diagnostics.push({
+            severity: SEVERITY.WARNING,
+            code: 'phantom-rows',
+            message:
+                `${phantomRows} loaded row(s) were not messages — a table linked to a dimension ` +
+                'adds a row for each value that has none — and they count against the limit.',
         });
     }
 
@@ -353,6 +385,7 @@ export function normalize({ layout, rows, props = {}, theme, area }) {
             total,
             loaded: messages.length,
             rowsLoaded,
+            phantomRows,
             truncated,
             mergedCount,
             conflictCount,
