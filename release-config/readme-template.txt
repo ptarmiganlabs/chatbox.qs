@@ -21,13 +21,30 @@ Do NOT unzip chatbox-qs.zip first. Sense expects the archive.
 
 USING IT
 --------
-Add Chatbox.qs to a sheet, then add, in this order:
+Add Chatbox.qs to a sheet. Under "Conversation" in the property panel, choose
+the conversation model BEFORE adding dimensions, then add, in this order:
+
+Participants (default) -- one dimension holds every speaker:
 
   Dimension 1   Message ID   must be UNIQUE per message
   Dimension 2   Participant  the speaker
   Dimension 3   Thread       optional
+  Dimension 4   To           optional recipient
   Measure 1     Only([MsgText])
   Measure 2     Count([MsgId])   integrity probe, keep it
+
+From -> To -- a sender and a recipient, for one-to-one conversations:
+
+  Dimension 1   Message ID   must be UNIQUE per message
+  Dimension 2   From         the sender
+  Dimension 3   To           the recipient, one per row
+  Dimension 4   Thread       optional
+  Measure 1     Only([MsgText])
+  Measure 2     Count([MsgText])   integrity probe; count a field only the
+                                   messages table has, not a key field
+
+In From -> To, a message to several people is shown as one bubble listing
+them. Spell each person identically in From and To.
 
 The Message ID must be unique. A straight hypercube emits one row per distinct
 combination of dimension values, so duplicate ids merge separate messages into

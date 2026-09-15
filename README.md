@@ -21,14 +21,82 @@ distinct combination of dimension values, so the message id **must be unique** �
 messages merge into a single bubble. The extension detects that and warns rather than showing you a
 quietly wrong conversation.
 
+Choose a **conversation model** under _Conversation_ in the property panel **before adding
+dimensions** — it decides which role each new dimension gets. Switching later never changes the role
+of a dimension that is already there.
+
+### Participants (default)
+
+One dimension holds every speaker. Use it for group chats, or any conversation where who a message
+went to does not matter.
+
 | Slot        | Role                  | Notes                                                                              |
 | ----------- | --------------------- | ---------------------------------------------------------------------------------- |
 | Dimension 1 | Message ID            | Must be unique per message                                                         |
 | Dimension 2 | Participant           | The speaker. Selections act on this                                                |
 | Dimension 3 | Conversation / thread | Optional                                                                           |
+| Dimension 4 | To                    | Optional — adds recipients to the bubbles                                          |
 | Measure 1   | Message text          | `Only([MsgText])` — a measure, so long bodies never become selectable field values |
 | Measure 2   | Integrity probe       | `Count([MsgId])` — detects merged bubbles                                          |
 | Measure 3+  | KPIs                  | Optional                                                                           |
+
+### From → To
+
+A sender and a recipient dimension, for one-to-one conversations — an agent's chats, a DM export.
+
+| Slot        | Role                  | Notes                                                                          |
+| ----------- | --------------------- | ------------------------------------------------------------------------------ |
+| Dimension 1 | Message ID            | Must be unique per message                                                     |
+| Dimension 2 | From                  | The sender. Selections act on this                                             |
+| Dimension 3 | To                    | The recipient, one per row                                                     |
+| Dimension 4 | Conversation / thread | Optional                                                                       |
+| Measure 1   | Message text          | `Only([MsgText])`                                                              |
+| Measure 2   | Integrity probe       | Count a field only the messages table has, e.g. `Count([MsgText])` — see below |
+| Measure 3+  | KPIs                  | Optional                                                                       |
+
+- **One recipient per row.** A message to several people arrives as one row per recipient and is
+  shown as one bubble listing them all. Store recipients one per row — split a stored list with
+  `SubField()` in the load script.
+- **Spell each person identically** in From and To. People are matched by exact, case-sensitive text.
+- **Keep _Include null values_ on for To.** Unticking it silently drops every message without a
+  recipient, and nothing downstream can detect that.
+- **Maximum messages counts rows**, so a message to 20 people uses 20 of the budget. Data export
+  likewise has one row per recipient.
+- **Why not `Count([MsgId])` for the probe:** a From → To model usually links messages to a
+  recipients table by that id, and counting a key field counts the linked table's rows — every group
+  message would be reported as merged.
+
+## Two-sided layout
+
+With **Layout** set to _Two-sided_, every conversation — a thread, or a From → To pair — is resolved
+on its own:
+
+- **Own participant** goes right in every conversation they are part of, however many people are in
+  it. An expression such as `=OSUser()` works.
+- Otherwise, in a two-person conversation the person with **more conversations** goes right, so an
+  agent or an inbox owner stays on one side throughout. On a tie, whoever wrote last goes right — a
+  single two-person chat looks exactly as it always has.
+- A group message goes right only when its sender is on the right in each of its pairs. Three or more
+  people with no Own participant among them stay left.
+- The **Own message (1/0)** metadata expression outranks all of this.
+
+Automatic sides are worked out from the messages currently loaded, so narrowing a selection to one
+conversation can move them. For sides that never move, set Own participant or the Own message
+expression.
+
+## Clicking a message
+
+Set under **Behaviour → Clicking a message**:
+
+- **Selects the participant (sender)** — the default.
+- **Selects the recipient** — who the clicked message went to (From → To).
+- **Selects the conversation** — the message's thread when it has one. Without a thread, in From →
+  To, it selects everyone in the exchange in both From and To, so the view narrows to it with both
+  sides kept. A message with no recipient belongs to no exchange, so there it is not offered.
+- **Selects the message**, **Opens the details** or **Does nothing**.
+
+A single value toggles, as a click in Sense always has. A set of values replaces that field's
+selection, because toggling a set flips each value on its own.
 
 Per-message metadata is configured under **Message metadata** in the property panel. Each expression
 must aggregate — `Only([Field])`, not a bare field reference.

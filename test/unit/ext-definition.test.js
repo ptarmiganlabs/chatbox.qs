@@ -67,6 +67,13 @@ describe('property panel definition', () => {
         expect(opts).toContain('none');
     });
 
+    it('offers the recipient and conversation click actions', () => {
+        const opts = definition.items.behaviour.items.onBubbleClick.options.map((o) => o.value);
+        expect(opts).toEqual(
+            expect.arrayContaining(['selectAuthor', 'selectRecipient', 'selectConversation'])
+        );
+    });
+
     it('defaults the detail presentation to automatic', () => {
         // A Sense object spans roughly 300 to 4000 px, so a fixed presentation
         // is wrong at one end of that range.
@@ -87,6 +94,31 @@ describe('property panel definition', () => {
         // The panel order and the slot order are one contract: the engine
         // returns attribute-expression values positionally.
         expect(refs).toEqual(ATTR_ORDER.map((id) => `chatbox.attrs.${id}`));
+    });
+});
+
+describe('conversation model', () => {
+    const item = definition.items.conversation.items.conversationModel;
+
+    it('comes right after the data section, since it decides what dimensions become', () => {
+        const keys = Object.keys(definition.items);
+        expect(keys.indexOf('conversation')).toBe(keys.indexOf('data') + 1);
+    });
+
+    it('binds to the extension’s own bag and defaults to today’s model', () => {
+        expect(item.ref).toBe('chatbox.conversationModel');
+        expect(item.defaultValue).toBe('participant');
+        expect(item.options.map((o) => o.value)).toEqual(['participant', 'fromTo']);
+    });
+
+    it('uses a component string the panel already renders elsewhere', () => {
+        // A wrong component string fails silently in the classic panel (GOTCHAS 6).
+        const shipped = new Set(
+            walk(definition)
+                .filter(([path]) => !path.startsWith('conversation'))
+                .map(([, i]) => i.component)
+        );
+        expect(shipped.has(item.component)).toBe(true);
     });
 });
 

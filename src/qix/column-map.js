@@ -19,6 +19,21 @@ export const ROLES = {
     THREAD: 'thread',
     TEXT: 'text',
     DUP_CHECK: 'dupCheck',
+    // Who a message was sent to. Only the From -> To model requires it, but it
+    // resolves in either model, so rendering follows the cube, not a flag.
+    RECIPIENT: 'recipient',
+};
+
+/**
+ * The two conversation models.
+ *
+ * Participant is today's contract: one dimension holds every speaker. From -> To
+ * adds a recipient dimension. The author role IS the sender in both, so nothing
+ * author-based differs between them.
+ */
+export const CONVERSATION_MODELS = {
+    PARTICIPANT: 'participant',
+    FROM_TO: 'fromTo',
 };
 
 /** The `cId` values seeded into the initial properties, by role. */
@@ -28,7 +43,54 @@ export const DEFAULT_CIDS = {
     [ROLES.THREAD]: 'd_thread',
     [ROLES.TEXT]: 'm_text',
     [ROLES.DUP_CHECK]: 'm_dupcheck',
+    [ROLES.RECIPIENT]: 'd_recipient',
 };
+
+/**
+ * Read the conversation model from a `chatbox` settings bag.
+ *
+ * Objects saved before the setting existed carry none, and must keep behaving
+ * exactly as they always have — so anything unrecognised is the participant model.
+ *
+ * @param {object} [settings] - The `chatbox` property bag.
+ * @returns {string} One of the CONVERSATION_MODELS values.
+ */
+export function conversationModelOf(settings) {
+    return settings?.conversationModel === CONVERSATION_MODELS.FROM_TO
+        ? CONVERSATION_MODELS.FROM_TO
+        : CONVERSATION_MODELS.PARTICIPANT;
+}
+
+/**
+ * The dimension roles in slot order, for a conversation model.
+ *
+ * This is the single source for both the panel seeding in data.js and the
+ * positional fallback below. The participant model keeps its first three slots
+ * exactly as they always were and takes a recipient only as a fourth.
+ *
+ * @param {string} [model] - A CONVERSATION_MODELS value.
+ * @returns {string[]} Dimension roles, in slot order.
+ */
+export function dimensionRoleOrder(model) {
+    return model === CONVERSATION_MODELS.FROM_TO
+        ? [ROLES.MESSAGE_ID, ROLES.AUTHOR, ROLES.RECIPIENT, ROLES.THREAD]
+        : [ROLES.MESSAGE_ID, ROLES.AUTHOR, ROLES.THREAD, ROLES.RECIPIENT];
+}
+
+/** The measure roles in slot order. The same in both models. */
+export const MEASURE_ROLE_ORDER = [ROLES.TEXT, ROLES.DUP_CHECK];
+
+/**
+ * The roles a conversation model cannot render without.
+ *
+ * @param {string} [model] - A CONVERSATION_MODELS value.
+ * @returns {string[]} Required roles.
+ */
+export function requiredRoles(model) {
+    const required = [ROLES.MESSAGE_ID, ROLES.AUTHOR, ROLES.TEXT];
+    if (model === CONVERSATION_MODELS.FROM_TO) required.splice(2, 0, ROLES.RECIPIENT);
+    return required;
+}
 
 /**
  * Build the flat column list for a layout, in qMatrix order.
@@ -65,44 +127,100 @@ export function buildColumns(layout) {
     return columns;
 }
 
+/** Which axis each role lives on. A role never binds a column of the other kind. */
+const ROLE_KIND = {
+    [ROLES.MESSAGE_ID]: 'dim',
+    [ROLES.AUTHOR]: 'dim',
+    [ROLES.THREAD]: 'dim',
+    [ROLES.TEXT]: 'msr',
+    [ROLES.DUP_CHECK]: 'msr',
+    [ROLES.RECIPIENT]: 'dim',
+};
+
+/**
+ * Merge a stored role → cId bag over the defaults.
+ *
+ * A saved object's bag only holds the roles that existed when it was created,
+ * so a role added later must still resolve through its default cId.
+ *
+ * @param {object} [roleCIds] - Role → cId map from the object properties.
+ * @returns {object} A complete role → cId map.
+ */
+function mergeRoleCIds(roleCIds) {
+    const merged = { ...DEFAULT_CIDS };
+    for (const [role, cId] of Object.entries(roleCIds ?? {})) {
+        if (typeof cId === 'string' && cId) merged[role] = cId;
+    }
+    return merged;
+}
+
 /**
  * Resolve role names to column descriptors.
  *
- * Resolution is by `cId` first. When a `cId` is absent — an older object, or a
- * column the user added by hand — it falls back to the positional convention
- * the initial properties establish, so the extension still renders.
+ * Resolution is by `cId` first. When a role finds no column that way — an older
+ * object, or a chart converted from another type, whose columns carry uids — it
+ * falls back to the positional convention the initial properties establish, so
+ * the extension still renders.
+ *
+ * The fallback may only take a column that no role has claimed AND that carries
+ * no role cId. Without that guard, deleting the Participant dimension moved the
+ * thread column into its slot and bound it as the speaker too: every bubble was
+ * labelled with a conversation id and the not-configured state never appeared.
  *
  * @param {object} [layout] - The object layout containing qHyperCube.
  * @param {object} [roleCIds] - Role → cId map from the object properties.
- * @returns {object} { columns, byRole, missing } where byRole maps a role to a
- *   column descriptor (or null) and missing lists unresolved required roles.
+ * @param {object} [options] - Resolution options.
+ * @param {string} [options.conversationModel] - A CONVERSATION_MODELS value; decides
+ *   the positional slot order and which roles are required.
+ * @returns {object} { columns, byRole, missing, conversationModel } where byRole maps
+ *   a role to a column descriptor (or null) and missing lists unresolved required roles.
  */
-export function resolveRoles(layout, roleCIds = DEFAULT_CIDS) {
+export function resolveRoles(layout, roleCIds = DEFAULT_CIDS, { conversationModel } = {}) {
+    const model = conversationModelOf({ conversationModel });
     const columns = buildColumns(layout);
-    const byCId = new Map(columns.filter((c) => c.cId).map((c) => [c.cId, c]));
+    const cIds = mergeRoleCIds(roleCIds);
+    const roleCIdSet = new Set(Object.values(cIds));
 
-    const dims = columns.filter((c) => c.kind === 'dim');
-    const measures = columns.filter((c) => c.kind === 'msr');
-
-    // Positional fallback, matching the slot order the initial properties create.
-    const positional = {
-        [ROLES.MESSAGE_ID]: dims[0] ?? null,
-        [ROLES.AUTHOR]: dims[1] ?? null,
-        [ROLES.THREAD]: dims[2] ?? null,
-        [ROLES.TEXT]: measures[0] ?? null,
-        [ROLES.DUP_CHECK]: measures[1] ?? null,
+    const pools = {
+        dim: columns.filter((c) => c.kind === 'dim'),
+        msr: columns.filter((c) => c.kind === 'msr'),
     };
 
+    // Positional fallback, matching the slot order the panel seeds for this model.
+    const positional = {};
+    dimensionRoleOrder(model).forEach((role, i) => {
+        positional[role] = pools.dim[i];
+    });
+    MEASURE_ROLE_ORDER.forEach((role, i) => {
+        positional[role] = pools.msr[i];
+    });
+
     const byRole = {};
+    const claimed = new Set();
+
+    // Pass 1: by cId, within the role's own axis. The first match wins, so a
+    // duplicated column cannot take a second role.
     for (const role of Object.values(ROLES)) {
-        const cId = roleCIds?.[role];
-        byRole[role] = (cId && byCId.get(cId)) || positional[role] || null;
+        const column = pools[ROLE_KIND[role]].find(
+            (c) => c.cId === cIds[role] && !claimed.has(c.col)
+        );
+        byRole[role] = column ?? null;
+        if (column) claimed.add(column.col);
     }
 
-    const required = [ROLES.MESSAGE_ID, ROLES.AUTHOR, ROLES.TEXT];
-    const missing = required.filter((role) => !byRole[role]);
+    // Pass 2: the exact slot, for columns nothing else owns or is tagged for.
+    for (const role of Object.values(ROLES)) {
+        if (byRole[role]) continue;
+        const column = positional[role];
+        if (column && !claimed.has(column.col) && !roleCIdSet.has(column.cId)) {
+            byRole[role] = column;
+            claimed.add(column.col);
+        }
+    }
 
-    return { columns, byRole, missing };
+    const missing = requiredRoles(model).filter((role) => !byRole[role]);
+
+    return { columns, byRole, missing, conversationModel: model };
 }
 
 /**
@@ -123,6 +241,26 @@ export function kpiColumns(columns, byRole) {
             .map((c) => c.col)
     );
     return columns.filter((c) => c.kind === 'msr' && !claimed.has(c.col));
+}
+
+/**
+ * Collect the dimension columns no role claims.
+ *
+ * A measure without a role is a KPI; a dimension without a role is never
+ * harmless. It still takes part in the combinations the engine emits, so every
+ * extra value it has for a message becomes another row of that message.
+ *
+ * @param {object[]} columns - Column descriptors from {@link buildColumns}.
+ * @param {object} byRole - Role map from {@link resolveRoles}.
+ * @returns {object[]} Unclaimed dimension columns, in cube order.
+ */
+export function unassignedDimensions(columns, byRole) {
+    const claimed = new Set(
+        Object.values(byRole ?? {})
+            .filter(Boolean)
+            .map((c) => c.col)
+    );
+    return columns.filter((c) => c.kind === 'dim' && !claimed.has(c.col));
 }
 
 /**

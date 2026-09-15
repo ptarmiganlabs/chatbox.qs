@@ -304,6 +304,23 @@
     margin-bottom: 1px;
 }
 
+/* Who a message went to, beside the author name. Muted and regular weight, so
+   the sender stays the thing the eye lands on. */
+.recipients {
+    font-weight: 400;
+    color: var(--cqs-muted, #6c6c6c);
+}
+
+/* Read by screen readers, invisible on screen. */
+.srOnly {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+}
+
 .body {
     white-space: pre-wrap;
 }

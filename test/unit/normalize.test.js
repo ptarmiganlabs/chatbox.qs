@@ -204,7 +204,7 @@ describe('normalize', () => {
             expect(normalize({ layout, rows }).messages[0].side).toBe('right');
         });
 
-        it('keeps everything left with three or more participants', () => {
+        it('keeps everything left with three or more participants in RAIL mode', () => {
             const rows = [
                 row({ id: '1', author: 'Ada', authorElem: 10, text: 'a' }),
                 row({ id: '2', author: 'Bob', authorElem: 11, text: 'b' }),
@@ -454,5 +454,557 @@ describe('per-message KPIs', () => {
         const m = normalize({ layout: kpiLayout(), rows: [r] }).messages[0];
         expect(m.kpis[0].text).toBe('high');
         expect(m.kpis[0].num).toBeNull();
+    });
+});
+
+describe('rows that belong to one message', () => {
+    // A cube with a fourth dimension no role claims — the same row shape a
+    // recipient dimension produces for a group message: one row per extra value.
+    // It carries a role cId another column already holds, so neither the cId pass
+    // nor the positional fallback can give it a role. Element numbers are
+    // explicit here, because the row() helper above gives every row the same
+    // message-id element.
+    function wideLayout({ qcy, attrIds = [], kpiCount = 0 } = {}) {
+        return {
+            qHyperCube: {
+                qSize: { qcx: 6 + kpiCount, qcy },
+                qDimensionInfo: [
+                    { cId: 'd_msgid', qAttrExprInfo: attrIds.map((id) => ({ id })) },
+                    { cId: 'd_author' },
+                    { cId: 'd_thread' },
+                    { cId: 'd_author', qFallbackTitle: 'Channel' },
+                ],
+                qMeasureInfo: [
+                    { cId: 'm_text' },
+                    { cId: 'm_dupcheck' },
+                    ...Array.from({ length: kpiCount }, (_, k) => ({
+                        cId: `m_kpi${k}`,
+                        qFallbackTitle: `KPI ${k}`,
+                    })),
+                ],
+            },
+        };
+    }
+
+    function wideRow({
+        id,
+        elemId,
+        author = 'Ada',
+        authorElem = 10,
+        extra = 'Bob',
+        text = 'hello',
+        dup = 1,
+        attrs = [],
+        kpis = [],
+    }) {
+        return [
+            { qText: id, qElemNumber: elemId, qAttrExps: { qValues: attrs } },
+            { qText: author, qElemNumber: authorElem, qState: 'O' },
+            { qText: '-', qElemNumber: -2 },
+            { qText: extra, qElemNumber: 0 },
+            { qText: text, qNum: 'NaN' },
+            { qText: String(dup), qNum: dup },
+            ...kpis,
+        ];
+    }
+
+    it('collapses the rows of one message into a single bubble', () => {
+        const rows = ['Bob', 'Cy', 'Dan'].map((extra) =>
+            wideRow({ id: '7', elemId: 7, extra, text: 'to all of you' })
+        );
+        const c = normalize({ layout: wideLayout({ qcy: 3 }), rows });
+
+        expect(c.messages).toHaveLength(1);
+        expect(c.messages[0].body).toBe('to all of you');
+        expect(c.messages[0].rowsCollapsed).toBe(3);
+        expect(c.meta.rowsLoaded).toBe(3);
+    });
+
+    it('collapses rows that are not adjacent, keeping the first row in place', () => {
+        // A dragged dimension or an expression sort can separate a message's rows.
+        const rows = [
+            wideRow({ id: '7', elemId: 7, extra: 'Bob', text: 'first' }),
+            wideRow({ id: '8', elemId: 8, author: 'Bob', authorElem: 11, text: 'second' }),
+            wideRow({ id: '7', elemId: 7, extra: 'Cy', text: 'first' }),
+        ];
+        const c = normalize({ layout: wideLayout({ qcy: 3 }), rows });
+        expect(c.messages.map((m) => m.body)).toEqual(['first', 'second']);
+    });
+
+    it('never collapses rows whose message id is null or synthetic', () => {
+        // Every null id shares element -2; grouping on it would merge strangers.
+        const rows = [
+            wideRow({ id: '-', elemId: -2, extra: 'Bob', text: 'same' }),
+            wideRow({ id: '-', elemId: -2, extra: 'Cy', text: 'same' }),
+        ];
+        const c = normalize({ layout: wideLayout({ qcy: 2 }), rows });
+        expect(c.messages).toHaveLength(2);
+    });
+
+    it('keeps the probe honest: merged if any row says so, with the largest count', () => {
+        const rows = [
+            wideRow({ id: '7', elemId: 7, extra: 'Bob', dup: 1 }),
+            wideRow({ id: '7', elemId: 7, extra: 'Cy', dup: 3 }),
+        ];
+        const m = normalize({ layout: wideLayout({ qcy: 2 }), rows }).messages[0];
+        expect(m.merged).toBe(true);
+        // The largest count, never the sum: recipients are not messages.
+        expect(m.rowCount).toBe(3);
+    });
+
+    it('marks a KPI that differs between the rows as varying', () => {
+        const rows = [
+            wideRow({
+                id: '7',
+                elemId: 7,
+                extra: 'Bob',
+                kpis: [
+                    { qText: '10', qNum: 10 },
+                    { qText: 'same', qNum: 'NaN' },
+                ],
+            }),
+            wideRow({
+                id: '7',
+                elemId: 7,
+                extra: 'Cy',
+                kpis: [
+                    { qText: '12', qNum: 12 },
+                    { qText: 'same', qNum: 'NaN' },
+                ],
+            }),
+        ];
+        const m = normalize({ layout: wideLayout({ qcy: 2, kpiCount: 2 }), rows }).messages[0];
+        expect(m.kpis[0]).toMatchObject({ varies: true, num: null, text: '' });
+        expect(m.kpis[1]).toMatchObject({ text: 'same' });
+        expect(m.kpis[1].varies).toBeUndefined();
+    });
+
+    it('honours the side attribute only when every row agrees on it', () => {
+        const layout = wideLayout({ qcy: 2, attrIds: [ATTR_IDS.SIDE] });
+        const agree = normalize({
+            layout,
+            rows: [
+                wideRow({ id: '7', elemId: 7, extra: 'Bob', attrs: [{ qNum: 1 }] }),
+                wideRow({ id: '7', elemId: 7, extra: 'Cy', attrs: [{ qNum: 1 }] }),
+            ],
+        });
+        expect(agree.messages[0].side).toBe('right');
+
+        const disagree = normalize({
+            layout,
+            rows: [
+                wideRow({ id: '7', elemId: 7, extra: 'Bob', attrs: [{ qNum: 1 }] }),
+                wideRow({ id: '7', elemId: 7, extra: 'Cy', attrs: [{ qNum: 0 }] }),
+            ],
+        });
+        expect(disagree.messages[0].sideHint).toBeNull();
+    });
+
+    it('keeps different messages that share an id apart, and says so', () => {
+        // Ids unique per chat but not globally: "hi" to Bob and "yo" to Cy both
+        // carry id 7. Collapsing them would silently drop "yo".
+        const rows = [
+            wideRow({ id: '7', elemId: 7, extra: 'Bob', text: 'hi' }),
+            wideRow({ id: '7', elemId: 7, extra: 'Cy', text: 'yo' }),
+        ];
+        const c = normalize({ layout: wideLayout({ qcy: 2 }), rows });
+
+        expect(c.messages.map((m) => m.body)).toEqual(['hi', 'yo']);
+        expect(c.messages.every((m) => m.idConflict)).toBe(true);
+        expect(c.meta.conflictCount).toBe(1);
+        expect(c.diagnostics.filter((d) => d.code === 'ambiguous-message-id')).toHaveLength(1);
+    });
+
+    it('warns about a dimension no role uses', () => {
+        const c = normalize({
+            layout: wideLayout({ qcy: 1 }),
+            rows: [wideRow({ id: '7', elemId: 7 })],
+        });
+        const warning = c.diagnostics.find((d) => d.code === 'unassigned-dimension');
+        expect(warning.message).toContain('Channel');
+    });
+
+    it('does not report truncation when every row is loaded — regression', () => {
+        // 6 rows collapse to 2 bubbles. Comparing bubbles with qcy would claim
+        // four messages are missing when every one of them is on screen.
+        const rows = ['Bob', 'Cy', 'Dan'].flatMap((extra) => [
+            wideRow({ id: '7', elemId: 7, extra, text: 'a' }),
+            wideRow({ id: '8', elemId: 8, extra, text: 'b' }),
+        ]);
+        const c = normalize({ layout: wideLayout({ qcy: 6 }), rows });
+
+        expect(c.messages).toHaveLength(2);
+        expect(c.meta.truncated).toBe(false);
+        expect(c.diagnostics.find((d) => d.code === 'truncated')).toBeUndefined();
+    });
+
+    it('reports truncation in rows when rows and bubbles differ', () => {
+        const rows = ['Bob', 'Cy', 'Dan'].flatMap((extra) => [
+            wideRow({ id: '7', elemId: 7, extra, text: 'a' }),
+            wideRow({ id: '8', elemId: 8, extra, text: 'b' }),
+        ]);
+        const c = normalize({ layout: wideLayout({ qcy: 9 }), rows });
+
+        expect(c.meta.truncated).toBe(true);
+        const warning = c.diagnostics.find((d) => d.code === 'truncated');
+        expect(warning.message).toContain('2 messages from 6 of 9 rows');
+    });
+
+    it('gives every bubble a unique key, and the first bubble keeps its id', () => {
+        // Two authors sharing an id is the harmless case from GOTCHAS 8 — but
+        // the view must still tell the bubbles apart.
+        const rows = [
+            row({ id: '7', elemId: 7, author: 'Ada', authorElem: 10, text: 'a' }),
+            row({ id: '7', elemId: 7, author: 'Bob', authorElem: 11, text: 'b' }),
+        ];
+        const c = normalize({ layout: makeLayout({ qcy: 2 }), rows });
+        expect(c.messages.map((m) => m.key)).toEqual(['7', '7#2']);
+    });
+});
+
+describe('the From → To model', () => {
+    function fromToLayout({ qcy, thread = false } = {}) {
+        return {
+            qHyperCube: {
+                qSize: { qcx: thread ? 6 : 5, qcy },
+                qDimensionInfo: [
+                    { cId: 'd_msgid' },
+                    { cId: 'd_author' },
+                    { cId: 'd_recipient' },
+                    ...(thread ? [{ cId: 'd_thread' }] : []),
+                ],
+                qMeasureInfo: [{ cId: 'm_text' }, { cId: 'm_dupcheck' }],
+            },
+        };
+    }
+
+    const props = { conversationModel: 'fromTo' };
+
+    function ftRow({ id, elemId, from, fromElem, to, toElem, text = 'hello' }) {
+        return [
+            { qText: id, qElemNumber: elemId, qAttrExps: { qValues: [] } },
+            { qText: from, qElemNumber: fromElem, qState: 'O' },
+            { qText: to, qElemNumber: toElem },
+            { qText: text, qNum: 'NaN' },
+            { qText: '1', qNum: 1 },
+        ];
+    }
+
+    it('attaches the recipient to each message', () => {
+        const c = normalize({
+            layout: fromToLayout({ qcy: 1 }),
+            rows: [ftRow({ id: '1', elemId: 1, from: 'Ada', fromElem: 0, to: 'Bob', toElem: 5 })],
+            props,
+        });
+        expect(c.messages[0].recipients).toEqual([
+            { key: 'Bob', label: 'Bob', elem: 5, unknown: false },
+        ]);
+        // A recipient role is not an unused dimension.
+        expect(c.diagnostics.find((d) => d.code === 'unassigned-dimension')).toBeUndefined();
+    });
+
+    it('keeps each person’s element number per field — regression', () => {
+        // Ada is element 0 in From and element 9 in To. Selecting her in To with
+        // her From number would select somebody else entirely.
+        const c = normalize({
+            layout: fromToLayout({ qcy: 2 }),
+            rows: [
+                ftRow({ id: '1', elemId: 1, from: 'Ada', fromElem: 0, to: 'Bob', toElem: 5 }),
+                ftRow({ id: '2', elemId: 2, from: 'Bob', fromElem: 1, to: 'Ada', toElem: 9 }),
+            ],
+            props,
+        });
+        expect(c.participants.get('Ada').elem).toBe(0);
+        expect(c.recipientElems.get('Ada')).toBe(9);
+        expect(c.recipientElems.get('Bob')).toBe(5);
+    });
+
+    it('gathers a group message’s recipients into one bubble', () => {
+        const rows = [
+            ftRow({ id: '1', elemId: 1, from: 'Ada', fromElem: 0, to: 'Bob', toElem: 5 }),
+            ftRow({ id: '1', elemId: 1, from: 'Ada', fromElem: 0, to: 'Cy', toElem: 6 }),
+        ];
+        const c = normalize({ layout: fromToLayout({ qcy: 2 }), rows, props });
+        expect(c.messages).toHaveLength(1);
+        expect(c.messages[0].recipients.map((r) => r.label)).toEqual(['Bob', 'Cy']);
+    });
+
+    it('shows a null recipient as nobody, not as a person called "-"', () => {
+        const c = normalize({
+            layout: fromToLayout({ qcy: 1 }),
+            rows: [ftRow({ id: '1', elemId: 1, from: 'Ada', fromElem: 0, to: '-', toElem: -2 })],
+            props,
+        });
+        expect(c.messages[0].recipients).toEqual([
+            { key: null, label: '(no recipient)', elem: -2, unknown: true },
+        ]);
+        expect(c.recipientElems.size).toBe(0);
+    });
+
+    it('keeps the text of a synthetic recipient such as Others', () => {
+        const c = normalize({
+            layout: fromToLayout({ qcy: 1 }),
+            rows: [
+                ftRow({ id: '1', elemId: 1, from: 'Ada', fromElem: 0, to: 'Others', toElem: -3 }),
+            ],
+            props,
+        });
+        expect(c.messages[0].recipients[0]).toMatchObject({ label: 'Others', unknown: true });
+    });
+
+    it('flags only the last bubble’s recipients as possibly incomplete when truncated', () => {
+        const rows = [
+            ftRow({ id: '1', elemId: 1, from: 'Ada', fromElem: 0, to: 'Bob', toElem: 5 }),
+            ftRow({ id: '2', elemId: 2, from: 'Ada', fromElem: 0, to: 'Bob', toElem: 5 }),
+            ftRow({ id: '2', elemId: 2, from: 'Ada', fromElem: 0, to: 'Cy', toElem: 6 }),
+        ];
+        const truncated = normalize({ layout: fromToLayout({ qcy: 10 }), rows, props });
+        expect(truncated.messages.map((m) => Boolean(m.recipientsPartial))).toEqual([false, true]);
+
+        const complete = normalize({ layout: fromToLayout({ qcy: 3 }), rows, props });
+        expect(complete.messages.some((m) => m.recipientsPartial)).toBe(false);
+    });
+
+    it('does not flag a complete message when the limit falls among phantom rows — regression', () => {
+        // Null message ids sort last, so a People table's phantom rows come after
+        // every message row. A cut inside them leaves no message incomplete.
+        const phantomRow = [
+            { qText: '-', qElemNumber: -2, qAttrExps: { qValues: [] } },
+            { qText: 'Dora', qElemNumber: 3, qState: 'O' },
+            { qText: '-', qElemNumber: -2 },
+            { qText: '-', qNum: 'NaN' },
+            { qText: '0', qNum: 0 },
+        ];
+        const rows = [
+            ftRow({ id: '1', elemId: 1, from: 'Ada', fromElem: 0, to: 'Bob', toElem: 5 }),
+            phantomRow,
+        ];
+        const c = normalize({ layout: fromToLayout({ qcy: 10 }), rows, props });
+        expect(c.meta.truncated).toBe(true);
+        expect(c.messages).toHaveLength(1);
+        expect(c.messages[0].recipientsPartial).toBeFalsy();
+    });
+
+    it('is not configured without a To dimension', () => {
+        const layout = {
+            qHyperCube: {
+                qSize: { qcx: 3, qcy: 1 },
+                qDimensionInfo: [{ cId: 'd_msgid' }, { cId: 'd_author' }],
+                qMeasureInfo: [{ cId: 'm_text' }],
+            },
+        };
+        const c = normalize({ layout, rows: [], props });
+        const error = c.diagnostics.find((d) => d.code === 'missing-roles');
+        expect(error.message).toContain('recipient');
+    });
+
+    it('renders recipients from a fourth To dimension in the participant model', () => {
+        const layout = {
+            qHyperCube: {
+                qSize: { qcx: 6, qcy: 1 },
+                qDimensionInfo: [
+                    { cId: 'd_msgid' },
+                    { cId: 'd_author' },
+                    { cId: 'd_thread' },
+                    { cId: 'd_recipient' },
+                ],
+                qMeasureInfo: [{ cId: 'm_text' }, { cId: 'm_dupcheck' }],
+            },
+        };
+        const r = [
+            { qText: '1', qElemNumber: 1, qAttrExps: { qValues: [] } },
+            { qText: 'Ada', qElemNumber: 0, qState: 'O' },
+            { qText: 'T1', qElemNumber: 0 },
+            { qText: 'Bob', qElemNumber: 4 },
+            { qText: 'hi', qNum: 'NaN' },
+            { qText: '1', qNum: 1 },
+        ];
+        const c = normalize({ layout, rows: [r] });
+        expect(c.messages[0].recipients.map((x) => x.label)).toEqual(['Bob']);
+        expect(c.messages[0].threadId).toBe('T1');
+    });
+
+    it('carries no recipients at all in a participant cube', () => {
+        const c = normalize({
+            layout: makeLayout({ qcy: 1 }),
+            rows: [row({ id: '1', author: 'Ada', text: 'hi' })],
+        });
+        expect(c.messages[0].recipients).toBeNull();
+    });
+});
+
+describe('phantom rows from linked tables', () => {
+    // With null suppression off, a value of a linked table that has no message —
+    // Carol in a People table, who never wrote anything — still becomes a row:
+    // null message id, no text, probe 0. On PTLAB a 1000-order cube returned 1035.
+    const phantom = (over = {}) =>
+        row({ id: '-', elemId: -2, author: 'Carol', authorElem: 12, text: '-', dup: 0, ...over });
+
+    it('drops a row with a null id, no text and a zero probe', () => {
+        const c = normalize({
+            layout: makeLayout({ qcy: 2 }),
+            rows: [row({ id: '1', elemId: 1, author: 'Ada', text: 'hi' }), phantom()],
+        });
+        expect(c.messages.map((m) => m.body)).toEqual(['hi']);
+        expect(c.participants.has('Carol')).toBe(false);
+        expect(c.meta.phantomRows).toBe(1);
+    });
+
+    it('keeps a two-person chat two-sided when a People table adds a phantom — regression', () => {
+        // The phantom's person used to count as a third participant, which
+        // silently switched sided layout off.
+        const c = normalize({
+            layout: makeLayout({ qcy: 3 }),
+            rows: [
+                row({ id: '1', elemId: 1, author: 'Ada', authorElem: 10, text: 'a' }),
+                row({ id: '2', elemId: 2, author: 'Bob', authorElem: 11, text: 'b' }),
+                phantom(),
+            ],
+            props: { layoutMode: 'sided' },
+        });
+        expect(c.participants.size).toBe(2);
+        expect(c.participants.get('Bob').side).toBe('right');
+    });
+
+    it('drops a phantom when there is no probe to ask', () => {
+        const layout = {
+            qHyperCube: {
+                qSize: { qcx: 4, qcy: 1 },
+                qDimensionInfo: [{ cId: 'd_msgid' }, { cId: 'd_author' }, { cId: 'd_thread' }],
+                qMeasureInfo: [{ cId: 'm_text' }],
+            },
+        };
+        const r = phantom().slice(0, 4);
+        expect(normalize({ layout, rows: [r] }).messages).toEqual([]);
+    });
+
+    it('keeps a null-id row that has text, and says it has no id', () => {
+        const c = normalize({
+            layout: makeLayout({ qcy: 1 }),
+            rows: [phantom({ text: 'I am a real message', dup: 1 })],
+        });
+        expect(c.messages).toHaveLength(1);
+        expect(c.diagnostics.find((d) => d.code === 'null-message-id')).toBeTruthy();
+    });
+
+    it('keeps a null-id row whose probe reports merged messages', () => {
+        // Only() over several texts is null, so the body is empty — but the probe
+        // says real messages are in there.
+        const c = normalize({ layout: makeLayout({ qcy: 1 }), rows: [phantom({ dup: 3 })] });
+        expect(c.messages).toHaveLength(1);
+        expect(c.messages[0].merged).toBe(true);
+    });
+
+    it('keeps a message with a real id even when it has no text and a zero probe', () => {
+        const c = normalize({
+            layout: makeLayout({ qcy: 1 }),
+            rows: [row({ id: '5', elemId: 5, author: 'Ada', text: '', dup: 0 })],
+        });
+        expect(c.messages).toHaveLength(1);
+    });
+
+    it('counts phantoms as loaded rows, so a complete load is not reported truncated', () => {
+        const c = normalize({
+            layout: makeLayout({ qcy: 2 }),
+            rows: [row({ id: '1', elemId: 1, author: 'Ada', text: 'hi' }), phantom()],
+        });
+        expect(c.meta.rowsLoaded).toBe(2);
+        expect(c.meta.truncated).toBe(false);
+        expect(c.diagnostics.find((d) => d.code === 'phantom-rows')).toBeUndefined();
+    });
+
+    it('warns about phantoms only when they used up the row limit', () => {
+        const c = normalize({
+            layout: makeLayout({ qcy: 50 }),
+            rows: [row({ id: '1', elemId: 1, author: 'Ada', text: 'hi' }), phantom()],
+        });
+        expect(c.meta.truncated).toBe(true);
+        expect(c.diagnostics.find((d) => d.code === 'phantom-rows')).toBeTruthy();
+    });
+});
+
+describe('two-sided alignment per conversation', () => {
+    const three = () => [
+        row({ id: '1', elemId: 1, author: 'Ada', authorElem: 10, text: 'a' }),
+        row({ id: '2', elemId: 2, author: 'Bob', authorElem: 11, text: 'b' }),
+        row({ id: '3', elemId: 3, author: 'Cy', authorElem: 12, text: 'c' }),
+    ];
+
+    it('puts Own participant right at any participant count', () => {
+        // Today Own was ignored as soon as a third person appeared in the cube.
+        const c = normalize({
+            layout: makeLayout({ qcy: 3 }),
+            rows: three(),
+            props: { layoutMode: 'sided', ownParticipant: 'bob' },
+        });
+        expect(c.messages.map((m) => m.side)).toEqual(['left', 'right', 'left']);
+        expect(c.participants.get('Bob').side).toBe('right');
+    });
+
+    it('keeps three or more people left in sided mode when nobody is Own', () => {
+        const c = normalize({
+            layout: makeLayout({ qcy: 3 }),
+            rows: three(),
+            props: { layoutMode: 'sided' },
+        });
+        expect(c.messages.every((m) => m.side === 'left')).toBe(true);
+    });
+
+    it('lets the side attribute outrank Own participant', () => {
+        const layout = makeLayout({ qcy: 1, attrIds: [ATTR_IDS.SIDE] });
+        const c = normalize({
+            layout,
+            rows: [row({ id: '1', elemId: 1, author: 'Ada', text: 'a', attrs: [{ qNum: 0 }] })],
+            props: { layoutMode: 'sided', ownParticipant: 'Ada' },
+        });
+        expect(c.messages[0].side).toBe('left');
+    });
+
+    it('gives the same sides oldest-first and newest-first', () => {
+        const rows = () => [
+            row({ id: '1', elemId: 1, author: 'Ada', authorElem: 10, text: 'a' }),
+            row({ id: '2', elemId: 2, author: 'Bob', authorElem: 11, text: 'b' }),
+        ];
+        const oldest = normalize({
+            layout: makeLayout({ qcy: 2 }),
+            rows: rows(),
+            props: { layoutMode: 'sided' },
+        });
+        const newest = normalize({
+            layout: makeLayout({ qcy: 2 }),
+            rows: rows(),
+            props: { layoutMode: 'sided', order: 'newest' },
+        });
+        const sideOf = (c) => Object.fromEntries(c.messages.map((m) => [m.body, m.side]));
+        expect(sideOf(newest)).toEqual(sideOf(oldest));
+    });
+
+    it('resolves each From → To pair on its own, keeping a hub right in all of them', () => {
+        const layout = {
+            qHyperCube: {
+                qSize: { qcx: 5, qcy: 4 },
+                qDimensionInfo: [{ cId: 'd_msgid' }, { cId: 'd_author' }, { cId: 'd_recipient' }],
+                qMeasureInfo: [{ cId: 'm_text' }, { cId: 'm_dupcheck' }],
+            },
+        };
+        const ft = (id, from, fromElem, to, toElem) => [
+            { qText: id, qElemNumber: Number(id), qAttrExps: { qValues: [] } },
+            { qText: from, qElemNumber: fromElem, qState: 'O' },
+            { qText: to, qElemNumber: toElem },
+            { qText: `${from} to ${to}`, qNum: 'NaN' },
+            { qText: '1', qNum: 1 },
+        ];
+        const c = normalize({
+            layout,
+            rows: [
+                ft('1', 'Agent', 0, 'C1', 0),
+                ft('2', 'C1', 1, 'Agent', 1),
+                ft('3', 'Agent', 0, 'C2', 2),
+                ft('4', 'C2', 2, 'Agent', 1),
+            ],
+            props: { conversationModel: 'fromTo', layoutMode: 'sided' },
+        });
+        // Four people in the cube — today this was an all-left rail.
+        expect(c.messages.map((m) => m.side)).toEqual(['right', 'left', 'right', 'left']);
     });
 });

@@ -143,3 +143,31 @@ describe('resolveDensity', () => {
         }
     });
 });
+
+describe('startsCluster with recipients', () => {
+    const to = (...names) => names.map((name) => ({ key: name, label: name, unknown: false }));
+    const msg = (recipients) => ({ authorKey: 'Ada', ts: null, recipients });
+
+    it('starts a new cluster when the same author writes to someone else', () => {
+        // Otherwise "Ada → Bob" silently heads a message Ada sent to Cy.
+        expect(startsCluster(msg(to('Cy')), msg(to('Bob')), 120)).toBe(true);
+    });
+
+    it('continues a cluster to the same recipients in any order', () => {
+        expect(startsCluster(msg(to('Cy', 'Bob')), msg(to('Bob', 'Cy')), 120)).toBe(false);
+    });
+
+    it('is unaffected in the participant model, where there are no recipients', () => {
+        expect(startsCluster(msg(null), msg(null), 120)).toBe(false);
+    });
+});
+
+describe('startsCluster across sides', () => {
+    it('starts a new cluster when the same author switches sides', () => {
+        // A side attribute, or Own in one conversation and not another, can put
+        // one author on both sides; the moved bubble needs its own header.
+        const previous = { authorKey: 'Ada', ts: null, recipients: null, side: 'left' };
+        const message = { authorKey: 'Ada', ts: null, recipients: null, side: 'right' };
+        expect(startsCluster(message, previous, 120)).toBe(true);
+    });
+});

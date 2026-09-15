@@ -11,6 +11,7 @@
  * document.body is invisible in PDF and image export, unreachable on touch, and
  * lost to keyboard users.
  */
+import { formatRecipients } from '../chat/recipients';
 import styles from './chat.module.css';
 import Sparkline from './Sparkline';
 
@@ -52,7 +53,15 @@ function KpiRow({ kpi, series, activeIndex }) {
     return (
         <div className={styles.kpi}>
             <div className={styles.kpiLabel}>{kpi.label}</div>
-            <div className={styles.kpiValue}>{kpi.text || '—'}</div>
+            {kpi.varies ? (
+                // Collapsed rows disagreed on this measure — typically a value per
+                // recipient — so there is no single number to show.
+                <div className={styles.kpiValue} title="Different on each row this message spans">
+                    Varies
+                </div>
+            ) : (
+                <div className={styles.kpiValue}>{kpi.text || '—'}</div>
+            )}
             <Sparkline values={series} activeIndex={activeIndex} label={kpi.label} />
         </div>
     );
@@ -72,7 +81,19 @@ function DetailBody({ message, messages, index, showParticipant }) {
     const facts = [
         // Only where there is no header to name them already — repeating the
         // author immediately under its own heading is noise.
-        ['Participant', showParticipant ? message.author?.label : null],
+        [
+            message.recipients ? 'From' : 'Participant',
+            showParticipant ? message.author?.label : null,
+        ],
+        [
+            'To',
+            message.recipients?.length
+                ? formatRecipients(message.recipients, {
+                      max: 50,
+                      partial: message.recipientsPartial,
+                  })
+                : null,
+        ],
         ['Sent', message.tsText],
         ['Thread', message.threadId],
         ['Kind', message.kind],
@@ -85,6 +106,20 @@ function DetailBody({ message, messages, index, showParticipant }) {
                 <div className={styles.detailWarning}>
                     This bubble combines {message.rowCount} messages, because the Message ID is not
                     unique.
+                </div>
+            ) : null}
+
+            {message.recipientsPartial ? (
+                <div className={styles.detailWarning}>
+                    Some recipients may be missing: the conversation stopped at the message limit
+                    part-way through this message.
+                </div>
+            ) : null}
+
+            {message.idConflict ? (
+                <div className={styles.detailWarning}>
+                    A different message from the same sender has this Message ID. Make the id unique
+                    across conversations, not just within one.
                 </div>
             ) : null}
 

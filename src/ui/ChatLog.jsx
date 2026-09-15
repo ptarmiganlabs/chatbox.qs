@@ -23,20 +23,37 @@ import MessageRow from './render-message';
 import { Empty } from './states';
 
 /**
+ * The key that identifies a bubble within the conversation.
+ *
+ * Message ids can repeat — two authors sharing one, or two messages that only
+ * share an id — so the open detail, the React row key and the snapshot state all
+ * key on this instead. normalize() sets it; the id is the fallback for a message
+ * built by hand.
+ *
+ * @param {object} message - A normalized Message.
+ * @returns {string} A key unique within the conversation.
+ */
+export function bubbleKey(message) {
+    return message.key ?? message.id;
+}
+
+/**
  * Report whether a bubble can be clicked, for the configured selection target.
  *
- * The gate must test the element number of the cell that will ACTUALLY be
- * selected. Checking the author's element number while selecting the message
- * offers a click that the engine then rejects.
+ * The fallback for when the host passes no `isMessageSelectable` predicate. The
+ * gate must test the element number of the cell that will ACTUALLY be selected:
+ * checking the author's element number while selecting the message offers a
+ * click that the engine then rejects. An action this cannot evaluate is not
+ * offered at all, rather than guessed at.
  *
  * @param {object} message - A normalized Message.
  * @param {string} [mode] - The configured onBubbleClick mode.
  * @returns {boolean} True when the click will produce a valid selection.
  */
 export function isSelectable(message, mode) {
-    if (mode === 'none') return false;
     if (mode === 'selectMessage') return message.elem >= 0;
-    return (message.author?.elem ?? -1) >= 0;
+    if (mode === undefined || mode === 'selectAuthor') return (message.author?.elem ?? -1) >= 0;
+    return false;
 }
 
 /**
@@ -47,6 +64,8 @@ export function isSelectable(message, mode) {
  * @param {object} [props.settings] - The `chatbox` property bag.
  * @param {boolean} [props.canSelect] - Whether selections are permitted.
  * @param {Function} [props.onSelect] - Called with a message on click.
+ * @param {Function} [props.isMessageSelectable] - Whether a click on a message would select
+ *   anything; derived from the same builder the click runs.
  * @param {object} [props.rect] - The object's rect, for choosing a detail presentation.
  * @param {object} [props.keyboard] - The object returned by useKeyboard().
  * @param {object} [props.layout] - The object layout, for snapshot state.
@@ -58,6 +77,7 @@ export function ChatLog({
     settings = {},
     canSelect = false,
     onSelect,
+    isMessageSelectable,
     rect,
     keyboard,
     layout,
@@ -89,7 +109,7 @@ export function ChatLog({
      * @returns {void}
      */
     const toggleDetail = useCallback((message) => {
-        setOpenId((current) => (current === message.id ? null : message.id));
+        setOpenId((current) => (current === bubbleKey(message) ? null : bubbleKey(message)));
     }, []);
 
     /**
@@ -150,7 +170,7 @@ export function ChatLog({
     const gapSec = Number(settings.groupGapSec) >= 0 ? Number(settings.groupGapSec) : 120;
     const showAvatars = settings.showAvatars !== false;
 
-    const openIndex = openId ? messages.findIndex((m) => m.id === openId) : -1;
+    const openIndex = openId ? messages.findIndex((m) => bubbleKey(m) === openId) : -1;
     // A selection can remove the open message from the cube entirely, which
     // would otherwise leave a pane rendering a stale bubble.
     const openMessage = openIndex >= 0 ? messages[openIndex] : null;
@@ -231,7 +251,7 @@ export function ChatLog({
         const message = messages[index];
         const previous = index > 0 ? messages[index - 1] : null;
         const showAuthor = startsCluster(message, previous, gapSec);
-        const isOpen = message.id === openId;
+        const isOpen = bubbleKey(message) === openId;
         return (
             <>
                 <MessageRow
@@ -243,7 +263,10 @@ export function ChatLog({
                     showAvatar={showAvatars}
                     selectable={
                         detailsOnClick ||
-                        (canSelect && isSelectable(message, settings.onBubbleClick))
+                        (canSelect &&
+                            (isMessageSelectable
+                                ? isMessageSelectable(message)
+                                : isSelectable(message, settings.onBubbleClick)))
                     }
                     expanded={isOpen}
                     onSelect={detailsOnClick ? toggleDetail : onSelect}
@@ -301,7 +324,7 @@ export function ChatLog({
                         // browser, where a virtualized window would capture only the
                         // rows that happened to be visible.
                         messages.map((_, i) => (
-                            <div key={messages[i].id}>
+                            <div key={bubbleKey(messages[i])}>
                                 {separatorBefore(i) ? (
                                     <div className={styles.separator}>{separatorBefore(i)}</div>
                                 ) : null}

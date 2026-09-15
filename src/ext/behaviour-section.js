@@ -37,9 +37,14 @@ export function behaviourSection() {
                 type: 'string',
                 component: 'dropdown',
                 label: 'Clicking a message',
+                description:
+                    'Selects the conversation narrows to the clicked message’s thread, or — with ' +
+                    'no thread — to both people of a From → To exchange.',
                 defaultValue: 'selectAuthor',
                 options: [
-                    { value: 'selectAuthor', label: 'Selects the participant' },
+                    { value: 'selectAuthor', label: 'Selects the participant (sender)' },
+                    { value: 'selectRecipient', label: 'Selects the recipient (From → To)' },
+                    { value: 'selectConversation', label: 'Selects the conversation' },
                     { value: 'selectMessage', label: 'Selects the message' },
                     { value: 'showDetails', label: 'Opens the details' },
                     { value: 'none', label: 'Does nothing' },
@@ -64,7 +69,8 @@ export function behaviourSection() {
                 type: 'number',
                 label: 'Maximum messages',
                 description:
-                    'Messages beyond this are not fetched; a banner reports the shortfall. ' +
+                    'Counts rows: a message to several recipients uses one row per recipient. ' +
+                    'Rows beyond this are not fetched; a banner reports the shortfall. ' +
                     'Large conversations are better filtered than rendered.',
                 defaultValue: 5000,
                 min: 1,

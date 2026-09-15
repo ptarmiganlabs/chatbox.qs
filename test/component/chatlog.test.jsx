@@ -1,7 +1,7 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { VirtuosoMockContext } from 'react-virtuoso';
-import ChatLog from '../../src/ui/ChatLog';
+import ChatLog, { isSelectable } from '../../src/ui/ChatLog';
 
 /** Virtuoso measures with the real DOM; jsdom has no layout, so mock the viewport. */
 function renderList(ui) {
@@ -292,5 +292,85 @@ describe('ChatLog snapshot rendering', () => {
             />
         );
         expect(screen.queryByLabelText('Message details')).not.toBeInTheDocument();
+    });
+});
+
+describe('ChatLog bubbles that share a message id', () => {
+    // Ids repeat legitimately (two authors sharing one) or through a data error.
+    // normalize() gives each bubble a unique key; the view must key on it.
+    const shared = [
+        message({ id: '7', key: '7', body: 'first' }),
+        message({ id: '7', key: '7#2', body: 'second' }),
+    ];
+    const active = { enabled: true, active: true, blur: () => {} };
+
+    it('opens only the bubble that was activated', () => {
+        const { container } = renderList(
+            <ChatLog
+                conversation={conversation(shared)}
+                settings={{}}
+                // Narrow enough for inline details, which render per row.
+                rect={{ width: 300, height: 600 }}
+                keyboard={active}
+            />
+        );
+        const list = container.querySelector('[role="list"]');
+        fireEvent.keyDown(list, { key: 'ArrowDown' });
+        fireEvent.keyDown(list, { key: 'ArrowDown' });
+        fireEvent.keyDown(list, { key: 'Enter' });
+
+        expect(screen.getAllByRole('button', { name: 'Close' })).toHaveLength(1);
+    });
+
+    it('renders both in the export path without duplicate React keys', () => {
+        const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+        renderList(
+            <ChatLog
+                conversation={conversation(shared)}
+                settings={{}}
+                layout={{ snapshotData: { chatbox: { firstVisibleIndex: 0, openId: null } } }}
+            />
+        );
+        expect(screen.getByText('first')).toBeInTheDocument();
+        expect(screen.getByText('second')).toBeInTheDocument();
+        const keyWarnings = errors.mock.calls.filter((args) =>
+            String(args[0]).includes('same key')
+        );
+        errors.mockRestore();
+        expect(keyWarnings).toEqual([]);
+    });
+});
+
+describe('ChatLog click gating', () => {
+    const two = [message({ id: '1', body: 'one' }), message({ id: '2', body: 'two' })];
+
+    it('offers a click only where the selection builder says it selects something', () => {
+        const { container } = renderList(
+            <ChatLog
+                conversation={conversation(two)}
+                settings={{ onBubbleClick: 'selectConversation' }}
+                canSelect
+                onSelect={() => {}}
+                isMessageSelectable={(m) => m.id === '1'}
+            />
+        );
+        expect(container.querySelector('[data-message-index="0"]').getAttribute('role')).toBe(
+            'button'
+        );
+        expect(container.querySelector('[data-message-index="1"]').getAttribute('role')).toBeNull();
+    });
+});
+
+describe('isSelectable', () => {
+    it('keeps the author and message gates it always had', () => {
+        const m = message();
+        expect(isSelectable(m, 'selectAuthor')).toBe(true);
+        expect(isSelectable(m, undefined)).toBe(true);
+        expect(isSelectable({ ...m, elem: -2 }, 'selectMessage')).toBe(false);
+    });
+
+    it('refuses an action it cannot evaluate rather than guessing author', () => {
+        expect(isSelectable(message(), 'selectConversation')).toBe(false);
+        expect(isSelectable(message(), 'none')).toBe(false);
     });
 });

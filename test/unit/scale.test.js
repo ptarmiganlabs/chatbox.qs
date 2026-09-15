@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { normalize } from '../../src/chat/normalize';
 import { buildDayGroups } from '../../src/chat/grouping';
 import { fetchAllRows, rowsPerPage } from '../../src/qix/paging';
+import { assignBubbleKeys, collapseRecords } from '../../src/chat/collapse';
 
 /**
  * Matches the ChatBig fixture on the PTLAB server: 12,000 generated messages
@@ -89,6 +90,128 @@ describe('scale: 12,000 messages', () => {
         const c = normalize({ layout: bigLayout(), rows: bigRows(3) });
         expect(new Date(c.messages[0].ts).getFullYear()).toBe(2026);
         expect(c.messages[1].ts - c.messages[0].ts).toBeCloseTo(300_000, -2);
+    });
+});
+
+describe('scale: 12,000 messages spread over 36,000 rows', () => {
+    // A group message arrives as one row per recipient. Collapsing must stay
+    // linear, or a large cube with recipients becomes a resize-time stall.
+    const WIDE = 6;
+    const recipients = ['Bob', 'Cy', 'Dan'];
+
+    function wideRows(messages) {
+        return bigRows(messages).flatMap((r) =>
+            recipients.map((name, k) => [
+                r[0],
+                r[1],
+                r[2],
+                { qText: name, qElemNumber: k },
+                r[3],
+                r[4],
+            ])
+        );
+    }
+
+    const wideLayout = (qcy) => ({
+        qHyperCube: {
+            qSize: { qcx: WIDE, qcy },
+            qDimensionInfo: [
+                { cId: 'd_msgid', qAttrExprInfo: [{ id: 'ts' }] },
+                { cId: 'd_author' },
+                { cId: 'd_thread' },
+                { cId: 'uidRecipient', qFallbackTitle: 'Recipient' },
+            ],
+            qMeasureInfo: [{ cId: 'm_text' }, { cId: 'm_dupcheck' }],
+        },
+    });
+
+    it('collapses back to 12,000 bubbles without reporting truncation', () => {
+        const rows = wideRows(COUNT);
+        const c = normalize({ layout: wideLayout(rows.length), rows });
+        expect(c.messages).toHaveLength(COUNT);
+        expect(c.meta.rowsLoaded).toBe(COUNT * 3);
+        expect(c.meta.truncated).toBe(false);
+    });
+
+    it('collapses in a time a resize can afford', () => {
+        const rows = wideRows(COUNT);
+        const layout = wideLayout(rows.length);
+        const started = performance.now();
+        normalize({ layout, rows });
+        expect(performance.now() - started).toBeLessThan(2000);
+    });
+});
+
+describe('scale: a Message ID shared by 20,000 different messages', () => {
+    // A misconfigured id — a campaign or conversation id — shared by many different
+    // messages from one sender. Splitting them and keying the bubbles was
+    // quadratic: 12 seconds at this size, on every layout change.
+    it('splits and keys them in linear time — regression', () => {
+        const n = 20_000;
+        const records = Array.from({ length: n }, (_, i) => ({
+            id: 'campaign-7',
+            elem: 1,
+            authorKey: 'Ada',
+            threadId: null,
+            body: `Message ${i}`,
+            ts: i,
+            rowCount: 1,
+            merged: false,
+            sideHint: null,
+            kpis: [],
+            recipients: null,
+        }));
+        const started = performance.now();
+        const { messages, conflictCount } = collapseRecords(records);
+        assignBubbleKeys(messages);
+        const elapsed = performance.now() - started;
+
+        expect(messages).toHaveLength(n);
+        expect(conflictCount).toBe(n - 1);
+        expect(messages.every((m) => m.idConflict)).toBe(true);
+        expect(new Set(messages.map((m) => m.key)).size).toBe(n);
+        expect(elapsed).toBeLessThan(2000);
+    });
+});
+
+describe('scale: sided From → To with many pairs', () => {
+    // 12,000 messages between three people and 200 contacts, every tenth one a
+    // group message to three contacts: ~14,400 rows and 600 pairs.
+    function pairRows(messages) {
+        const authors = ['Ada', 'Göran', 'Priya'];
+        const rows = [];
+        for (let i = 0; i < messages; i += 1) {
+            const recipients = i % 10 === 0 ? [i % 200, (i + 1) % 200, (i + 2) % 200] : [i % 200];
+            for (const r of recipients) {
+                rows.push([
+                    { qText: String(i + 1), qElemNumber: i, qAttrExps: { qValues: [] } },
+                    { qText: authors[i % 3], qElemNumber: i % 3, qState: 'O' },
+                    { qText: `Contact ${r}`, qElemNumber: r },
+                    { qText: `Generated message ${i + 1}`, qNum: 'NaN', qIsNull: true },
+                    { qText: '1', qNum: 1 },
+                ]);
+            }
+        }
+        return rows;
+    }
+
+    const pairLayout = (qcy) => ({
+        qHyperCube: {
+            qSize: { qcx: 5, qcy },
+            qDimensionInfo: [{ cId: 'd_msgid' }, { cId: 'd_author' }, { cId: 'd_recipient' }],
+            qMeasureInfo: [{ cId: 'm_text' }, { cId: 'm_dupcheck' }],
+        },
+    });
+
+    it('resolves sides for every message in a time a resize can afford', () => {
+        const rows = pairRows(COUNT);
+        const layout = pairLayout(rows.length);
+        const props = { conversationModel: 'fromTo', layoutMode: 'sided' };
+        const started = performance.now();
+        const c = normalize({ layout, rows, props });
+        expect(performance.now() - started).toBeLessThan(2000);
+        expect(c.messages).toHaveLength(COUNT);
+        expect(c.messages.every((m) => m.side === 'left' || m.side === 'right')).toBe(true);
     });
 });
 

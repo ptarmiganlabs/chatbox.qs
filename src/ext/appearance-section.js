@@ -26,7 +26,7 @@ export function appearanceSection() {
                 defaultValue: 'rail',
                 options: [
                     { value: 'rail', label: 'Rail (any number of participants)' },
-                    { value: 'sided', label: 'Two-sided (2 participants only)' },
+                    { value: 'sided', label: 'Two-sided (per conversation)' },
                 ],
             },
             ownParticipant: {
@@ -34,8 +34,10 @@ export function appearanceSection() {
                 type: 'string',
                 label: 'Own participant',
                 description:
-                    'Which participant is shown on the right. Accepts a literal name or an ' +
-                    'expression such as =OSUser(). Leave blank to decide automatically.',
+                    'Shown on the right in every conversation they are part of, however many ' +
+                    'people are in it. Accepts a literal name or an expression such as =OSUser(). ' +
+                    'Left blank, the person in the most conversations goes right; in a single ' +
+                    'two-person chat, whoever wrote last.',
                 expression: 'optional',
                 defaultValue: '',
                 /**

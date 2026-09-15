@@ -88,3 +88,84 @@ is harmless — the author disambiguates the combination.)
 
 **Rule:** the hidden `Count([MsgId])` integrity probe measure detects it and the extension renders a
 warning banner. It is a data-model constraint the extension can detect but never fix.
+
+## 9. The positional role fallback can hand one column to two roles
+
+Roles bind by `cId`, with a positional fallback for columns that have none — an older object, or a
+chart converted from another type, whose columns carry uids. The fallback used to look only at the
+slot. Delete the Participant dimension and the thread column moves into its slot: it was bound as the
+speaker **and** the thread, conversation ids rendered as names, and the not-configured state never
+appeared.
+
+**Rule:** bind by `cId` first, within the role's own axis. A positional slot may only supply a
+column that no role has claimed and that carries no role `cId`. A column tagged for one role is never
+reinterpreted as another.
+
+_See `src/qix/column-map.js`._
+
+## 10. One message can arrive as several rows, and the probe cannot see it
+
+A straight hypercube emits one row per distinct combination of dimension values. Give a message a
+dimension with several values for it — a recipient dimension on a group message, or a dimension no
+role uses — and the message arrives once per value. `Count([MsgId])` is 1 on every one of those rows,
+so the integrity probe stays quiet, and the bubble silently repeats.
+
+**Rule:** rows sharing message-id element, author and thread collapse into one bubble, but only when
+body and timestamp also agree — ids unique per chat but not globally would otherwise fold two
+messages together and drop one. Never collapse a negative message-id element. Truncation compares
+**rows** loaded with `qcy`, never bubbles. Views key on `message.key`, which stays unique when ids
+repeat.
+
+_See `src/chat/collapse.js`._
+
+## 11. Counting a key field counts the linked table's rows
+
+`Count([MsgId])` is the integrity probe, and it works while the message id lives in one table. Link
+messages to a recipients table by that id and it becomes a key field — and counting a key field does
+not count messages. On PTLAB, `Count(OrderID)` over a sales table linked to a three-rows-per-order
+table returned **3000** against 1000 distinct orders, and 3 on every per-order row. The probe reported
+every group message as merged.
+
+**Rule:** the probe counts a field that exists only in the messages table, e.g. `Count([MsgText])`.
+The From → To slot description says so.
+
+## 12. Element numbers belong to a field, not to a person
+
+`qElemNumber` is a value's index in its field's symbol table. Ada is element 0 in From and element 9
+in To. Selecting her in the To field with her From element selects whoever holds element 0 there — no
+error, just a different person.
+
+**Rule:** people are matched across From and To by exact text, and every selection uses element
+numbers read from the field being selected: participants carry From-field elements,
+`conversation.recipientElems` carries To-field elements.
+
+_See `src/chat/recipients.js` and `collectRecipientElems` in `src/chat/normalize.js`._
+
+## 13. Null suppression off turns every silent linked value into a row
+
+Null suppression is pinned off on every dimension, so that a message whose thread or recipient is
+null still renders. The price: a value of a table linked to one of those dimensions that has **no**
+message still becomes a row — a person nobody wrote to, a thread with nothing in it — with a null
+message id, no text and a probe of 0. On PTLAB, a cube over 1000 orders returned 1035 rows; the extra
+35 were exactly the employees with no orders. Each rendered as an empty bubble, and its person counted
+as a participant, which silently switched two-sided layout off.
+
+**Rule:** a row is dropped as a phantom only when its message-id element is negative **and** it has no
+text **and** its probe is 0 or absent — a null id with text or a positive probe is a real, broken
+message and is kept and reported. Phantoms still count as loaded rows, and are only reported when they
+used up the row limit.
+
+_See `isPhantomRecord` in `src/chat/collapse.js`._
+
+## 14. One failed select resets the whole selection session
+
+stardust's `selections.select()` calls `resetMadeSelections()` whenever a call returns `false`, which
+undoes every selection made in the session, not just the one that failed. And `selectHyperCubeValues`
+with toggle on flips each listed value separately: toggling `[Ada, Bob]` while Ada is already
+selected leaves just Bob.
+
+**Rule:** a click that selects in two fields runs its steps in order and stops at the first `false`,
+so they succeed or fail together. A single value toggles; a set replaces. Never send an empty value
+list — the engine reads it as every value.
+
+_See `src/qix/selection.js`._

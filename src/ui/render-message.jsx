@@ -12,6 +12,7 @@
  * DOM; since an extension runs on the hub's own origin inside the user's
  * session, that is a session-stealing XSS vector rather than a style choice.
  */
+import { formatRecipients } from '../chat/recipients';
 import BubbleBody from './BubbleBody';
 import styles from './chat.module.css';
 
@@ -60,6 +61,7 @@ export function MessageRow({
     onShowDetails,
 }) {
     const own = message.side === 'right';
+    const groupSize = message.recipients?.length ?? 0;
     const accent = message.accent || message.author?.color || 'transparent';
 
     const rowClass = [styles.row, own ? styles.rowOwn : ''].filter(Boolean).join(' ');
@@ -136,7 +138,24 @@ export function MessageRow({
         <div className={rowClass} role="listitem" style={{ '--cqs-accent': accent }}>
             {avatar}
             <div className={styles.bubbleWrap}>
-                {showAuthor ? <div className={styles.author}>{message.author?.label}</div> : null}
+                {showAuthor ? (
+                    <div className={styles.author}>
+                        <span>{message.author?.label}</span>
+                        {message.recipients?.length ? (
+                            <span
+                                className={styles.recipients}
+                                title={message.recipients.map((r) => r.label).join(', ')}
+                            >
+                                {/* The arrow is decoration; a screen reader hears "to". */}
+                                <span aria-hidden="true"> → </span>
+                                <span className={styles.srOnly}> to </span>
+                                {formatRecipients(message.recipients, {
+                                    partial: message.recipientsPartial,
+                                })}
+                            </span>
+                        ) : null}
+                    </div>
+                ) : null}
                 <div
                     className={bubbleClass}
                     onClick={handleClick}
@@ -163,15 +182,31 @@ export function MessageRow({
                     ) : (
                         <div className={styles.body} />
                     )}
-                    {message.tsText || message.badge || message.merged || onShowDetails ? (
+                    {message.tsText ||
+                    message.badge ||
+                    message.merged ||
+                    message.idConflict ||
+                    groupSize > 1 ||
+                    onShowDetails ? (
                         <div className={styles.meta}>
                             {message.tsText ? <span>{message.tsText}</span> : null}
                             {message.badge ? (
                                 <span className={styles.badge}>{message.badge}</span>
                             ) : null}
+                            {groupSize > 1 ? (
+                                <span className={styles.badge}>{groupSize} recipients</span>
+                            ) : null}
                             {message.merged ? (
                                 <span className={styles.badge} title="Message ID is not unique">
                                     merged
+                                </span>
+                            ) : null}
+                            {message.idConflict ? (
+                                <span
+                                    className={styles.badge}
+                                    title="A different message has the same Message ID"
+                                >
+                                    shared id
                                 </span>
                             ) : null}
                             {onShowDetails ? (
