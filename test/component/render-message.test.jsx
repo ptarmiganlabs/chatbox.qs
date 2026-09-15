@@ -225,3 +225,23 @@ describe('MessageRow — merged and excluded regressions', () => {
         ).toBe(false);
     });
 });
+
+describe('MessageRow — shared message ids', () => {
+    it('flags a bubble whose id belongs to a different message too', () => {
+        render(
+            <MessageRow
+                message={message({ idConflict: true })}
+                showAuthor
+                showAvatar
+                selectable={false}
+            />
+        );
+        const badge = screen.getByText('shared id');
+        expect(badge).toHaveAttribute('title', 'A different message has the same Message ID');
+    });
+
+    it('shows no such badge on an ordinary bubble', () => {
+        render(<MessageRow message={message()} showAuthor showAvatar selectable={false} />);
+        expect(screen.queryByText('shared id')).not.toBeInTheDocument();
+    });
+});

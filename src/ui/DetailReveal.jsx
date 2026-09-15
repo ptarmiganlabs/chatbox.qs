@@ -52,7 +52,15 @@ function KpiRow({ kpi, series, activeIndex }) {
     return (
         <div className={styles.kpi}>
             <div className={styles.kpiLabel}>{kpi.label}</div>
-            <div className={styles.kpiValue}>{kpi.text || '—'}</div>
+            {kpi.varies ? (
+                // Collapsed rows disagreed on this measure — typically a value per
+                // recipient — so there is no single number to show.
+                <div className={styles.kpiValue} title="Different on each row this message spans">
+                    Varies
+                </div>
+            ) : (
+                <div className={styles.kpiValue}>{kpi.text || '—'}</div>
+            )}
             <Sparkline values={series} activeIndex={activeIndex} label={kpi.label} />
         </div>
     );
@@ -85,6 +93,13 @@ function DetailBody({ message, messages, index, showParticipant }) {
                 <div className={styles.detailWarning}>
                     This bubble combines {message.rowCount} messages, because the Message ID is not
                     unique.
+                </div>
+            ) : null}
+
+            {message.idConflict ? (
+                <div className={styles.detailWarning}>
+                    A different message from the same sender has this Message ID. Make the id unique
+                    across conversations, not just within one.
                 </div>
             ) : null}
 

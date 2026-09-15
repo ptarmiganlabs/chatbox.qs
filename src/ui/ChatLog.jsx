@@ -23,6 +23,21 @@ import MessageRow from './render-message';
 import { Empty } from './states';
 
 /**
+ * The key that identifies a bubble within the conversation.
+ *
+ * Message ids can repeat — two authors sharing one, or two messages that only
+ * share an id — so the open detail, the React row key and the snapshot state all
+ * key on this instead. normalize() sets it; the id is the fallback for a message
+ * built by hand.
+ *
+ * @param {object} message - A normalized Message.
+ * @returns {string} A key unique within the conversation.
+ */
+export function bubbleKey(message) {
+    return message.key ?? message.id;
+}
+
+/**
  * Report whether a bubble can be clicked, for the configured selection target.
  *
  * The gate must test the element number of the cell that will ACTUALLY be
@@ -89,7 +104,7 @@ export function ChatLog({
      * @returns {void}
      */
     const toggleDetail = useCallback((message) => {
-        setOpenId((current) => (current === message.id ? null : message.id));
+        setOpenId((current) => (current === bubbleKey(message) ? null : bubbleKey(message)));
     }, []);
 
     /**
@@ -150,7 +165,7 @@ export function ChatLog({
     const gapSec = Number(settings.groupGapSec) >= 0 ? Number(settings.groupGapSec) : 120;
     const showAvatars = settings.showAvatars !== false;
 
-    const openIndex = openId ? messages.findIndex((m) => m.id === openId) : -1;
+    const openIndex = openId ? messages.findIndex((m) => bubbleKey(m) === openId) : -1;
     // A selection can remove the open message from the cube entirely, which
     // would otherwise leave a pane rendering a stale bubble.
     const openMessage = openIndex >= 0 ? messages[openIndex] : null;
@@ -231,7 +246,7 @@ export function ChatLog({
         const message = messages[index];
         const previous = index > 0 ? messages[index - 1] : null;
         const showAuthor = startsCluster(message, previous, gapSec);
-        const isOpen = message.id === openId;
+        const isOpen = bubbleKey(message) === openId;
         return (
             <>
                 <MessageRow
@@ -301,7 +316,7 @@ export function ChatLog({
                         // browser, where a virtualized window would capture only the
                         // rows that happened to be visible.
                         messages.map((_, i) => (
-                            <div key={messages[i].id}>
+                            <div key={bubbleKey(messages[i])}>
                                 {separatorBefore(i) ? (
                                     <div className={styles.separator}>{separatorBefore(i)}</div>
                                 ) : null}

@@ -13,9 +13,13 @@
  *    and no React.
  *  - Problems are collected as diagnostics, never thrown. A merged-bubble
  *    warning renders a badge beside the conversation; it never blanks the chart.
+ *
+ * It runs in three steps: every row is read into a flat record, records that
+ * belong to one message are collapsed into one bubble (see collapse.js), and
+ * participants and sides are resolved over the result.
  */
 import { ATTR_IDS, attrValue, buildAttrMap } from '../qix/attr-map';
-import { ROLES, kpiColumns, resolveRoles } from '../qix/column-map';
+import { ROLES, kpiColumns, resolveRoles, unassignedDimensions } from '../qix/column-map';
 import * as cell from '../qix/read-cell';
 import {
     NULL_SENTINEL,
@@ -25,6 +29,7 @@ import {
     safeColor,
     safeUrl,
 } from './sanitize';
+import { assignBubbleKeys, collapseRecords } from './collapse';
 import { colorForElem, paletteFromTheme, resolveRightSide } from './participants';
 
 /** Severity levels for collected diagnostics. */
@@ -41,9 +46,108 @@ function emptyConversation(diagnostics = [], meta = {}) {
     return {
         messages: [],
         participants: new Map(),
-        meta: { total: 0, loaded: 0, truncated: false, mergedCount: 0, ...meta },
+        meta: {
+            total: 0,
+            loaded: 0,
+            rowsLoaded: 0,
+            truncated: false,
+            mergedCount: 0,
+            conflictCount: 0,
+            ...meta,
+        },
         diagnostics,
     };
+}
+
+/**
+ * Read one qMatrix row into a flat record.
+ *
+ * @param {Array} row - The qMatrix row.
+ * @param {number} i - The row's index within the loaded rows.
+ * @param {object} ctx - Resolved columns, attribute map and settings.
+ * @returns {object} The record — a message as it looks before collapsing.
+ */
+function readRecord(row, i, ctx) {
+    const idCell = row[ctx.idCol.col];
+    const authorCell = row[ctx.authorCol.col];
+    const threadCell = ctx.threadCol ? row[ctx.threadCol.col] : undefined;
+
+    const dupCount = ctx.dupCol ? cell.num(row[ctx.dupCol.col]) : null;
+
+    // Only() returns NULL when the value is not unique within the group, and
+    // the engine renders that as its '-' sentinel. On a merged bubble that is
+    // exactly what happens, so the raw sentinel must not reach the bubble as
+    // if it were the message. The renderer explains the merge instead.
+    const rawBody = cell.text(row[ctx.textCol.col]);
+
+    // Qlik returns a DAY SERIAL here, not epoch milliseconds — see
+    // qlikTimeToEpochMs. Storing the raw value silently disables every
+    // time-based behaviour downstream.
+    const tsValue = attrValue(idCell, ctx.attrMap, ATTR_IDS.TS);
+
+    const mediaRaw = attrText(attrValue(idCell, ctx.attrMap, ATTR_IDS.MEDIA));
+
+    return {
+        id: cell.text(idCell) || `row-${i}`,
+        elem: cell.elem(idCell),
+        body: rawBody === NULL_SENTINEL ? '' : rawBody,
+        rowCount: typeof dupCount === 'number' ? dupCount : 1,
+        merged: typeof dupCount === 'number' && dupCount > 1,
+        bodyFormat: ctx.bodyFormat,
+        authorKey: cell.text(authorCell),
+        authorElem: cell.elem(authorCell),
+        avatar: safeUrl(attrValue(idCell, ctx.attrMap, ATTR_IDS.AVATAR)?.qText),
+        ts: qlikTimeToEpochMs(tsValue?.qNum),
+        tsText: attrText(attrValue(idCell, ctx.attrMap, ATTR_IDS.TS_TEXT)),
+        threadId: threadCell ? cell.optionalText(threadCell) : null,
+        threadElem: threadCell ? cell.elem(threadCell) : -1,
+        kind: attrText(attrValue(idCell, ctx.attrMap, ATTR_IDS.KIND)),
+        media: parseMediaRefs(mediaRaw)
+            .map((m) => ({ ...m, ref: m.ref }))
+            .filter((m) => m.ref),
+        accent: safeColor(attrValue(idCell, ctx.attrMap, ATTR_IDS.ACCENT)),
+        badge: attrText(attrValue(idCell, ctx.attrMap, ATTR_IDS.BADGE)),
+        sideHint: attrValue(idCell, ctx.attrMap, ATTR_IDS.SIDE)?.qNum ?? null,
+        kpis: ctx.kpiCols.map((column) => ({
+            key: column.cId || `msr-${column.col}`,
+            label: column.label,
+            text: cell.text(row[column.col]),
+            num: cell.num(row[column.col]),
+        })),
+        state: cell.state(authorCell),
+        rowIdx: cell.absoluteRow(ctx.area, i),
+    };
+}
+
+/**
+ * Register every author seen in the records, in first-seen order.
+ *
+ * Colour keys off the author's element number, never off order of appearance;
+ * the avatar is the first valid one any of the author's rows carries.
+ *
+ * @param {object[]} records - Records in cube order.
+ * @param {string[]} palette - Colours to choose from.
+ * @returns {Map<string, object>} Participants keyed by author text.
+ */
+function registerParticipants(records, palette) {
+    const participants = new Map();
+    for (const record of records) {
+        let participant = participants.get(record.authorKey);
+        if (!participant) {
+            participant = {
+                key: record.authorKey,
+                elem: record.authorElem,
+                label: record.authorKey || '(unknown)',
+                color: colorForElem(record.authorElem, palette),
+                avatarUrl: null,
+                side: 'left',
+                unknown: record.authorElem < 0,
+            };
+            participants.set(record.authorKey, participant);
+        }
+        if (record.avatar && !participant.avatarUrl) participant.avatarUrl = record.avatar;
+    }
+    return participants;
 }
 
 /**
@@ -73,109 +177,36 @@ export function normalize({ layout, rows, props = {}, theme, area }) {
         return emptyConversation(diagnostics, { total: hc.qSize?.qcy ?? 0 });
     }
 
-    const idCol = byRole[ROLES.MESSAGE_ID];
-    const authorCol = byRole[ROLES.AUTHOR];
-    const textCol = byRole[ROLES.TEXT];
-    const threadCol = byRole[ROLES.THREAD];
-    const dupCol = byRole[ROLES.DUP_CHECK];
+    const ctx = {
+        idCol: byRole[ROLES.MESSAGE_ID],
+        authorCol: byRole[ROLES.AUTHOR],
+        textCol: byRole[ROLES.TEXT],
+        threadCol: byRole[ROLES.THREAD],
+        dupCol: byRole[ROLES.DUP_CHECK],
+        // Attribute expressions ride on the message-id dimension. Build the
+        // id -> index map once per layout; never index into qValues by a literal.
+        attrMap: buildAttrMap(byRole[ROLES.MESSAGE_ID].info),
+        // Measures beyond the text and the integrity probe are per-message KPIs.
+        kpiCols: kpiColumns(columns, byRole),
+        bodyFormat: props.bodyFormat === 'markdown' ? 'markdown' : 'text',
+        area,
+    };
 
-    // Attribute expressions ride on the message-id dimension. Build the
-    // id -> index map once per layout; never index into qValues by a literal.
-    const attrMap = buildAttrMap(idCol.info);
-
-    // Measures beyond the text and the integrity probe are per-message KPIs.
-    const kpiCols = kpiColumns(columns, byRole);
-
-    const palette = paletteFromTheme(theme);
-    const participants = new Map();
-    const authorOrder = [];
-    const messages = [];
-    let mergedCount = 0;
-
-    const source = Array.isArray(rows) ? rows : [];
-
-    source.forEach((row, i) => {
-        if (!Array.isArray(row)) return;
-
-        const idCell = row[idCol.col];
-        const authorCell = row[authorCol.col];
-        const textCell = row[textCol.col];
-
-        const authorKey = cell.text(authorCell);
-        const authorElem = cell.elem(authorCell);
-
-        if (!participants.has(authorKey)) {
-            authorOrder.push(authorKey);
-            participants.set(authorKey, {
-                key: authorKey,
-                elem: authorElem,
-                label: authorKey || '(unknown)',
-                color: colorForElem(authorElem, palette),
-                avatarUrl: null,
-                side: 'left',
-                unknown: authorElem < 0,
-            });
-        }
-
-        const dupCount = dupCol ? cell.num(row[dupCol.col]) : null;
-        const merged = typeof dupCount === 'number' && dupCount > 1;
-        if (merged) mergedCount += 1;
-
-        // Only() returns NULL when the value is not unique within the group, and
-        // the engine renders that as its '-' sentinel. On a merged bubble that is
-        // exactly what happens, so the raw sentinel must not reach the bubble as
-        // if it were the message. The renderer explains the merge instead.
-        const rawBody = cell.text(textCell);
-        const body = rawBody === NULL_SENTINEL ? '' : rawBody;
-
-        const avatar = safeUrl(attrValue(idCell, attrMap, ATTR_IDS.AVATAR)?.qText);
-        if (avatar && !participants.get(authorKey).avatarUrl) {
-            participants.get(authorKey).avatarUrl = avatar;
-        }
-
-        // Qlik returns a DAY SERIAL here, not epoch milliseconds — see
-        // qlikTimeToEpochMs. Storing the raw value silently disables every
-        // time-based behaviour downstream.
-        const tsValue = attrValue(idCell, attrMap, ATTR_IDS.TS);
-        const ts = qlikTimeToEpochMs(tsValue?.qNum);
-
-        const mediaRaw = attrText(attrValue(idCell, attrMap, ATTR_IDS.MEDIA));
-        const media = parseMediaRefs(mediaRaw)
-            .map((m) => ({ ...m, ref: m.ref }))
-            .filter((m) => m.ref);
-
-        messages.push({
-            id: cell.text(idCell) || `row-${i}`,
-            elem: cell.elem(idCell),
-            body,
-            rowCount: typeof dupCount === 'number' ? dupCount : 1,
-            bodyFormat: props.bodyFormat === 'markdown' ? 'markdown' : 'text',
-            authorKey,
-            ts,
-            tsText: attrText(attrValue(idCell, attrMap, ATTR_IDS.TS_TEXT)),
-            threadId: threadCol ? cell.optionalText(row[threadCol.col]) : null,
-            kind: attrText(attrValue(idCell, attrMap, ATTR_IDS.KIND)),
-            media,
-            accent: safeColor(attrValue(idCell, attrMap, ATTR_IDS.ACCENT)),
-            badge: attrText(attrValue(idCell, attrMap, ATTR_IDS.BADGE)),
-            sideHint: attrValue(idCell, attrMap, ATTR_IDS.SIDE)?.qNum ?? null,
-            kpis: kpiCols.map((column) => ({
-                key: column.cId || `msr-${column.col}`,
-                label: column.label,
-                text: cell.text(row[column.col]),
-                num: cell.num(row[column.col]),
-            })),
-            state: cell.state(authorCell),
-            rowIdx: cell.absoluteRow(area, i),
-            merged,
-        });
+    const records = [];
+    (Array.isArray(rows) ? rows : []).forEach((row, i) => {
+        if (Array.isArray(row)) records.push(readRecord(row, i, ctx));
     });
 
-    // Side resolution needs the whole set, so it runs after the row loop.
+    const participants = registerParticipants(records, paletteFromTheme(theme));
+    const { messages, conflictCount } = collapseRecords(records);
+    assignBubbleKeys(messages);
+    const mergedCount = messages.filter((m) => m.merged).length;
+
+    // Side resolution needs the whole set, so it runs after collapsing.
     // Synthetic rows (Total, Null, Others) are not people. Counting them as
     // participants turns a genuine two-party chat into a three-party one and
     // silently disables two-sided alignment.
-    const realAuthorKeys = authorOrder.filter((key) => !participants.get(key).unknown);
+    const realAuthorKeys = [...participants.keys()].filter((key) => !participants.get(key).unknown);
     const lastReal = [...messages].reverse().find((m) => !participants.get(m.authorKey)?.unknown);
 
     // Two-sided alignment is opt-in and only meaningful for exactly two people.
@@ -208,13 +239,43 @@ export function normalize({ layout, rows, props = {}, theme, area }) {
         });
     }
 
-    const total = hc.qSize?.qcy ?? messages.length;
-    const truncated = total > messages.length;
+    if (conflictCount > 0) {
+        diagnostics.push({
+            severity: SEVERITY.WARNING,
+            code: 'ambiguous-message-id',
+            message:
+                `${conflictCount} message(s) share a Message ID with a different message from ` +
+                'the same sender. Make the id unique across conversations, not just within one.',
+        });
+    }
+
+    const unassigned = unassignedDimensions(columns, byRole);
+    if (unassigned.length) {
+        const names = unassigned.map((c) => c.label || `Dimension ${c.col + 1}`).join(', ');
+        diagnostics.push({
+            severity: SEVERITY.WARNING,
+            code: 'unassigned-dimension',
+            message:
+                `Not used by the conversation: ${names}. An unused dimension still splits ` +
+                'messages into extra rows — remove it.',
+        });
+    }
+
+    // Truncation is a question about ROWS: the engine counts rows, and once rows
+    // are collapsed a fully loaded cube holds fewer bubbles than qcy. Comparing
+    // bubbles with qcy would report messages missing that are all on screen.
+    const rowsLoaded = records.length;
+    const total = hc.qSize?.qcy ?? rowsLoaded;
+    const truncated = total > rowsLoaded;
     if (truncated) {
         diagnostics.push({
             severity: SEVERITY.WARNING,
             code: 'truncated',
-            message: `Showing ${messages.length} of ${total} messages. Filter to see the rest.`,
+            message:
+                rowsLoaded === messages.length
+                    ? `Showing ${messages.length} of ${total} messages. Filter to see the rest.`
+                    : `Showing ${messages.length} messages from ${rowsLoaded} of ${total} rows. ` +
+                      'Filter to see the rest.',
         });
     }
 
@@ -223,7 +284,14 @@ export function normalize({ layout, rows, props = {}, theme, area }) {
     return {
         messages,
         participants,
-        meta: { total, loaded: messages.length, truncated, mergedCount },
+        meta: {
+            total,
+            loaded: messages.length,
+            rowsLoaded,
+            truncated,
+            mergedCount,
+            conflictCount,
+        },
         diagnostics,
     };
 }

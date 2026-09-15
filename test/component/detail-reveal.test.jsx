@@ -175,3 +175,34 @@ describe('DetailReveal', () => {
         expect(screen.getByText(/1 attachment.*not yet supported/)).toBeInTheDocument();
     });
 });
+
+describe('DetailReveal — collapsed rows', () => {
+    it('says a KPI varies instead of showing one row’s value', () => {
+        const kpi = { key: 'k', label: 'Tokens', text: '', num: null, varies: true };
+        const message = msg({ kpis: [kpi] });
+        render(
+            <DetailReveal
+                message={message}
+                messages={[message]}
+                index={0}
+                mode="pane"
+                onClose={vi.fn()}
+            />
+        );
+        expect(screen.getByText('Varies')).toBeInTheDocument();
+    });
+
+    it('explains a Message ID that another message shares', () => {
+        const message = msg({ idConflict: true });
+        render(
+            <DetailReveal
+                message={message}
+                messages={[message]}
+                index={0}
+                mode="pane"
+                onClose={vi.fn()}
+            />
+        );
+        expect(screen.getByText(/has this Message ID/)).toBeInTheDocument();
+    });
+});

@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { VirtuosoMockContext } from 'react-virtuoso';
 import ChatLog from '../../src/ui/ChatLog';
@@ -292,5 +292,51 @@ describe('ChatLog snapshot rendering', () => {
             />
         );
         expect(screen.queryByLabelText('Message details')).not.toBeInTheDocument();
+    });
+});
+
+describe('ChatLog bubbles that share a message id', () => {
+    // Ids repeat legitimately (two authors sharing one) or through a data error.
+    // normalize() gives each bubble a unique key; the view must key on it.
+    const shared = [
+        message({ id: '7', key: '7', body: 'first' }),
+        message({ id: '7', key: '7#2', body: 'second' }),
+    ];
+    const active = { enabled: true, active: true, blur: () => {} };
+
+    it('opens only the bubble that was activated', () => {
+        const { container } = renderList(
+            <ChatLog
+                conversation={conversation(shared)}
+                settings={{}}
+                // Narrow enough for inline details, which render per row.
+                rect={{ width: 300, height: 600 }}
+                keyboard={active}
+            />
+        );
+        const list = container.querySelector('[role="list"]');
+        fireEvent.keyDown(list, { key: 'ArrowDown' });
+        fireEvent.keyDown(list, { key: 'ArrowDown' });
+        fireEvent.keyDown(list, { key: 'Enter' });
+
+        expect(screen.getAllByRole('button', { name: 'Close' })).toHaveLength(1);
+    });
+
+    it('renders both in the export path without duplicate React keys', () => {
+        const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+        renderList(
+            <ChatLog
+                conversation={conversation(shared)}
+                settings={{}}
+                layout={{ snapshotData: { chatbox: { firstVisibleIndex: 0, openId: null } } }}
+            />
+        );
+        expect(screen.getByText('first')).toBeInTheDocument();
+        expect(screen.getByText('second')).toBeInTheDocument();
+        const keyWarnings = errors.mock.calls.filter((args) =>
+            String(args[0]).includes('same key')
+        );
+        errors.mockRestore();
+        expect(keyWarnings).toEqual([]);
     });
 });

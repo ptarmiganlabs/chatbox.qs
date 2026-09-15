@@ -456,3 +456,206 @@ describe('per-message KPIs', () => {
         expect(m.kpis[0].num).toBeNull();
     });
 });
+
+describe('rows that belong to one message', () => {
+    // A cube with a fourth dimension no role claims — the same shape a recipient
+    // dimension produces for a group message: one row per extra value. Element
+    // numbers are explicit here, because the row() helper above gives every
+    // row the same message-id element.
+    function wideLayout({ qcy, attrIds = [], kpiCount = 0 } = {}) {
+        return {
+            qHyperCube: {
+                qSize: { qcx: 6 + kpiCount, qcy },
+                qDimensionInfo: [
+                    { cId: 'd_msgid', qAttrExprInfo: attrIds.map((id) => ({ id })) },
+                    { cId: 'd_author' },
+                    { cId: 'd_thread' },
+                    { cId: 'uidX', qFallbackTitle: 'Recipient' },
+                ],
+                qMeasureInfo: [
+                    { cId: 'm_text' },
+                    { cId: 'm_dupcheck' },
+                    ...Array.from({ length: kpiCount }, (_, k) => ({
+                        cId: `m_kpi${k}`,
+                        qFallbackTitle: `KPI ${k}`,
+                    })),
+                ],
+            },
+        };
+    }
+
+    function wideRow({
+        id,
+        elemId,
+        author = 'Ada',
+        authorElem = 10,
+        extra = 'Bob',
+        text = 'hello',
+        dup = 1,
+        attrs = [],
+        kpis = [],
+    }) {
+        return [
+            { qText: id, qElemNumber: elemId, qAttrExps: { qValues: attrs } },
+            { qText: author, qElemNumber: authorElem, qState: 'O' },
+            { qText: '-', qElemNumber: -2 },
+            { qText: extra, qElemNumber: 0 },
+            { qText: text, qNum: 'NaN' },
+            { qText: String(dup), qNum: dup },
+            ...kpis,
+        ];
+    }
+
+    it('collapses the rows of one message into a single bubble', () => {
+        const rows = ['Bob', 'Cy', 'Dan'].map((extra) =>
+            wideRow({ id: '7', elemId: 7, extra, text: 'to all of you' })
+        );
+        const c = normalize({ layout: wideLayout({ qcy: 3 }), rows });
+
+        expect(c.messages).toHaveLength(1);
+        expect(c.messages[0].body).toBe('to all of you');
+        expect(c.messages[0].rowsCollapsed).toBe(3);
+        expect(c.meta.rowsLoaded).toBe(3);
+    });
+
+    it('collapses rows that are not adjacent, keeping the first row in place', () => {
+        // A dragged dimension or an expression sort can separate a message's rows.
+        const rows = [
+            wideRow({ id: '7', elemId: 7, extra: 'Bob', text: 'first' }),
+            wideRow({ id: '8', elemId: 8, author: 'Bob', authorElem: 11, text: 'second' }),
+            wideRow({ id: '7', elemId: 7, extra: 'Cy', text: 'first' }),
+        ];
+        const c = normalize({ layout: wideLayout({ qcy: 3 }), rows });
+        expect(c.messages.map((m) => m.body)).toEqual(['first', 'second']);
+    });
+
+    it('never collapses rows whose message id is null or synthetic', () => {
+        // Every null id shares element -2; grouping on it would merge strangers.
+        const rows = [
+            wideRow({ id: '-', elemId: -2, extra: 'Bob', text: 'same' }),
+            wideRow({ id: '-', elemId: -2, extra: 'Cy', text: 'same' }),
+        ];
+        const c = normalize({ layout: wideLayout({ qcy: 2 }), rows });
+        expect(c.messages).toHaveLength(2);
+    });
+
+    it('keeps the probe honest: merged if any row says so, with the largest count', () => {
+        const rows = [
+            wideRow({ id: '7', elemId: 7, extra: 'Bob', dup: 1 }),
+            wideRow({ id: '7', elemId: 7, extra: 'Cy', dup: 3 }),
+        ];
+        const m = normalize({ layout: wideLayout({ qcy: 2 }), rows }).messages[0];
+        expect(m.merged).toBe(true);
+        // The largest count, never the sum: recipients are not messages.
+        expect(m.rowCount).toBe(3);
+    });
+
+    it('marks a KPI that differs between the rows as varying', () => {
+        const rows = [
+            wideRow({
+                id: '7',
+                elemId: 7,
+                extra: 'Bob',
+                kpis: [
+                    { qText: '10', qNum: 10 },
+                    { qText: 'same', qNum: 'NaN' },
+                ],
+            }),
+            wideRow({
+                id: '7',
+                elemId: 7,
+                extra: 'Cy',
+                kpis: [
+                    { qText: '12', qNum: 12 },
+                    { qText: 'same', qNum: 'NaN' },
+                ],
+            }),
+        ];
+        const m = normalize({ layout: wideLayout({ qcy: 2, kpiCount: 2 }), rows }).messages[0];
+        expect(m.kpis[0]).toMatchObject({ varies: true, num: null, text: '' });
+        expect(m.kpis[1]).toMatchObject({ text: 'same' });
+        expect(m.kpis[1].varies).toBeUndefined();
+    });
+
+    it('honours the side attribute only when every row agrees on it', () => {
+        const layout = wideLayout({ qcy: 2, attrIds: [ATTR_IDS.SIDE] });
+        const agree = normalize({
+            layout,
+            rows: [
+                wideRow({ id: '7', elemId: 7, extra: 'Bob', attrs: [{ qNum: 1 }] }),
+                wideRow({ id: '7', elemId: 7, extra: 'Cy', attrs: [{ qNum: 1 }] }),
+            ],
+        });
+        expect(agree.messages[0].side).toBe('right');
+
+        const disagree = normalize({
+            layout,
+            rows: [
+                wideRow({ id: '7', elemId: 7, extra: 'Bob', attrs: [{ qNum: 1 }] }),
+                wideRow({ id: '7', elemId: 7, extra: 'Cy', attrs: [{ qNum: 0 }] }),
+            ],
+        });
+        expect(disagree.messages[0].sideHint).toBeNull();
+    });
+
+    it('keeps different messages that share an id apart, and says so', () => {
+        // Ids unique per chat but not globally: "hi" to Bob and "yo" to Cy both
+        // carry id 7. Collapsing them would silently drop "yo".
+        const rows = [
+            wideRow({ id: '7', elemId: 7, extra: 'Bob', text: 'hi' }),
+            wideRow({ id: '7', elemId: 7, extra: 'Cy', text: 'yo' }),
+        ];
+        const c = normalize({ layout: wideLayout({ qcy: 2 }), rows });
+
+        expect(c.messages.map((m) => m.body)).toEqual(['hi', 'yo']);
+        expect(c.messages.every((m) => m.idConflict)).toBe(true);
+        expect(c.meta.conflictCount).toBe(1);
+        expect(c.diagnostics.filter((d) => d.code === 'ambiguous-message-id')).toHaveLength(1);
+    });
+
+    it('warns about a dimension no role uses', () => {
+        const c = normalize({
+            layout: wideLayout({ qcy: 1 }),
+            rows: [wideRow({ id: '7', elemId: 7 })],
+        });
+        const warning = c.diagnostics.find((d) => d.code === 'unassigned-dimension');
+        expect(warning.message).toContain('Recipient');
+    });
+
+    it('does not report truncation when every row is loaded — regression', () => {
+        // 6 rows collapse to 2 bubbles. Comparing bubbles with qcy would claim
+        // four messages are missing when every one of them is on screen.
+        const rows = ['Bob', 'Cy', 'Dan'].flatMap((extra) => [
+            wideRow({ id: '7', elemId: 7, extra, text: 'a' }),
+            wideRow({ id: '8', elemId: 8, extra, text: 'b' }),
+        ]);
+        const c = normalize({ layout: wideLayout({ qcy: 6 }), rows });
+
+        expect(c.messages).toHaveLength(2);
+        expect(c.meta.truncated).toBe(false);
+        expect(c.diagnostics.find((d) => d.code === 'truncated')).toBeUndefined();
+    });
+
+    it('reports truncation in rows when rows and bubbles differ', () => {
+        const rows = ['Bob', 'Cy', 'Dan'].flatMap((extra) => [
+            wideRow({ id: '7', elemId: 7, extra, text: 'a' }),
+            wideRow({ id: '8', elemId: 8, extra, text: 'b' }),
+        ]);
+        const c = normalize({ layout: wideLayout({ qcy: 9 }), rows });
+
+        expect(c.meta.truncated).toBe(true);
+        const warning = c.diagnostics.find((d) => d.code === 'truncated');
+        expect(warning.message).toContain('2 messages from 6 of 9 rows');
+    });
+
+    it('gives every bubble a unique key, and the first bubble keeps its id', () => {
+        // Two authors sharing an id is the harmless case from GOTCHAS 8 — but
+        // the view must still tell the bubbles apart.
+        const rows = [
+            row({ id: '7', elemId: 7, author: 'Ada', authorElem: 10, text: 'a' }),
+            row({ id: '7', elemId: 7, author: 'Bob', authorElem: 11, text: 'b' }),
+        ];
+        const c = normalize({ layout: makeLayout({ qcy: 2 }), rows });
+        expect(c.messages.map((m) => m.key)).toEqual(['7', '7#2']);
+    });
+});

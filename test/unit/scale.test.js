@@ -92,6 +92,55 @@ describe('scale: 12,000 messages', () => {
     });
 });
 
+describe('scale: 12,000 messages spread over 36,000 rows', () => {
+    // A group message arrives as one row per recipient. Collapsing must stay
+    // linear, or a large cube with recipients becomes a resize-time stall.
+    const WIDE = 6;
+    const recipients = ['Bob', 'Cy', 'Dan'];
+
+    function wideRows(messages) {
+        return bigRows(messages).flatMap((r) =>
+            recipients.map((name, k) => [
+                r[0],
+                r[1],
+                r[2],
+                { qText: name, qElemNumber: k },
+                r[3],
+                r[4],
+            ])
+        );
+    }
+
+    const wideLayout = (qcy) => ({
+        qHyperCube: {
+            qSize: { qcx: WIDE, qcy },
+            qDimensionInfo: [
+                { cId: 'd_msgid', qAttrExprInfo: [{ id: 'ts' }] },
+                { cId: 'd_author' },
+                { cId: 'd_thread' },
+                { cId: 'uidRecipient', qFallbackTitle: 'Recipient' },
+            ],
+            qMeasureInfo: [{ cId: 'm_text' }, { cId: 'm_dupcheck' }],
+        },
+    });
+
+    it('collapses back to 12,000 bubbles without reporting truncation', () => {
+        const rows = wideRows(COUNT);
+        const c = normalize({ layout: wideLayout(rows.length), rows });
+        expect(c.messages).toHaveLength(COUNT);
+        expect(c.meta.rowsLoaded).toBe(COUNT * 3);
+        expect(c.meta.truncated).toBe(false);
+    });
+
+    it('collapses in a time a resize can afford', () => {
+        const rows = wideRows(COUNT);
+        const layout = wideLayout(rows.length);
+        const started = performance.now();
+        normalize({ layout, rows });
+        expect(performance.now() - started).toBeLessThan(2000);
+    });
+});
+
 describe('scale: paging 12,000 rows', () => {
     it('fetches every row in the fewest calls the cell budget allows', async () => {
         const perPage = rowsPerPage(COLS); // 2000

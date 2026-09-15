@@ -178,6 +178,26 @@ export function kpiColumns(columns, byRole) {
 }
 
 /**
+ * Collect the dimension columns no role claims.
+ *
+ * A measure without a role is a KPI; a dimension without a role is never
+ * harmless. It still takes part in the combinations the engine emits, so every
+ * extra value it has for a message becomes another row of that message.
+ *
+ * @param {object[]} columns - Column descriptors from {@link buildColumns}.
+ * @param {object} byRole - Role map from {@link resolveRoles}.
+ * @returns {object[]} Unclaimed dimension columns, in cube order.
+ */
+export function unassignedDimensions(columns, byRole) {
+    const claimed = new Set(
+        Object.values(byRole ?? {})
+            .filter(Boolean)
+            .map((c) => c.col)
+    );
+    return columns.filter((c) => c.kind === 'dim' && !claimed.has(c.col));
+}
+
+/**
  * Find a dimension's index among dimensions only.
  *
  * `selectHyperCubeValues` addresses a dimension by its index in the dimension

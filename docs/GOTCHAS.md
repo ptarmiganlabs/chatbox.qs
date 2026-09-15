@@ -102,3 +102,18 @@ column that no role has claimed and that carries no role `cId`. A column tagged 
 reinterpreted as another.
 
 _See `src/qix/column-map.js`._
+
+## 10. One message can arrive as several rows, and the probe cannot see it
+
+A straight hypercube emits one row per distinct combination of dimension values. Give a message a
+dimension with several values for it — a recipient dimension on a group message, or a dimension no
+role uses — and the message arrives once per value. `Count([MsgId])` is 1 on every one of those rows,
+so the integrity probe stays quiet, and the bubble silently repeats.
+
+**Rule:** rows sharing message-id element, author and thread collapse into one bubble, but only when
+body and timestamp also agree — ids unique per chat but not globally would otherwise fold two
+messages together and drop one. Never collapse a negative message-id element. Truncation compares
+**rows** loaded with `qcy`, never bubbles. Views key on `message.key`, which stays unique when ids
+repeat.
+
+_See `src/chat/collapse.js`._

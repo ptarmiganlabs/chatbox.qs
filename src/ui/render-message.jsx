@@ -163,7 +163,11 @@ export function MessageRow({
                     ) : (
                         <div className={styles.body} />
                     )}
-                    {message.tsText || message.badge || message.merged || onShowDetails ? (
+                    {message.tsText ||
+                    message.badge ||
+                    message.merged ||
+                    message.idConflict ||
+                    onShowDetails ? (
                         <div className={styles.meta}>
                             {message.tsText ? <span>{message.tsText}</span> : null}
                             {message.badge ? (
@@ -172,6 +176,14 @@ export function MessageRow({
                             {message.merged ? (
                                 <span className={styles.badge} title="Message ID is not unique">
                                     merged
+                                </span>
+                            ) : null}
+                            {message.idConflict ? (
+                                <span
+                                    className={styles.badge}
+                                    title="A different message has the same Message ID"
+                                >
+                                    shared id
                                 </span>
                             ) : null}
                             {onShowDetails ? (
