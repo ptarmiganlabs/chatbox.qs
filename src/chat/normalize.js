@@ -385,8 +385,13 @@ export function normalize({ layout, rows, props = {}, theme, area }) {
     }
 
     // The cap can fall part-way through a group message's rows, so the last
-    // bubble loaded may be missing recipients the engine would still return.
-    if (truncated && lastBubble?.recipients) lastBubble.recipientsPartial = true;
+    // bubble loaded may be missing recipients the engine would still return —
+    // unless the last row loaded was a phantom. Then the cut fell after every
+    // message row, and the last real bubble is complete.
+    const lastRecord = records[records.length - 1];
+    if (truncated && lastBubble?.recipients && lastRecord && !isPhantomRecord(lastRecord)) {
+        lastBubble.recipientsPartial = true;
+    }
 
     if (props.order === 'newest') messages.reverse();
 

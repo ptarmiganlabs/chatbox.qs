@@ -79,14 +79,17 @@ function toBubble(record) {
 }
 
 /**
- * Report whether a row carries the same message as a bubble.
+ * Key a row by the content that decides whether it is the same message.
  *
- * @param {object} bubble - The bubble collected so far.
- * @param {object} record - The row being considered.
- * @returns {boolean} True when body and timestamp both match.
+ * Body and timestamp, serialised unambiguously so a lookup replaces a scan: a
+ * misconfigured Message ID shared by thousands of different messages must cost
+ * one Map lookup per row, not a pass over every bubble already collected.
+ *
+ * @param {object} record - A record or bubble.
+ * @returns {string} Equal for rows with the same body and timestamp.
  */
-function sameContent(bubble, record) {
-    return bubble.body === record.body && bubble.ts === record.ts;
+function contentKey(record) {
+    return JSON.stringify([record.body, record.ts]);
 }
 
 /**
@@ -136,17 +139,18 @@ export function collapseRecords(records) {
 
     for (const record of Array.isArray(records) ? records : []) {
         const key = collapseKey(record);
+        // Each group maps content → bubble, so finding a row's bubble is a lookup.
         const group = key === null ? null : byKey.get(key);
 
         if (!group) {
             const bubble = toBubble(record);
-            if (key !== null) byKey.set(key, [bubble]);
+            if (key !== null) byKey.set(key, new Map([[contentKey(record), bubble]]));
             messages.push(bubble);
             lastBubble = bubble;
             continue;
         }
 
-        const match = group.find((bubble) => sameContent(bubble, record));
+        const match = group.get(contentKey(record));
         if (match) {
             foldInto(match, record);
             lastBubble = match;
@@ -155,8 +159,11 @@ export function collapseRecords(records) {
 
         const bubble = toBubble(record);
         bubble.idConflict = true;
-        for (const other of group) other.idConflict = true;
-        group.push(bubble);
+        // Only the group's first bubble can still be unflagged: every later one
+        // was flagged as it arrived. Re-flagging the whole group each time made
+        // a heavily shared id quadratic.
+        if (group.size === 1) for (const other of group.values()) other.idConflict = true;
+        group.set(contentKey(record), bubble);
         messages.push(bubble);
         lastBubble = bubble;
         conflictCount += 1;
@@ -181,16 +188,20 @@ export function collapseRecords(records) {
 export function assignBubbleKeys(messages) {
     const reserved = new Set(messages.map((m) => m.id));
     const used = new Set();
+    // Where each id's suffix search resumes. Restarting at #2 for every repeat
+    // made k bubbles sharing an id cost k² probes — 12 seconds at 20 000 rows.
+    const nextSuffix = new Map();
     for (const message of messages) {
         if (!used.has(message.id)) {
             message.key = message.id;
             used.add(message.id);
             continue;
         }
-        let n = 2;
+        let n = nextSuffix.get(message.id) ?? 2;
         while (reserved.has(`${message.id}#${n}`) || used.has(`${message.id}#${n}`)) n += 1;
         message.key = `${message.id}#${n}`;
         used.add(message.key);
+        nextSuffix.set(message.id, n + 1);
     }
     return messages;
 }

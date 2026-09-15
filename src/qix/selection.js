@@ -84,13 +84,19 @@ export function buildSelection({
             }
             if (!byRole[ROLES.RECIPIENT]) return [];
 
-            // Without one, the conversation is its people: everyone in it, in both
+            // A message with no named recipient belongs to no exchange of people.
+            // Selecting its sender in both fields would narrow the view to the
+            // sender's notes to self — and drop the clicked message, whose null
+            // recipient no selection in the To field can ever include.
+            const recipientKeys = (message.recipients ?? [])
+                .filter((r) => !r.unknown)
+                .map((r) => r.key);
+            if (!recipientKeys.length) return [];
+
+            // Otherwise the conversation is its people: everyone in it, in both
             // fields, each with the element number that field gives them. Someone
             // who never sent has no From number and is simply not needed there.
-            const parties = [
-                message.authorKey,
-                ...(message.recipients ?? []).filter((r) => !r.unknown).map((r) => r.key),
-            ];
+            const parties = [message.authorKey, ...recipientKeys];
             const from = selectable(
                 parties.map((key) => {
                     const participant = participants?.get(key);

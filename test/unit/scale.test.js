@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { normalize } from '../../src/chat/normalize';
 import { buildDayGroups } from '../../src/chat/grouping';
 import { fetchAllRows, rowsPerPage } from '../../src/qix/paging';
+import { assignBubbleKeys, collapseRecords } from '../../src/chat/collapse';
 
 /**
  * Matches the ChatBig fixture on the PTLAB server: 12,000 generated messages
@@ -138,6 +139,38 @@ describe('scale: 12,000 messages spread over 36,000 rows', () => {
         const started = performance.now();
         normalize({ layout, rows });
         expect(performance.now() - started).toBeLessThan(2000);
+    });
+});
+
+describe('scale: a Message ID shared by 20,000 different messages', () => {
+    // A misconfigured id — a campaign or conversation id — shared by many different
+    // messages from one sender. Splitting them and keying the bubbles was
+    // quadratic: 12 seconds at this size, on every layout change.
+    it('splits and keys them in linear time — regression', () => {
+        const n = 20_000;
+        const records = Array.from({ length: n }, (_, i) => ({
+            id: 'campaign-7',
+            elem: 1,
+            authorKey: 'Ada',
+            threadId: null,
+            body: `Message ${i}`,
+            ts: i,
+            rowCount: 1,
+            merged: false,
+            sideHint: null,
+            kpis: [],
+            recipients: null,
+        }));
+        const started = performance.now();
+        const { messages, conflictCount } = collapseRecords(records);
+        assignBubbleKeys(messages);
+        const elapsed = performance.now() - started;
+
+        expect(messages).toHaveLength(n);
+        expect(conflictCount).toBe(n - 1);
+        expect(messages.every((m) => m.idConflict)).toBe(true);
+        expect(new Set(messages.map((m) => m.key)).size).toBe(n);
+        expect(elapsed).toBeLessThan(2000);
     });
 });
 

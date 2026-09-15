@@ -765,6 +765,26 @@ describe('the From → To model', () => {
         expect(complete.messages.some((m) => m.recipientsPartial)).toBe(false);
     });
 
+    it('does not flag a complete message when the limit falls among phantom rows — regression', () => {
+        // Null message ids sort last, so a People table's phantom rows come after
+        // every message row. A cut inside them leaves no message incomplete.
+        const phantomRow = [
+            { qText: '-', qElemNumber: -2, qAttrExps: { qValues: [] } },
+            { qText: 'Dora', qElemNumber: 3, qState: 'O' },
+            { qText: '-', qElemNumber: -2 },
+            { qText: '-', qNum: 'NaN' },
+            { qText: '0', qNum: 0 },
+        ];
+        const rows = [
+            ftRow({ id: '1', elemId: 1, from: 'Ada', fromElem: 0, to: 'Bob', toElem: 5 }),
+            phantomRow,
+        ];
+        const c = normalize({ layout: fromToLayout({ qcy: 10 }), rows, props });
+        expect(c.meta.truncated).toBe(true);
+        expect(c.messages).toHaveLength(1);
+        expect(c.messages[0].recipientsPartial).toBeFalsy();
+    });
+
     it('is not configured without a To dimension', () => {
         const layout = {
             qHyperCube: {

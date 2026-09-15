@@ -96,6 +96,24 @@ describe('resolveSides — threads', () => {
         expect(sides(messages, { scope: 'threads' })).toEqual(['left', 'right', 'right']);
     });
 
+    it('keeps a two-person cube two-sided when the two never share a thread — regression', () => {
+        // Every thread holds one person, so nobody has a two-party conversation.
+        // The two-person cube rule still applies, as it always did: whoever wrote
+        // last goes right.
+        const messages = [msg('Ada', { thread: 'T1' }), msg('Bob', { thread: 'T2' })];
+        expect(sides(messages, { scope: 'threads' })).toEqual(['left', 'right']);
+        expect(sides(messages, { scope: 'threads', own: 'ada' })).toEqual(['right', 'left']);
+    });
+
+    it('keeps three people in separate threads left, as before', () => {
+        const messages = [
+            msg('Ada', { thread: 'T1' }),
+            msg('Bob', { thread: 'T2' }),
+            msg('Cy', { thread: 'T3' }),
+        ];
+        expect(sides(messages, { scope: 'threads' })).toEqual(['left', 'left', 'left']);
+    });
+
     it('treats messages without a thread as one conversation', () => {
         expect(sides([msg('Ada'), msg('Bob')], { scope: 'threads' })).toEqual(['left', 'right']);
     });

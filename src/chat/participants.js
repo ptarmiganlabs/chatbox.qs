@@ -216,6 +216,19 @@ export function resolveSides({ messages, scope, ownParticipant, isReal }) {
         }
     }
 
+    // The whole-cube rule the participant model has always had: with exactly two
+    // people in the cube, Own — or else whoever wrote last — goes right. A
+    // one-party thread whose author has no two-party conversation to take a side
+    // from takes this one instead; without it, two people who never share a
+    // thread both sat left, where they always had two sides. From → To pairs
+    // keep their own rules.
+    const people = [...lastSent.keys()];
+    let cubeRight = null;
+    if (scope !== 'pairs' && people.length === 2) {
+        const [a, b] = people;
+        cubeRight = people.find(isOwn) ?? (lastSent.get(a) >= lastSent.get(b) ? a : b);
+    }
+
     // Pass 5: each message.
     return list.map((message, i) => {
         const author = message.authorKey;
@@ -225,8 +238,11 @@ export function resolveSides({ messages, scope, ownParticipant, isReal }) {
         if (conversation) {
             if (conversation.right !== null)
                 return conversation.right === author ? 'right' : 'left';
-            if (conversation.parties.size === 1)
-                return rightEverywhere.get(author) ? 'right' : 'left';
+            if (conversation.parties.size === 1) {
+                if (rightEverywhere.has(author))
+                    return rightEverywhere.get(author) ? 'right' : 'left';
+                return author === cubeRight ? 'right' : 'left';
+            }
             return 'left';
         }
 

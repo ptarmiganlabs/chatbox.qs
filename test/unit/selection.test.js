@@ -194,6 +194,36 @@ describe('buildSelection — selectConversation', () => {
         ).toEqual([]);
     });
 
+    it('selects nothing for a message with no recipient — regression', () => {
+        // It belongs to no exchange of people. Selecting the sender in both fields
+        // narrowed the view to their notes to self and dropped the clicked message,
+        // whose null recipient no selection in To can include.
+        const byRole = roles(['d_msgid', 'd_author', 'd_recipient'], 'fromTo');
+        const m = message({
+            recipients: [{ key: null, label: '(no recipient)', elem: -2, unknown: true }],
+        });
+        expect(
+            buildSelection({
+                action: 'selectConversation',
+                message: m,
+                byRole,
+                participants,
+                recipientElems,
+            })
+        ).toEqual([]);
+    });
+
+    it('still selects the thread for a message with no recipient', () => {
+        const byRole = roles(['d_msgid', 'd_author', 'd_recipient', 'd_thread'], 'fromTo');
+        const m = message({
+            recipients: [{ key: null, label: '(no recipient)', elem: -2, unknown: true }],
+            threadElem: 4,
+        });
+        expect(
+            buildSelection({ action: 'selectConversation', message: m, byRole, participants })
+        ).toEqual([{ dimIdx: 3, values: [4], toggle: true }]);
+    });
+
     it('selects nothing in the participant model without a thread', () => {
         expect(
             buildSelection({

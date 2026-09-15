@@ -92,7 +92,7 @@ Set under **Behaviour → Clicking a message**:
 - **Selects the recipient** — who the clicked message went to (From → To).
 - **Selects the conversation** — the message's thread when it has one. Without a thread, in From →
   To, it selects everyone in the exchange in both From and To, so the view narrows to it with both
-  sides kept.
+  sides kept. A message with no recipient belongs to no exchange, so there it is not offered.
 - **Selects the message**, **Opens the details** or **Does nothing**.
 
 A single value toggles, as a click in Sense always has. A set of values replaces that field's
