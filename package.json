@@ -1,6 +1,6 @@
 {
     "name": "chatbox-qs",
-    "version": "0.2.0",
+    "version": "0.3.0",
     "type": "module",
     "description": "Render chat-style conversations from the Qlik Sense data model",
     "license": "MIT",
