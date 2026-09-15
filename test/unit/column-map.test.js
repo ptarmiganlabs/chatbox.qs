@@ -72,6 +72,82 @@ describe('resolveRoles', () => {
         expect(missing).not.toContain(ROLES.MESSAGE_ID);
     });
 
+    it('never hands a column another role owns to a missing role — regression', () => {
+        // The Participant dimension was deleted, so the thread column moved into
+        // slot 2. The positional fallback used to bind it as the author as well:
+        // conversation ids rendered as speakers and nothing said "not configured".
+        const { byRole, missing } = resolveRoles(
+            layout([{ cId: 'd_msgid' }, { cId: 'd_thread' }], [{ cId: 'm_text' }]),
+            DEFAULT_CIDS
+        );
+        expect(byRole[ROLES.AUTHOR]).toBeNull();
+        expect(byRole[ROLES.THREAD].col).toBe(1);
+        expect(missing).toEqual([ROLES.AUTHOR]);
+    });
+
+    it('still binds by position for a chart converted from another type', () => {
+        // stardust gives every added column a uid cId, so a converted chart has
+        // no role cIds at all — position is the only information there is.
+        const converted = layout(
+            [{ cId: 'uidA' }, { cId: 'uidB' }, { cId: 'uidC' }],
+            [{ cId: 'uidD' }, { cId: 'uidE' }]
+        );
+        const { byRole, missing } = resolveRoles(converted, DEFAULT_CIDS);
+        expect(missing).toEqual([]);
+        expect(byRole[ROLES.AUTHOR].col).toBe(1);
+        expect(byRole[ROLES.THREAD].col).toBe(2);
+        expect(byRole[ROLES.DUP_CHECK].col).toBe(4);
+    });
+
+    it('lets an untagged column fill its slot beside tagged ones', () => {
+        const { byRole } = resolveRoles(
+            layout([{ cId: 'd_msgid' }, { cId: 'uidB' }], [{ cId: 'm_text' }]),
+            DEFAULT_CIDS
+        );
+        expect(byRole[ROLES.AUTHOR].col).toBe(1);
+    });
+
+    it('never binds a dimension role to a measure carrying its cId', () => {
+        const { byRole, missing } = resolveRoles(
+            layout([{ cId: 'd_msgid' }], [{ cId: 'd_author' }, { cId: 'm_text' }]),
+            DEFAULT_CIDS
+        );
+        expect(byRole[ROLES.AUTHOR]).toBeNull();
+        expect(byRole[ROLES.TEXT].col).toBe(2);
+        // The measure in the probe's slot is tagged for another role, so it is
+        // not quietly reinterpreted as the probe either.
+        expect(byRole[ROLES.DUP_CHECK]).toBeNull();
+        expect(missing).toEqual([ROLES.AUTHOR]);
+    });
+
+    it('binds a duplicated cId once and does not reinterpret the copy', () => {
+        const { byRole } = resolveRoles(
+            layout(
+                [{ cId: 'd_msgid' }, { cId: 'd_author' }, { cId: 'd_author' }],
+                [{ cId: 'm_text' }]
+            ),
+            DEFAULT_CIDS
+        );
+        expect(byRole[ROLES.AUTHOR].col).toBe(1);
+        expect(byRole[ROLES.THREAD]).toBeNull();
+    });
+
+    it('resolves a role the stored bag predates through its default cId', () => {
+        // A saved object's chatbox.roles only lists the roles that existed when
+        // it was created.
+        const { byRole, missing } = resolveRoles(
+            layout(
+                [{ cId: 'd_thread' }, { cId: 'd_msgid' }, { cId: 'd_author' }],
+                [{ cId: 'm_text' }, { cId: 'm_dupcheck' }]
+            ),
+            { messageId: 'd_msgid', author: 'd_author', text: '' }
+        );
+        expect(missing).toEqual([]);
+        expect(byRole[ROLES.THREAD].col).toBe(0);
+        expect(byRole[ROLES.TEXT].col).toBe(3);
+        expect(byRole[ROLES.DUP_CHECK].col).toBe(4);
+    });
+
     it('treats the optional thread role as absent without complaint', () => {
         const { byRole, missing } = resolveRoles(
             layout([{ cId: 'd_msgid' }, { cId: 'd_author' }], [{ cId: 'm_text' }]),

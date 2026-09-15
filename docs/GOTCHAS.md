@@ -88,3 +88,17 @@ is harmless — the author disambiguates the combination.)
 
 **Rule:** the hidden `Count([MsgId])` integrity probe measure detects it and the extension renders a
 warning banner. It is a data-model constraint the extension can detect but never fix.
+
+## 9. The positional role fallback can hand one column to two roles
+
+Roles bind by `cId`, with a positional fallback for columns that have none — an older object, or a
+chart converted from another type, whose columns carry uids. The fallback used to look only at the
+slot. Delete the Participant dimension and the thread column moves into its slot: it was bound as the
+speaker **and** the thread, conversation ids rendered as names, and the not-configured state never
+appeared.
+
+**Rule:** bind by `cId` first, within the role's own axis. A positional slot may only supply a
+column that no role has claimed and that carries no role `cId`. A column tagged for one role is never
+reinterpreted as another.
+
+_See `src/qix/column-map.js`._

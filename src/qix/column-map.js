@@ -65,12 +65,44 @@ export function buildColumns(layout) {
     return columns;
 }
 
+/** Which axis each role lives on. A role never binds a column of the other kind. */
+const ROLE_KIND = {
+    [ROLES.MESSAGE_ID]: 'dim',
+    [ROLES.AUTHOR]: 'dim',
+    [ROLES.THREAD]: 'dim',
+    [ROLES.TEXT]: 'msr',
+    [ROLES.DUP_CHECK]: 'msr',
+};
+
+/**
+ * Merge a stored role → cId bag over the defaults.
+ *
+ * A saved object's bag only holds the roles that existed when it was created,
+ * so a role added later must still resolve through its default cId.
+ *
+ * @param {object} [roleCIds] - Role → cId map from the object properties.
+ * @returns {object} A complete role → cId map.
+ */
+function mergeRoleCIds(roleCIds) {
+    const merged = { ...DEFAULT_CIDS };
+    for (const [role, cId] of Object.entries(roleCIds ?? {})) {
+        if (typeof cId === 'string' && cId) merged[role] = cId;
+    }
+    return merged;
+}
+
 /**
  * Resolve role names to column descriptors.
  *
- * Resolution is by `cId` first. When a `cId` is absent — an older object, or a
- * column the user added by hand — it falls back to the positional convention
- * the initial properties establish, so the extension still renders.
+ * Resolution is by `cId` first. When a role finds no column that way — an older
+ * object, or a chart converted from another type, whose columns carry uids — it
+ * falls back to the positional convention the initial properties establish, so
+ * the extension still renders.
+ *
+ * The fallback may only take a column that no role has claimed AND that carries
+ * no role cId. Without that guard, deleting the Participant dimension moved the
+ * thread column into its slot and bound it as the speaker too: every bubble was
+ * labelled with a conversation id and the not-configured state never appeared.
  *
  * @param {object} [layout] - The object layout containing qHyperCube.
  * @param {object} [roleCIds] - Role → cId map from the object properties.
@@ -79,24 +111,44 @@ export function buildColumns(layout) {
  */
 export function resolveRoles(layout, roleCIds = DEFAULT_CIDS) {
     const columns = buildColumns(layout);
-    const byCId = new Map(columns.filter((c) => c.cId).map((c) => [c.cId, c]));
+    const cIds = mergeRoleCIds(roleCIds);
+    const roleCIdSet = new Set(Object.values(cIds));
 
-    const dims = columns.filter((c) => c.kind === 'dim');
-    const measures = columns.filter((c) => c.kind === 'msr');
+    const pools = {
+        dim: columns.filter((c) => c.kind === 'dim'),
+        msr: columns.filter((c) => c.kind === 'msr'),
+    };
 
     // Positional fallback, matching the slot order the initial properties create.
     const positional = {
-        [ROLES.MESSAGE_ID]: dims[0] ?? null,
-        [ROLES.AUTHOR]: dims[1] ?? null,
-        [ROLES.THREAD]: dims[2] ?? null,
-        [ROLES.TEXT]: measures[0] ?? null,
-        [ROLES.DUP_CHECK]: measures[1] ?? null,
+        [ROLES.MESSAGE_ID]: pools.dim[0],
+        [ROLES.AUTHOR]: pools.dim[1],
+        [ROLES.THREAD]: pools.dim[2],
+        [ROLES.TEXT]: pools.msr[0],
+        [ROLES.DUP_CHECK]: pools.msr[1],
     };
 
     const byRole = {};
+    const claimed = new Set();
+
+    // Pass 1: by cId, within the role's own axis. The first match wins, so a
+    // duplicated column cannot take a second role.
     for (const role of Object.values(ROLES)) {
-        const cId = roleCIds?.[role];
-        byRole[role] = (cId && byCId.get(cId)) || positional[role] || null;
+        const column = pools[ROLE_KIND[role]].find(
+            (c) => c.cId === cIds[role] && !claimed.has(c.col)
+        );
+        byRole[role] = column ?? null;
+        if (column) claimed.add(column.col);
+    }
+
+    // Pass 2: the exact slot, for columns nothing else owns or is tagged for.
+    for (const role of Object.values(ROLES)) {
+        if (byRole[role]) continue;
+        const column = positional[role];
+        if (column && !claimed.has(column.col) && !roleCIdSet.has(column.cId)) {
+            byRole[role] = column;
+            claimed.add(column.col);
+        }
     }
 
     const required = [ROLES.MESSAGE_ID, ROLES.AUTHOR, ROLES.TEXT];
