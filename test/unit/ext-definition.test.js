@@ -67,6 +67,13 @@ describe('property panel definition', () => {
         expect(opts).toContain('none');
     });
 
+    it('offers the recipient and conversation click actions', () => {
+        const opts = definition.items.behaviour.items.onBubbleClick.options.map((o) => o.value);
+        expect(opts).toEqual(
+            expect.arrayContaining(['selectAuthor', 'selectRecipient', 'selectConversation'])
+        );
+    });
+
     it('defaults the detail presentation to automatic', () => {
         // A Sense object spans roughly 300 to 4000 px, so a fixed presentation
         // is wrong at one end of that range.

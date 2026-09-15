@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { VirtuosoMockContext } from 'react-virtuoso';
-import ChatLog from '../../src/ui/ChatLog';
+import ChatLog, { isSelectable } from '../../src/ui/ChatLog';
 
 /** Virtuoso measures with the real DOM; jsdom has no layout, so mock the viewport. */
 function renderList(ui) {
@@ -338,5 +338,39 @@ describe('ChatLog bubbles that share a message id', () => {
         );
         errors.mockRestore();
         expect(keyWarnings).toEqual([]);
+    });
+});
+
+describe('ChatLog click gating', () => {
+    const two = [message({ id: '1', body: 'one' }), message({ id: '2', body: 'two' })];
+
+    it('offers a click only where the selection builder says it selects something', () => {
+        const { container } = renderList(
+            <ChatLog
+                conversation={conversation(two)}
+                settings={{ onBubbleClick: 'selectConversation' }}
+                canSelect
+                onSelect={() => {}}
+                isMessageSelectable={(m) => m.id === '1'}
+            />
+        );
+        expect(container.querySelector('[data-message-index="0"]').getAttribute('role')).toBe(
+            'button'
+        );
+        expect(container.querySelector('[data-message-index="1"]').getAttribute('role')).toBeNull();
+    });
+});
+
+describe('isSelectable', () => {
+    it('keeps the author and message gates it always had', () => {
+        const m = message();
+        expect(isSelectable(m, 'selectAuthor')).toBe(true);
+        expect(isSelectable(m, undefined)).toBe(true);
+        expect(isSelectable({ ...m, elem: -2 }, 'selectMessage')).toBe(false);
+    });
+
+    it('refuses an action it cannot evaluate rather than guessing author', () => {
+        expect(isSelectable(message(), 'selectConversation')).toBe(false);
+        expect(isSelectable(message(), 'none')).toBe(false);
     });
 });

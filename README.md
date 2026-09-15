@@ -84,6 +84,20 @@ Automatic sides are worked out from the messages currently loaded, so narrowing 
 conversation can move them. For sides that never move, set Own participant or the Own message
 expression.
 
+## Clicking a message
+
+Set under **Behaviour → Clicking a message**:
+
+- **Selects the participant (sender)** — the default.
+- **Selects the recipient** — who the clicked message went to (From → To).
+- **Selects the conversation** — the message's thread when it has one. Without a thread, in From →
+  To, it selects everyone in the exchange in both From and To, so the view narrows to it with both
+  sides kept.
+- **Selects the message**, **Opens the details** or **Does nothing**.
+
+A single value toggles, as a click in Sense always has. A set of values replaces that field's
+selection, because toggling a set flips each value on its own.
+
 Per-message metadata is configured under **Message metadata** in the property panel. Each expression
 must aggregate — `Only([Field])`, not a bare field reference.
 

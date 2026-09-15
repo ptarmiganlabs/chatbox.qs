@@ -40,18 +40,20 @@ export function bubbleKey(message) {
 /**
  * Report whether a bubble can be clicked, for the configured selection target.
  *
- * The gate must test the element number of the cell that will ACTUALLY be
- * selected. Checking the author's element number while selecting the message
- * offers a click that the engine then rejects.
+ * The fallback for when the host passes no `isMessageSelectable` predicate. The
+ * gate must test the element number of the cell that will ACTUALLY be selected:
+ * checking the author's element number while selecting the message offers a
+ * click that the engine then rejects. An action this cannot evaluate is not
+ * offered at all, rather than guessed at.
  *
  * @param {object} message - A normalized Message.
  * @param {string} [mode] - The configured onBubbleClick mode.
  * @returns {boolean} True when the click will produce a valid selection.
  */
 export function isSelectable(message, mode) {
-    if (mode === 'none') return false;
     if (mode === 'selectMessage') return message.elem >= 0;
-    return (message.author?.elem ?? -1) >= 0;
+    if (mode === undefined || mode === 'selectAuthor') return (message.author?.elem ?? -1) >= 0;
+    return false;
 }
 
 /**
@@ -62,6 +64,8 @@ export function isSelectable(message, mode) {
  * @param {object} [props.settings] - The `chatbox` property bag.
  * @param {boolean} [props.canSelect] - Whether selections are permitted.
  * @param {Function} [props.onSelect] - Called with a message on click.
+ * @param {Function} [props.isMessageSelectable] - Whether a click on a message would select
+ *   anything; derived from the same builder the click runs.
  * @param {object} [props.rect] - The object's rect, for choosing a detail presentation.
  * @param {object} [props.keyboard] - The object returned by useKeyboard().
  * @param {object} [props.layout] - The object layout, for snapshot state.
@@ -73,6 +77,7 @@ export function ChatLog({
     settings = {},
     canSelect = false,
     onSelect,
+    isMessageSelectable,
     rect,
     keyboard,
     layout,
@@ -258,7 +263,10 @@ export function ChatLog({
                     showAvatar={showAvatars}
                     selectable={
                         detailsOnClick ||
-                        (canSelect && isSelectable(message, settings.onBubbleClick))
+                        (canSelect &&
+                            (isMessageSelectable
+                                ? isMessageSelectable(message)
+                                : isSelectable(message, settings.onBubbleClick)))
                     }
                     expanded={isOpen}
                     onSelect={detailsOnClick ? toggleDetail : onSelect}

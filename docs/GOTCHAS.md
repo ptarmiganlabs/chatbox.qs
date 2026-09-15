@@ -156,3 +156,16 @@ message and is kept and reported. Phantoms still count as loaded rows, and are o
 used up the row limit.
 
 _See `isPhantomRecord` in `src/chat/collapse.js`._
+
+## 14. One failed select resets the whole selection session
+
+stardust's `selections.select()` calls `resetMadeSelections()` whenever a call returns `false`, which
+undoes every selection made in the session, not just the one that failed. And `selectHyperCubeValues`
+with toggle on flips each listed value separately: toggling `[Ada, Bob]` while Ada is already
+selected leaves just Bob.
+
+**Rule:** a click that selects in two fields runs its steps in order and stops at the first `false`,
+so they succeed or fail together. A single value toggles; a set replaces. Never send an empty value
+list — the engine reads it as every value.
+
+_See `src/qix/selection.js`._

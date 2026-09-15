@@ -28,7 +28,8 @@ import dataTargets from './data';
 import ext from './ext/index';
 import { normalize } from './chat/normalize';
 import { fetchAllRows } from './qix/paging';
-import { ROLES, conversationModelOf, dimensionIndex, resolveRoles } from './qix/column-map';
+import { conversationModelOf, resolveRoles } from './qix/column-map';
+import { buildSelection } from './qix/selection';
 import { describeAssignments } from './qix/role-labels';
 import { syncAttributeExpressions } from './qix/sync-attrs';
 import { isSnapshot, writeSnapshot } from './ui/snapshot';
@@ -241,6 +242,32 @@ export default function supernova(galaxy) {
                     Boolean(interactions?.select) && settings.onBubbleClick !== 'none';
 
                 /**
+                 * Build the selection steps a click on this message would run.
+                 *
+                 * @param {object} message - The message.
+                 * @returns {object[]} Steps; empty when the click selects nothing.
+                 */
+                const selectionFor = (message) =>
+                    buildSelection({
+                        action: settings.onBubbleClick,
+                        message,
+                        byRole,
+                        participants: conversation.participants,
+                        recipientElems: conversation.recipientElems,
+                    });
+
+                /**
+                 * Report whether clicking a message would select anything.
+                 *
+                 * Derived from the same builder the click runs, so the view can
+                 * never offer a click that then selects nothing.
+                 *
+                 * @param {object} message - The message.
+                 * @returns {boolean} True when there is at least one step.
+                 */
+                const isMessageSelectable = (message) => selectionFor(message).length > 0;
+
+                /**
                  * Apply a selection for a clicked message.
                  *
                  * @param {object} message - The message that was clicked.
@@ -248,25 +275,21 @@ export default function supernova(galaxy) {
                  */
                 const onSelect = async (message) => {
                     if (!canSelect || !selections) return;
-                    const role =
-                        settings.onBubbleClick === 'selectMessage'
-                            ? ROLES.MESSAGE_ID
-                            : ROLES.AUTHOR;
-                    const column = byRole[role];
-                    const dimIdx = dimensionIndex(column);
-                    const elemNumber = role === ROLES.AUTHOR ? message.author?.elem : message.elem;
-
-                    // Both guards matter: a negative element number is a synthetic
-                    // row, and an unresolved column index would address the wrong
-                    // field — the engine treats an empty index array as "everything".
-                    if (dimIdx < 0 || typeof elemNumber !== 'number' || elemNumber < 0) return;
+                    const steps = selectionFor(message);
+                    if (!steps.length) return;
 
                     try {
                         if (!selections.isActive()) await selections.begin(['/qHyperCubeDef']);
-                        await selections.select({
-                            method: 'selectHyperCubeValues',
-                            params: ['/qHyperCubeDef', dimIdx, [elemNumber], true],
-                        });
+                        for (const { dimIdx, values, toggle } of steps) {
+                            const ok = await selections.select({
+                                method: 'selectHyperCubeValues',
+                                params: ['/qHyperCubeDef', dimIdx, values, toggle],
+                            });
+                            // stardust resets every selection made in the session
+                            // when a call fails, so a later step must not run on
+                            // top of what is left: the steps succeed or fail together.
+                            if (ok === false) break;
+                        }
                     } catch (err) {
                         logger.warn('selection failed:', err);
                     }
@@ -289,6 +312,7 @@ export default function supernova(galaxy) {
                     settings,
                     canSelect,
                     onSelect,
+                    isMessageSelectable,
                     rect,
                     keyboard,
                     layout: staleLayout,
