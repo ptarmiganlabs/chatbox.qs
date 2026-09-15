@@ -25,6 +25,9 @@ export function startsCluster(message, previous, gapSec) {
     if (!previous) return true;
     if (previous.authorKey !== message.authorKey) return true;
     if (recipientsKey(previous.recipients) !== recipientsKey(message.recipients)) return true;
+    // Sides can differ for one author — Own in one conversation, automatic in
+    // another, or a side attribute. A bubble that switches sides needs its header.
+    if (previous.side !== message.side) return true;
     if (typeof message.ts === 'number' && typeof previous.ts === 'number') {
         return Math.abs(message.ts - previous.ts) > gapSec * 1000;
     }

@@ -66,6 +66,24 @@ A sender and a recipient dimension, for one-to-one conversations — an agent's 
   recipients table by that id, and counting a key field counts the linked table's rows — every group
   message would be reported as merged.
 
+## Two-sided layout
+
+With **Layout** set to _Two-sided_, every conversation — a thread, or a From → To pair — is resolved
+on its own:
+
+- **Own participant** goes right in every conversation they are part of, however many people are in
+  it. An expression such as `=OSUser()` works.
+- Otherwise, in a two-person conversation the person with **more conversations** goes right, so an
+  agent or an inbox owner stays on one side throughout. On a tie, whoever wrote last goes right — a
+  single two-person chat looks exactly as it always has.
+- A group message goes right only when its sender is on the right in each of its pairs. Three or more
+  people with no Own participant among them stay left.
+- The **Own message (1/0)** metadata expression outranks all of this.
+
+Automatic sides are worked out from the messages currently loaded, so narrowing a selection to one
+conversation can move them. For sides that never move, set Own participant or the Own message
+expression.
+
 Per-message metadata is configured under **Message metadata** in the property panel. Each expression
 must aggregate — `Only([Field])`, not a bare field reference.
 

@@ -141,6 +141,47 @@ describe('scale: 12,000 messages spread over 36,000 rows', () => {
     });
 });
 
+describe('scale: sided From → To with many pairs', () => {
+    // 12,000 messages between three people and 200 contacts, every tenth one a
+    // group message to three contacts: ~14,400 rows and 600 pairs.
+    function pairRows(messages) {
+        const authors = ['Ada', 'Göran', 'Priya'];
+        const rows = [];
+        for (let i = 0; i < messages; i += 1) {
+            const recipients = i % 10 === 0 ? [i % 200, (i + 1) % 200, (i + 2) % 200] : [i % 200];
+            for (const r of recipients) {
+                rows.push([
+                    { qText: String(i + 1), qElemNumber: i, qAttrExps: { qValues: [] } },
+                    { qText: authors[i % 3], qElemNumber: i % 3, qState: 'O' },
+                    { qText: `Contact ${r}`, qElemNumber: r },
+                    { qText: `Generated message ${i + 1}`, qNum: 'NaN', qIsNull: true },
+                    { qText: '1', qNum: 1 },
+                ]);
+            }
+        }
+        return rows;
+    }
+
+    const pairLayout = (qcy) => ({
+        qHyperCube: {
+            qSize: { qcx: 5, qcy },
+            qDimensionInfo: [{ cId: 'd_msgid' }, { cId: 'd_author' }, { cId: 'd_recipient' }],
+            qMeasureInfo: [{ cId: 'm_text' }, { cId: 'm_dupcheck' }],
+        },
+    });
+
+    it('resolves sides for every message in a time a resize can afford', () => {
+        const rows = pairRows(COUNT);
+        const layout = pairLayout(rows.length);
+        const props = { conversationModel: 'fromTo', layoutMode: 'sided' };
+        const started = performance.now();
+        const c = normalize({ layout, rows, props });
+        expect(performance.now() - started).toBeLessThan(2000);
+        expect(c.messages).toHaveLength(COUNT);
+        expect(c.messages.every((m) => m.side === 'left' || m.side === 'right')).toBe(true);
+    });
+});
+
 describe('scale: paging 12,000 rows', () => {
     it('fetches every row in the fewest calls the cell budget allows', async () => {
         const perPage = rowsPerPage(COLS); // 2000

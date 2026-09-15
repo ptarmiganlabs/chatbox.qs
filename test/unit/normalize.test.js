@@ -204,7 +204,7 @@ describe('normalize', () => {
             expect(normalize({ layout, rows }).messages[0].side).toBe('right');
         });
 
-        it('keeps everything left with three or more participants', () => {
+        it('keeps everything left with three or more participants in RAIL mode', () => {
             const rows = [
                 row({ id: '1', author: 'Ada', authorElem: 10, text: 'a' }),
                 row({ id: '2', author: 'Bob', authorElem: 11, text: 'b' }),
@@ -900,5 +900,91 @@ describe('phantom rows from linked tables', () => {
         });
         expect(c.meta.truncated).toBe(true);
         expect(c.diagnostics.find((d) => d.code === 'phantom-rows')).toBeTruthy();
+    });
+});
+
+describe('two-sided alignment per conversation', () => {
+    const three = () => [
+        row({ id: '1', elemId: 1, author: 'Ada', authorElem: 10, text: 'a' }),
+        row({ id: '2', elemId: 2, author: 'Bob', authorElem: 11, text: 'b' }),
+        row({ id: '3', elemId: 3, author: 'Cy', authorElem: 12, text: 'c' }),
+    ];
+
+    it('puts Own participant right at any participant count', () => {
+        // Today Own was ignored as soon as a third person appeared in the cube.
+        const c = normalize({
+            layout: makeLayout({ qcy: 3 }),
+            rows: three(),
+            props: { layoutMode: 'sided', ownParticipant: 'bob' },
+        });
+        expect(c.messages.map((m) => m.side)).toEqual(['left', 'right', 'left']);
+        expect(c.participants.get('Bob').side).toBe('right');
+    });
+
+    it('keeps three or more people left in sided mode when nobody is Own', () => {
+        const c = normalize({
+            layout: makeLayout({ qcy: 3 }),
+            rows: three(),
+            props: { layoutMode: 'sided' },
+        });
+        expect(c.messages.every((m) => m.side === 'left')).toBe(true);
+    });
+
+    it('lets the side attribute outrank Own participant', () => {
+        const layout = makeLayout({ qcy: 1, attrIds: [ATTR_IDS.SIDE] });
+        const c = normalize({
+            layout,
+            rows: [row({ id: '1', elemId: 1, author: 'Ada', text: 'a', attrs: [{ qNum: 0 }] })],
+            props: { layoutMode: 'sided', ownParticipant: 'Ada' },
+        });
+        expect(c.messages[0].side).toBe('left');
+    });
+
+    it('gives the same sides oldest-first and newest-first', () => {
+        const rows = () => [
+            row({ id: '1', elemId: 1, author: 'Ada', authorElem: 10, text: 'a' }),
+            row({ id: '2', elemId: 2, author: 'Bob', authorElem: 11, text: 'b' }),
+        ];
+        const oldest = normalize({
+            layout: makeLayout({ qcy: 2 }),
+            rows: rows(),
+            props: { layoutMode: 'sided' },
+        });
+        const newest = normalize({
+            layout: makeLayout({ qcy: 2 }),
+            rows: rows(),
+            props: { layoutMode: 'sided', order: 'newest' },
+        });
+        const sideOf = (c) => Object.fromEntries(c.messages.map((m) => [m.body, m.side]));
+        expect(sideOf(newest)).toEqual(sideOf(oldest));
+    });
+
+    it('resolves each From → To pair on its own, keeping a hub right in all of them', () => {
+        const layout = {
+            qHyperCube: {
+                qSize: { qcx: 5, qcy: 4 },
+                qDimensionInfo: [{ cId: 'd_msgid' }, { cId: 'd_author' }, { cId: 'd_recipient' }],
+                qMeasureInfo: [{ cId: 'm_text' }, { cId: 'm_dupcheck' }],
+            },
+        };
+        const ft = (id, from, fromElem, to, toElem) => [
+            { qText: id, qElemNumber: Number(id), qAttrExps: { qValues: [] } },
+            { qText: from, qElemNumber: fromElem, qState: 'O' },
+            { qText: to, qElemNumber: toElem },
+            { qText: `${from} to ${to}`, qNum: 'NaN' },
+            { qText: '1', qNum: 1 },
+        ];
+        const c = normalize({
+            layout,
+            rows: [
+                ft('1', 'Agent', 0, 'C1', 0),
+                ft('2', 'C1', 1, 'Agent', 1),
+                ft('3', 'Agent', 0, 'C2', 2),
+                ft('4', 'C2', 2, 'Agent', 1),
+            ],
+            props: { conversationModel: 'fromTo', layoutMode: 'sided' },
+        });
+        // Four people in the cube — today this was an all-left rail.
+        expect(c.messages.map((m) => m.side)).toEqual(['right', 'left', 'right', 'left']);
     });
 });

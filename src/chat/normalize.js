@@ -36,7 +36,7 @@ import {
     safeUrl,
 } from './sanitize';
 import { assignBubbleKeys, collapseRecords, isPhantomRecord } from './collapse';
-import { colorForElem, paletteFromTheme, resolveRightSide } from './participants';
+import { colorForElem, paletteFromTheme, resolveSides } from './participants';
 
 /** Severity levels for collected diagnostics. */
 export const SEVERITY = { WARNING: 'warning', ERROR: 'error' };
@@ -270,32 +270,45 @@ export function normalize({ layout, rows, props = {}, theme, area }) {
     assignBubbleKeys(messages);
     const mergedCount = messages.filter((m) => m.merged).length;
 
-    // Side resolution needs the whole set, so it runs after collapsing.
+    // Side resolution needs the whole set, so it runs after collapsing — and
+    // before any newest-first reversal, since "most recent" means cube order.
     // Synthetic rows (Total, Null, Others) are not people. Counting them as
-    // participants turns a genuine two-party chat into a three-party one and
-    // silently disables two-sided alignment.
-    const realAuthorKeys = [...participants.keys()].filter((key) => !participants.get(key).unknown);
-    const lastReal = [...messages].reverse().find((m) => !participants.get(m.authorKey)?.unknown);
+    // parties turns a genuine two-party chat into a three-party one.
+    /**
+     * Report whether an author is a person rather than a synthetic row.
+     *
+     * @param {string} key - An author key.
+     * @returns {boolean} True for a registered, non-synthetic participant.
+     */
+    const isReal = (key) => participants.has(key) && !participants.get(key).unknown;
 
-    // Two-sided alignment is opt-in and only meaningful for exactly two people.
-    const sidedAllowed = props.layoutMode === 'sided' && realAuthorKeys.length === 2;
-    const rightKeys = sidedAllowed
-        ? resolveRightSide({
-              authorKeys: realAuthorKeys,
-              ownParticipant: props.ownParticipant,
-              lastAuthorKey: lastReal ? lastReal.authorKey : null,
-          })
-        : new Set();
+    const sides =
+        props.layoutMode === 'sided'
+            ? resolveSides({
+                  messages,
+                  scope: ctx.recipientCol ? 'pairs' : ctx.threadCol ? 'threads' : 'single',
+                  ownParticipant: props.ownParticipant,
+                  isReal,
+              })
+            : messages.map(() => 'left');
+
+    // A participant's own side only means something when all their messages agree.
+    const allRight = new Map();
+    messages.forEach((message, i) => {
+        const soFar = allRight.get(message.authorKey) ?? true;
+        allRight.set(message.authorKey, soFar && sides[i] === 'right');
+    });
     for (const [key, participant] of participants) {
-        participant.side = rightKeys.has(key) ? 'right' : 'left';
+        participant.side = allRight.get(key) ? 'right' : 'left';
     }
-    for (const message of messages) {
-        // A per-message `side` attribute expression outranks the participant default.
+
+    messages.forEach((message, i) => {
+        // A per-message `side` attribute expression outranks everything else.
         if (message.sideHint === 1) message.side = 'right';
         else if (message.sideHint === 0) message.side = 'left';
-        else message.side = participants.get(message.authorKey)?.side ?? 'left';
+        else message.side = sides[i];
         message.author = participants.get(message.authorKey);
-    }
+    });
 
     if (mergedCount > 0) {
         diagnostics.push({

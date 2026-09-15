@@ -161,3 +161,13 @@ describe('startsCluster with recipients', () => {
         expect(startsCluster(msg(null), msg(null), 120)).toBe(false);
     });
 });
+
+describe('startsCluster across sides', () => {
+    it('starts a new cluster when the same author switches sides', () => {
+        // A side attribute, or Own in one conversation and not another, can put
+        // one author on both sides; the moved bubble needs its own header.
+        const previous = { authorKey: 'Ada', ts: null, recipients: null, side: 'left' };
+        const message = { authorKey: 'Ada', ts: null, recipients: null, side: 'right' };
+        expect(startsCluster(message, previous, 120)).toBe(true);
+    });
+});
