@@ -1,5 +1,38 @@
 # Changelog
 
+## [0.3.0](https://github.com/ptarmiganlabs/chatbox.qs/compare/chatbox-qs-v0.2.0...chatbox-qs-v0.3.0) (2026-09-15)
+
+
+### Features
+
+* add a From → To conversation model ([e8ba3d6](https://github.com/ptarmiganlabs/chatbox.qs/commit/e8ba3d6002b8df2c8d870c8346b51328660339d9))
+* collapse rows that belong to one message into one bubble ([1f8d322](https://github.com/ptarmiganlabs/chatbox.qs/commit/1f8d32209aa9101485ee4daac7267404aa274cb7))
+* keyboard navigation with a roving tabindex ([2286043](https://github.com/ptarmiganlabs/chatbox.qs/commit/228604363df8e5438b392ca89fdcda02dfd088ea))
+* optional markdown message bodies ([333bda5](https://github.com/ptarmiganlabs/chatbox.qs/commit/333bda57ccfbf33bcdda8c318bb340fe9e9fb358))
+* resolve two-sided alignment per conversation ([2050136](https://github.com/ptarmiganlabs/chatbox.qs/commit/205013698582c4914f4628cbd545efc5cb2a1fcd))
+* select the recipient or the whole conversation on click ([c5e77c8](https://github.com/ptarmiganlabs/chatbox.qs/commit/c5e77c87cdbaf10c28b7d8b48d18dd31143afb5f))
+* snapshot and export support ([a7d91df](https://github.com/ptarmiganlabs/chatbox.qs/commit/a7d91df4aa17c48c6fad088236f5ca09ca329d0a))
+* sticky date separators and density modes ([dded320](https://github.com/ptarmiganlabs/chatbox.qs/commit/dded3206e9e926c4bbc020c2a61ca4ccb73120a2))
+
+
+### Bug Fixes
+
+* close four gaps found reviewing the From → To model ([e4b170e](https://github.com/ptarmiganlabs/chatbox.qs/commit/e4b170e3a27118c0286afa487790c7d2b0571382))
+* keep the positional role fallback off columns another role owns ([0ede5a4](https://github.com/ptarmiganlabs/chatbox.qs/commit/0ede5a471978d0fcae3ac010c0902343a3cda354))
+* round the Qlik day-serial conversion to whole milliseconds ([b0387d5](https://github.com/ptarmiganlabs/chatbox.qs/commit/b0387d5d612d176fd13b76b388b9c5b8f6770563))
+* skip phantom rows that linked tables add to the cube ([3abfb30](https://github.com/ptarmiganlabs/chatbox.qs/commit/3abfb3055815a5dc58c1fef91b1721718d18fa9b))
+
+
+### Miscellaneous
+
+* characterise the hypercube data targets ([4847d63](https://github.com/ptarmiganlabs/chatbox.qs/commit/4847d63aed60075189e946086cd1266d7c9e2794))
+* **deps-dev:** Bump eslint-plugin-jsdoc from 63.3.3 to 64.3.4 ([287bcaf](https://github.com/ptarmiganlabs/chatbox.qs/commit/287bcaf5efbc760f19af13fa644004771872e39a))
+* **deps-dev:** Bump jsdom from 29.1.1 to 30.0.1 ([bf5badb](https://github.com/ptarmiganlabs/chatbox.qs/commit/bf5badba6e1ff15c2b6ef673037a58a44f9320f5))
+* **deps:** Bump actions/checkout from 6.0.2 to 7.0.1 ([82bc6b4](https://github.com/ptarmiganlabs/chatbox.qs/commit/82bc6b428580cb0083a8df8411f6e970eac01004))
+* **deps:** Bump actions/setup-node from 6.4.0 to 7.0.0 ([8362d1f](https://github.com/ptarmiganlabs/chatbox.qs/commit/8362d1f7ad4535c07e05cd15d592360fc9eb61c3))
+* **deps:** Bump astral-sh/setup-uv from 8.1.0 to 10.0.1 ([3b371e1](https://github.com/ptarmiganlabs/chatbox.qs/commit/3b371e14e176de2eee8ebdf1aeb560ac6372aad8))
+* **deps:** bump github/codeql-action to 4.37.9 across all steps ([0131387](https://github.com/ptarmiganlabs/chatbox.qs/commit/0131387b0a26b889d87a1b78b484c238eea74418))
+
 ## [0.2.0](https://github.com/ptarmiganlabs/chatbox.qs/compare/chatbox-qs-v0.1.0...chatbox-qs-v0.2.0) (2026-09-10)
 
 
