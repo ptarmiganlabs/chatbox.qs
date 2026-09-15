@@ -19,7 +19,13 @@
  * participants and sides are resolved over the result.
  */
 import { ATTR_IDS, attrValue, buildAttrMap } from '../qix/attr-map';
-import { ROLES, kpiColumns, resolveRoles, unassignedDimensions } from '../qix/column-map';
+import {
+    ROLES,
+    conversationModelOf,
+    kpiColumns,
+    resolveRoles,
+    unassignedDimensions,
+} from '../qix/column-map';
 import * as cell from '../qix/read-cell';
 import {
     NULL_SENTINEL,
@@ -46,6 +52,7 @@ function emptyConversation(diagnostics = [], meta = {}) {
     return {
         messages: [],
         participants: new Map(),
+        recipientElems: new Map(),
         meta: {
             total: 0,
             loaded: 0,
@@ -56,6 +63,30 @@ function emptyConversation(diagnostics = [], meta = {}) {
             ...meta,
         },
         diagnostics,
+    };
+}
+
+/**
+ * Read a recipient cell.
+ *
+ * A null recipient is a message nobody was named as receiving, not a person
+ * called '-'; Others keeps its own text. Both are marked unknown, so they are
+ * shown but never paired, counted or selected.
+ *
+ * @param {object} [recipientCell] - The recipient NxCell.
+ * @returns {object} The recipient: { key, label, elem, unknown }.
+ */
+function readRecipient(recipientCell) {
+    const elem = cell.elem(recipientCell);
+    if (elem >= 0) {
+        const text = cell.text(recipientCell);
+        return { key: text, label: text || '(empty)', elem, unknown: false };
+    }
+    return {
+        key: null,
+        label: cell.optionalText(recipientCell) ?? '(no recipient)',
+        elem,
+        unknown: true,
     };
 }
 
@@ -101,6 +132,9 @@ function readRecord(row, i, ctx) {
         tsText: attrText(attrValue(idCell, ctx.attrMap, ATTR_IDS.TS_TEXT)),
         threadId: threadCell ? cell.optionalText(threadCell) : null,
         threadElem: threadCell ? cell.elem(threadCell) : -1,
+        // One per row; collapsing a message's rows gathers them into a list.
+        // Null when there is no recipient role, so the view can tell the models apart.
+        recipients: ctx.recipientCol ? [readRecipient(row[ctx.recipientCol.col])] : null,
         kind: attrText(attrValue(idCell, ctx.attrMap, ATTR_IDS.KIND)),
         media: parseMediaRefs(mediaRaw)
             .map((m) => ({ ...m, ref: m.ref }))
@@ -151,6 +185,28 @@ function registerParticipants(records, palette) {
 }
 
 /**
+ * Map each recipient to their element number in the RECIPIENT field.
+ *
+ * Kept apart from the participants' element numbers on purpose: those belong to
+ * the author field. Selecting a person in the To field with their From-field
+ * number would select somebody else entirely.
+ *
+ * @param {object[]} records - Records in cube order.
+ * @returns {Map<string, number>} Recipient text → To-field element number.
+ */
+function collectRecipientElems(records) {
+    const elems = new Map();
+    for (const record of records) {
+        for (const recipient of record.recipients ?? []) {
+            if (!recipient.unknown && !elems.has(recipient.key)) {
+                elems.set(recipient.key, recipient.elem);
+            }
+        }
+    }
+    return elems;
+}
+
+/**
  * Turn hypercube rows into a Conversation.
  *
  * @param {object} options - Inputs.
@@ -167,7 +223,9 @@ export function normalize({ layout, rows, props = {}, theme, area }) {
 
     if (!hc) return emptyConversation(diagnostics);
 
-    const { columns, byRole, missing } = resolveRoles(layout, props.roles);
+    const { columns, byRole, missing } = resolveRoles(layout, props.roles, {
+        conversationModel: conversationModelOf(props),
+    });
     if (missing.length) {
         diagnostics.push({
             severity: SEVERITY.ERROR,
@@ -183,6 +241,7 @@ export function normalize({ layout, rows, props = {}, theme, area }) {
         textCol: byRole[ROLES.TEXT],
         threadCol: byRole[ROLES.THREAD],
         dupCol: byRole[ROLES.DUP_CHECK],
+        recipientCol: byRole[ROLES.RECIPIENT],
         // Attribute expressions ride on the message-id dimension. Build the
         // id -> index map once per layout; never index into qValues by a literal.
         attrMap: buildAttrMap(byRole[ROLES.MESSAGE_ID].info),
@@ -198,7 +257,8 @@ export function normalize({ layout, rows, props = {}, theme, area }) {
     });
 
     const participants = registerParticipants(records, paletteFromTheme(theme));
-    const { messages, conflictCount } = collapseRecords(records);
+    const recipientElems = collectRecipientElems(records);
+    const { messages, conflictCount, lastBubble } = collapseRecords(records);
     assignBubbleKeys(messages);
     const mergedCount = messages.filter((m) => m.merged).length;
 
@@ -279,11 +339,16 @@ export function normalize({ layout, rows, props = {}, theme, area }) {
         });
     }
 
+    // The cap can fall part-way through a group message's rows, so the last
+    // bubble loaded may be missing recipients the engine would still return.
+    if (truncated && lastBubble?.recipients) lastBubble.recipientsPartial = true;
+
     if (props.order === 'newest') messages.reverse();
 
     return {
         messages,
         participants,
+        recipientElems,
         meta: {
             total,
             loaded: messages.length,

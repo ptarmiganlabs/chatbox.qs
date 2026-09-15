@@ -19,6 +19,21 @@ export const ROLES = {
     THREAD: 'thread',
     TEXT: 'text',
     DUP_CHECK: 'dupCheck',
+    // Who a message was sent to. Only the From -> To model requires it, but it
+    // resolves in either model, so rendering follows the cube, not a flag.
+    RECIPIENT: 'recipient',
+};
+
+/**
+ * The two conversation models.
+ *
+ * Participant is today's contract: one dimension holds every speaker. From -> To
+ * adds a recipient dimension. The author role IS the sender in both, so nothing
+ * author-based differs between them.
+ */
+export const CONVERSATION_MODELS = {
+    PARTICIPANT: 'participant',
+    FROM_TO: 'fromTo',
 };
 
 /** The `cId` values seeded into the initial properties, by role. */
@@ -28,7 +43,54 @@ export const DEFAULT_CIDS = {
     [ROLES.THREAD]: 'd_thread',
     [ROLES.TEXT]: 'm_text',
     [ROLES.DUP_CHECK]: 'm_dupcheck',
+    [ROLES.RECIPIENT]: 'd_recipient',
 };
+
+/**
+ * Read the conversation model from a `chatbox` settings bag.
+ *
+ * Objects saved before the setting existed carry none, and must keep behaving
+ * exactly as they always have — so anything unrecognised is the participant model.
+ *
+ * @param {object} [settings] - The `chatbox` property bag.
+ * @returns {string} One of the CONVERSATION_MODELS values.
+ */
+export function conversationModelOf(settings) {
+    return settings?.conversationModel === CONVERSATION_MODELS.FROM_TO
+        ? CONVERSATION_MODELS.FROM_TO
+        : CONVERSATION_MODELS.PARTICIPANT;
+}
+
+/**
+ * The dimension roles in slot order, for a conversation model.
+ *
+ * This is the single source for both the panel seeding in data.js and the
+ * positional fallback below. The participant model keeps its first three slots
+ * exactly as they always were and takes a recipient only as a fourth.
+ *
+ * @param {string} [model] - A CONVERSATION_MODELS value.
+ * @returns {string[]} Dimension roles, in slot order.
+ */
+export function dimensionRoleOrder(model) {
+    return model === CONVERSATION_MODELS.FROM_TO
+        ? [ROLES.MESSAGE_ID, ROLES.AUTHOR, ROLES.RECIPIENT, ROLES.THREAD]
+        : [ROLES.MESSAGE_ID, ROLES.AUTHOR, ROLES.THREAD, ROLES.RECIPIENT];
+}
+
+/** The measure roles in slot order. The same in both models. */
+export const MEASURE_ROLE_ORDER = [ROLES.TEXT, ROLES.DUP_CHECK];
+
+/**
+ * The roles a conversation model cannot render without.
+ *
+ * @param {string} [model] - A CONVERSATION_MODELS value.
+ * @returns {string[]} Required roles.
+ */
+export function requiredRoles(model) {
+    const required = [ROLES.MESSAGE_ID, ROLES.AUTHOR, ROLES.TEXT];
+    if (model === CONVERSATION_MODELS.FROM_TO) required.splice(2, 0, ROLES.RECIPIENT);
+    return required;
+}
 
 /**
  * Build the flat column list for a layout, in qMatrix order.
@@ -72,6 +134,7 @@ const ROLE_KIND = {
     [ROLES.THREAD]: 'dim',
     [ROLES.TEXT]: 'msr',
     [ROLES.DUP_CHECK]: 'msr',
+    [ROLES.RECIPIENT]: 'dim',
 };
 
 /**
@@ -106,10 +169,14 @@ function mergeRoleCIds(roleCIds) {
  *
  * @param {object} [layout] - The object layout containing qHyperCube.
  * @param {object} [roleCIds] - Role → cId map from the object properties.
- * @returns {object} { columns, byRole, missing } where byRole maps a role to a
- *   column descriptor (or null) and missing lists unresolved required roles.
+ * @param {object} [options] - Resolution options.
+ * @param {string} [options.conversationModel] - A CONVERSATION_MODELS value; decides
+ *   the positional slot order and which roles are required.
+ * @returns {object} { columns, byRole, missing, conversationModel } where byRole maps
+ *   a role to a column descriptor (or null) and missing lists unresolved required roles.
  */
-export function resolveRoles(layout, roleCIds = DEFAULT_CIDS) {
+export function resolveRoles(layout, roleCIds = DEFAULT_CIDS, { conversationModel } = {}) {
+    const model = conversationModelOf({ conversationModel });
     const columns = buildColumns(layout);
     const cIds = mergeRoleCIds(roleCIds);
     const roleCIdSet = new Set(Object.values(cIds));
@@ -119,14 +186,14 @@ export function resolveRoles(layout, roleCIds = DEFAULT_CIDS) {
         msr: columns.filter((c) => c.kind === 'msr'),
     };
 
-    // Positional fallback, matching the slot order the initial properties create.
-    const positional = {
-        [ROLES.MESSAGE_ID]: pools.dim[0],
-        [ROLES.AUTHOR]: pools.dim[1],
-        [ROLES.THREAD]: pools.dim[2],
-        [ROLES.TEXT]: pools.msr[0],
-        [ROLES.DUP_CHECK]: pools.msr[1],
-    };
+    // Positional fallback, matching the slot order the panel seeds for this model.
+    const positional = {};
+    dimensionRoleOrder(model).forEach((role, i) => {
+        positional[role] = pools.dim[i];
+    });
+    MEASURE_ROLE_ORDER.forEach((role, i) => {
+        positional[role] = pools.msr[i];
+    });
 
     const byRole = {};
     const claimed = new Set();
@@ -151,10 +218,9 @@ export function resolveRoles(layout, roleCIds = DEFAULT_CIDS) {
         }
     }
 
-    const required = [ROLES.MESSAGE_ID, ROLES.AUTHOR, ROLES.TEXT];
-    const missing = required.filter((role) => !byRole[role]);
+    const missing = requiredRoles(model).filter((role) => !byRole[role]);
 
-    return { columns, byRole, missing };
+    return { columns, byRole, missing, conversationModel: model };
 }
 
 /**

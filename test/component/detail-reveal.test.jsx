@@ -206,3 +206,51 @@ describe('DetailReveal — collapsed rows', () => {
         expect(screen.getByText(/has this Message ID/)).toBeInTheDocument();
     });
 });
+
+describe('DetailReveal — recipients', () => {
+    const to = (...names) => names.map((name) => ({ key: name, label: name, unknown: false }));
+
+    it('lists who the message went to', () => {
+        const message = msg({ recipients: to('Bob', 'Cy') });
+        render(
+            <DetailReveal
+                message={message}
+                messages={[message]}
+                index={0}
+                mode="pane"
+                onClose={vi.fn()}
+            />
+        );
+        expect(screen.getByText('To')).toBeInTheDocument();
+        expect(screen.getByText('Bob, Cy')).toBeInTheDocument();
+    });
+
+    it('calls the author From inline when there are recipients', () => {
+        const message = msg({ recipients: to('Bob') });
+        render(
+            <DetailReveal
+                message={message}
+                messages={[message]}
+                index={0}
+                mode="inline"
+                onClose={vi.fn()}
+            />
+        );
+        expect(screen.getByText('From')).toBeInTheDocument();
+        expect(screen.queryByText('Participant')).not.toBeInTheDocument();
+    });
+
+    it('warns when the recipient list may be incomplete', () => {
+        const message = msg({ recipients: to('Bob'), recipientsPartial: true });
+        render(
+            <DetailReveal
+                message={message}
+                messages={[message]}
+                index={0}
+                mode="pane"
+                onClose={vi.fn()}
+            />
+        );
+        expect(screen.getByText(/Some recipients may be missing/)).toBeInTheDocument();
+    });
+});

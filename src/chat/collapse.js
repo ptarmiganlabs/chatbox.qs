@@ -17,6 +17,8 @@
  * Pure, so every one of those cases is unit-testable with no engine.
  */
 
+import { addRecipients } from './recipients';
+
 /** Separator for composite keys. It cannot occur in engine text. */
 const SEP = String.fromCharCode(0);
 
@@ -42,7 +44,13 @@ export function collapseKey(record) {
  * @returns {object} A bubble carrying every field of the record.
  */
 function toBubble(record) {
-    return { ...record, rowsCollapsed: 1, idConflict: false };
+    return {
+        ...record,
+        // A copy, because folding appends to it.
+        recipients: Array.isArray(record.recipients) ? [...record.recipients] : null,
+        rowsCollapsed: 1,
+        idConflict: false,
+    };
 }
 
 /**
@@ -72,6 +80,7 @@ function sameContent(bubble, record) {
  */
 function foldInto(bubble, record) {
     bubble.rowsCollapsed += 1;
+    if (bubble.recipients) addRecipients(bubble.recipients, record.recipients);
     bubble.merged = bubble.merged || record.merged;
     bubble.rowCount = Math.max(bubble.rowCount, record.rowCount);
     if (bubble.sideHint !== record.sideHint) bubble.sideHint = null;
@@ -90,13 +99,15 @@ function foldInto(bubble, record) {
  * its first row.
  *
  * @param {object[]} records - Records in cube order.
- * @returns {object} { messages, conflictCount } where conflictCount is the number
- *   of extra bubbles created because different messages share a key.
+ * @returns {object} { messages, conflictCount, lastBubble } where conflictCount is
+ *   the number of extra bubbles created because different messages share a key, and
+ *   lastBubble is the bubble that received the last record.
  */
 export function collapseRecords(records) {
     const messages = [];
     const byKey = new Map();
     let conflictCount = 0;
+    let lastBubble = null;
 
     for (const record of Array.isArray(records) ? records : []) {
         const key = collapseKey(record);
@@ -106,12 +117,14 @@ export function collapseRecords(records) {
             const bubble = toBubble(record);
             if (key !== null) byKey.set(key, [bubble]);
             messages.push(bubble);
+            lastBubble = bubble;
             continue;
         }
 
         const match = group.find((bubble) => sameContent(bubble, record));
         if (match) {
             foldInto(match, record);
+            lastBubble = match;
             continue;
         }
 
@@ -120,10 +133,11 @@ export function collapseRecords(records) {
         for (const other of group) other.idConflict = true;
         group.push(bubble);
         messages.push(bubble);
+        lastBubble = bubble;
         conflictCount += 1;
     }
 
-    return { messages, conflictCount };
+    return { messages, conflictCount, lastBubble };
 }
 
 /**

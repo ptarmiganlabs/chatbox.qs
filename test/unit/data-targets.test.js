@@ -70,15 +70,22 @@ describe('data targets: limits', () => {
     });
 
     it('states max explicitly, since FieldTarget.max defaults to 1000', () => {
-        expect(limit(target.dimensions.max, 0)).toBe(3);
+        // Message ID, author, recipient and thread.
+        expect(limit(target.dimensions.max, 0)).toBe(4);
         expect(limit(target.measures.max, 0)).toBe(10);
     });
 
     it('refuses a dimension past the maximum', () => {
         const properties = makeProperties();
-        for (let i = 0; i < 3; i += 1) addDimension(properties);
+        for (let i = 0; i < 4; i += 1) addDimension(properties);
         expect(addDimension(properties)).toBeNull();
-        expect(properties.qHyperCubeDef.qDimensions).toHaveLength(3);
+        expect(properties.qHyperCubeDef.qDimensions).toHaveLength(4);
+    });
+
+    it('is a plain number, because stardust calls max() with only the measure count', () => {
+        // A function could not see the conversation model, so the limit has to
+        // fit both models as a constant.
+        expect(typeof target.dimensions.max).toBe('number');
     });
 });
 
@@ -156,7 +163,7 @@ describe('data targets: dimension seeding', () => {
 
     it('leaves the cId alone when every role is already taken', () => {
         const properties = makeProperties();
-        for (let i = 0; i < 3; i += 1) addDimension(properties);
+        for (let i = 0; i < 4; i += 1) addDimension(properties);
         const extra = { qDef: { cId: 'uid-extra' } };
         properties.qHyperCubeDef.qDimensions.push(extra);
         target.dimensions.added(extra, properties);
@@ -189,22 +196,105 @@ describe('data targets: measure seeding', () => {
     });
 });
 
-describe('data targets: slot descriptions', () => {
-    it('labels the three dimension slots and nothing after them', () => {
+describe('data targets: conversation models', () => {
+    const fromTo = () => makeProperties({ conversationModel: 'fromTo' });
+
+    it('keeps the participant model slots exactly as they were, with a recipient fourth', () => {
         const properties = makeProperties();
-        expect(target.dimensions.description(properties, 0)).toMatch(/Message ID/);
-        expect(target.dimensions.description(properties, 1)).toMatch(/Participant/);
-        expect(target.dimensions.description(properties, 2)).toMatch(/thread/i);
-        expect(target.dimensions.description(properties, 3)).toBe('');
+        for (let i = 0; i < 4; i += 1) addDimension(properties);
+        expect(dimensionCIds(properties)).toEqual([
+            DEFAULT_CIDS[ROLES.MESSAGE_ID],
+            DEFAULT_CIDS[ROLES.AUTHOR],
+            DEFAULT_CIDS[ROLES.THREAD],
+            DEFAULT_CIDS[ROLES.RECIPIENT],
+        ]);
+    });
+
+    it('seeds the From → To model with the recipient third', () => {
+        const properties = fromTo();
+        for (let i = 0; i < 4; i += 1) addDimension(properties);
+        expect(dimensionCIds(properties)).toEqual([
+            DEFAULT_CIDS[ROLES.MESSAGE_ID],
+            DEFAULT_CIDS[ROLES.AUTHOR],
+            DEFAULT_CIDS[ROLES.RECIPIENT],
+            DEFAULT_CIDS[ROLES.THREAD],
+        ]);
+    });
+
+    it('seeds a recipient next after switching models with three dimensions in place', () => {
+        // Switching never rewrites existing columns; it only steers the next add.
+        const properties = makeProperties();
+        for (let i = 0; i < 3; i += 1) addDimension(properties);
+        properties.chatbox.conversationModel = 'fromTo';
+        expect(addDimension(properties).qDef.cId).toBe(DEFAULT_CIDS[ROLES.RECIPIENT]);
+    });
+
+    it('lets a copied dimension keep a role cId no other column holds', () => {
+        // stardust pushes the column before calling added(). Counting the column
+        // as a holder of its own cId turned a copied recipient into the author.
+        const properties = makeProperties();
+        addDimension(properties);
+        const copy = addDimension(properties, { cId: DEFAULT_CIDS[ROLES.RECIPIENT] });
+        expect(copy.qDef.cId).toBe(DEFAULT_CIDS[ROLES.RECIPIENT]);
+    });
+});
+
+describe('data targets: slot descriptions', () => {
+    it('names each slot by model before anything is added', () => {
+        const participant = makeProperties();
+        expect(target.dimensions.description(participant, 0)).toMatch(/^Dim 1 · Message ID/);
+        expect(target.dimensions.description(participant, 1)).toMatch(/^Dim 2 · Participant/);
+        expect(target.dimensions.description(participant, 2)).toMatch(/^Dim 3 · Conversation/);
+        expect(target.dimensions.description(participant, 3)).toMatch(/^Dim 4 · To \(optional\)/);
+        expect(target.dimensions.description(participant, 4)).toBe('');
+
+        const fromTo = makeProperties({ conversationModel: 'fromTo' });
+        expect(target.dimensions.description(fromTo, 1)).toMatch(/^Dim 2 · From/);
+        expect(target.dimensions.description(fromTo, 2)).toMatch(/^Dim 3 · To —/);
+        expect(target.dimensions.description(fromTo, 3)).toMatch(/^Dim 4 · Conversation/);
+    });
+
+    it('names a dimension by the role it really has after a drag', () => {
+        const properties = makeProperties();
+        for (let i = 0; i < 3; i += 1) addDimension(properties);
+        const [id, author, thread] = properties.qHyperCubeDef.qDimensions;
+        properties.qHyperCubeDef.qDimensions = [id, thread, author];
+
+        expect(target.dimensions.description(properties, 1)).toMatch(/Conversation/);
+        expect(target.dimensions.description(properties, 2)).toMatch(/Participant/);
+    });
+
+    it('names each dimension for what it is after a model switch', () => {
+        const properties = makeProperties();
+        for (let i = 0; i < 3; i += 1) addDimension(properties);
+        properties.chatbox.conversationModel = 'fromTo';
+        // The third column is still the thread; the next one added is the To.
+        expect(target.dimensions.description(properties, 2)).toMatch(/Conversation/);
+        expect(target.dimensions.description(properties, 3)).toMatch(/^Dim 4 · To —/);
+    });
+
+    it('calls out a dimension no role uses', () => {
+        const properties = makeProperties();
+        addDimension(properties);
+        addDimension(properties);
+        properties.qHyperCubeDef.qDimensions.push({ qDef: { cId: DEFAULT_CIDS[ROLES.AUTHOR] } });
+        expect(target.dimensions.description(properties, 2)).toMatch(/Not used/);
     });
 
     it('repeats the KPI label for every measure from the third on', () => {
         const properties = makeProperties();
         expect(target.measures.description(properties, 0)).toMatch(/Message text/);
-        expect(target.measures.description(properties, 1)).toMatch(/Integrity probe/);
+        expect(target.measures.description(properties, 1)).toMatch(/Count\(\[MsgId\]\)/);
         expect(target.measures.description(properties, 2)).toMatch(/KPI/);
         expect(target.measures.description(properties, 7)).toBe(
             target.measures.description(properties, 2)
         );
+    });
+
+    it('steers the From → To probe away from a key field', () => {
+        // Counting a key field counts the linked table's rows, so Count([MsgId])
+        // over a recipients link table reports every group message as merged.
+        const properties = makeProperties({ conversationModel: 'fromTo' });
+        expect(target.measures.description(properties, 1)).toMatch(/Count\(\[MsgText\]\)/);
     });
 });

@@ -28,7 +28,8 @@ import dataTargets from './data';
 import ext from './ext/index';
 import { normalize } from './chat/normalize';
 import { fetchAllRows } from './qix/paging';
-import { ROLES, dimensionIndex, resolveRoles } from './qix/column-map';
+import { ROLES, conversationModelOf, dimensionIndex, resolveRoles } from './qix/column-map';
+import { describeAssignments } from './qix/role-labels';
 import { syncAttributeExpressions } from './qix/sync-attrs';
 import { isSnapshot, writeSnapshot } from './ui/snapshot';
 import { render, destroy } from './ui/chat-renderer';
@@ -196,14 +197,21 @@ export default function supernova(galaxy) {
                     element.style.setProperty(key, value);
                 }
 
+                const conversationModel = conversationModelOf(settings);
                 if (!hc) {
-                    render(element, NotConfigured, { missing: [] });
+                    render(element, NotConfigured, { missing: [], conversationModel });
                     return undefined;
                 }
 
-                const { byRole, missing } = resolveRoles(staleLayout, settings.roles);
+                const { columns, byRole, missing } = resolveRoles(staleLayout, settings.roles, {
+                    conversationModel,
+                });
                 if (missing.length) {
-                    render(element, NotConfigured, { missing });
+                    render(element, NotConfigured, {
+                        missing,
+                        conversationModel,
+                        assigned: describeAssignments(columns, byRole, conversationModel),
+                    });
                     return undefined;
                 }
 

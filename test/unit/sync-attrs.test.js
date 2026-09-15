@@ -42,6 +42,27 @@ describe('syncAttributeExpressions', () => {
         setProperties: vi.fn(async () => {}),
     });
 
+    it('still writes onto the message-id dimension in the From → To model', async () => {
+        const model = mkModel([
+            { qDef: { cId: 'd_msgid' } },
+            { qDef: { cId: 'd_author' } },
+            { qDef: { cId: 'd_recipient' } },
+        ]);
+        const fromTo = {
+            ...layout({ ts: 'Num(Min(SentAt))' }, [
+                { cId: 'd_msgid' },
+                { cId: 'd_author' },
+                { cId: 'd_recipient' },
+            ]),
+        };
+        fromTo.chatbox.conversationModel = 'fromTo';
+        const wrote = await syncAttributeExpressions({ model, layout: fromTo, canEdit: true });
+        expect(wrote).toBe(true);
+        const dims = model.setProperties.mock.calls[0][0].qHyperCubeDef.qDimensions;
+        expect(dims[0].qAttributeExpressions).toHaveLength(ATTR_ORDER.length);
+        expect(dims[2].qAttributeExpressions).toBeUndefined();
+    });
+
     it('writes the expressions onto the message-id dimension', async () => {
         const model = mkModel([{ qDef: { cId: 'd_msgid' } }, { qDef: { cId: 'd_author' } }]);
         const wrote = await syncAttributeExpressions({

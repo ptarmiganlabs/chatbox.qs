@@ -49,7 +49,11 @@ describe('collapseRecords', () => {
     });
 
     it('tolerates a missing record list', () => {
-        expect(collapseRecords(undefined)).toEqual({ messages: [], conflictCount: 0 });
+        expect(collapseRecords(undefined)).toEqual({
+            messages: [],
+            conflictCount: 0,
+            lastBubble: null,
+        });
     });
 });
 

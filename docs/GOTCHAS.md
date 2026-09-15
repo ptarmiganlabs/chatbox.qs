@@ -117,3 +117,26 @@ messages together and drop one. Never collapse a negative message-id element. Tr
 repeat.
 
 _See `src/chat/collapse.js`._
+
+## 11. Counting a key field counts the linked table's rows
+
+`Count([MsgId])` is the integrity probe, and it works while the message id lives in one table. Link
+messages to a recipients table by that id and it becomes a key field — and counting a key field does
+not count messages. On PTLAB, `Count(OrderID)` over a sales table linked to a three-rows-per-order
+table returned **3000** against 1000 distinct orders, and 3 on every per-order row. The probe reported
+every group message as merged.
+
+**Rule:** the probe counts a field that exists only in the messages table, e.g. `Count([MsgText])`.
+The From → To slot description says so.
+
+## 12. Element numbers belong to a field, not to a person
+
+`qElemNumber` is a value's index in its field's symbol table. Ada is element 0 in From and element 9
+in To. Selecting her in the To field with her From element selects whoever holds element 0 there — no
+error, just a different person.
+
+**Rule:** people are matched across From and To by exact text, and every selection uses element
+numbers read from the field being selected: participants carry From-field elements,
+`conversation.recipientElems` carries To-field elements.
+
+_See `src/chat/recipients.js` and `collectRecipientElems` in `src/chat/normalize.js`._

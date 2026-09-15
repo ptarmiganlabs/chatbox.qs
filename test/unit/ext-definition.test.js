@@ -90,6 +90,31 @@ describe('property panel definition', () => {
     });
 });
 
+describe('conversation model', () => {
+    const item = definition.items.conversation.items.conversationModel;
+
+    it('comes right after the data section, since it decides what dimensions become', () => {
+        const keys = Object.keys(definition.items);
+        expect(keys.indexOf('conversation')).toBe(keys.indexOf('data') + 1);
+    });
+
+    it('binds to the extension’s own bag and defaults to today’s model', () => {
+        expect(item.ref).toBe('chatbox.conversationModel');
+        expect(item.defaultValue).toBe('participant');
+        expect(item.options.map((o) => o.value)).toEqual(['participant', 'fromTo']);
+    });
+
+    it('uses a component string the panel already renders elsewhere', () => {
+        // A wrong component string fails silently in the classic panel (GOTCHAS 6).
+        const shipped = new Set(
+            walk(definition)
+                .filter(([path]) => !path.startsWith('conversation'))
+                .map(([, i]) => i.component)
+        );
+        expect(shipped.has(item.component)).toBe(true);
+    });
+});
+
 describe('appearance: density', () => {
     it('offers density with automatic as the default', () => {
         const density = definition.items.appearance.items.density;

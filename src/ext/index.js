@@ -15,6 +15,7 @@
  */
 import { aboutSection } from './about-section';
 import { appearanceSection } from './appearance-section';
+import { conversationSection } from './conversation-section';
 import { behaviourSection } from './behaviour-section';
 import { detailSection } from './detail-section';
 import { metadataSection } from './metadata-section';
@@ -50,6 +51,8 @@ export default function ext(_galaxy) {
                 // reject the definition and render NO property panel at all —
                 // silently, with no console error.
                 data: { uses: 'data' },
+                // Right after data: it decides what each dimension added there becomes.
+                conversation: conversationSection(),
                 appearance: appearanceSection(),
                 metadata: metadataSection(),
                 detail: detailSection(),

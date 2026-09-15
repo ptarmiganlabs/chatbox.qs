@@ -64,7 +64,8 @@ export function behaviourSection() {
                 type: 'number',
                 label: 'Maximum messages',
                 description:
-                    'Messages beyond this are not fetched; a banner reports the shortfall. ' +
+                    'Counts rows: a message to several recipients uses one row per recipient. ' +
+                    'Rows beyond this are not fetched; a banner reports the shortfall. ' +
                     'Large conversations are better filtered than rendered.',
                 defaultValue: 5000,
                 min: 1,

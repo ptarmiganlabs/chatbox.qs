@@ -14,7 +14,7 @@
  */
 import logger from '../util/logger';
 import { ATTR_ORDER } from '../ext/metadata-section';
-import { ROLES, resolveRoles } from './column-map';
+import { ROLES, conversationModelOf, resolveRoles } from './column-map';
 
 /**
  * Build the attribute-expression array a dimension should carry.
@@ -80,7 +80,9 @@ export function isBagEmpty(attrs) {
 export async function syncAttributeExpressions({ model, layout, canEdit }) {
     if (!model || !canEdit) return false;
 
-    const { byRole } = resolveRoles(layout, layout?.chatbox?.roles);
+    const { byRole } = resolveRoles(layout, layout?.chatbox?.roles, {
+        conversationModel: conversationModelOf(layout?.chatbox),
+    });
     const idColumn = byRole[ROLES.MESSAGE_ID];
     if (!idColumn || idColumn.kind !== 'dim') return false;
 

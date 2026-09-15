@@ -458,10 +458,12 @@ describe('per-message KPIs', () => {
 });
 
 describe('rows that belong to one message', () => {
-    // A cube with a fourth dimension no role claims — the same shape a recipient
-    // dimension produces for a group message: one row per extra value. Element
-    // numbers are explicit here, because the row() helper above gives every
-    // row the same message-id element.
+    // A cube with a fourth dimension no role claims — the same row shape a
+    // recipient dimension produces for a group message: one row per extra value.
+    // It carries a role cId another column already holds, so neither the cId pass
+    // nor the positional fallback can give it a role. Element numbers are
+    // explicit here, because the row() helper above gives every row the same
+    // message-id element.
     function wideLayout({ qcy, attrIds = [], kpiCount = 0 } = {}) {
         return {
             qHyperCube: {
@@ -470,7 +472,7 @@ describe('rows that belong to one message', () => {
                     { cId: 'd_msgid', qAttrExprInfo: attrIds.map((id) => ({ id })) },
                     { cId: 'd_author' },
                     { cId: 'd_thread' },
-                    { cId: 'uidX', qFallbackTitle: 'Recipient' },
+                    { cId: 'd_author', qFallbackTitle: 'Channel' },
                 ],
                 qMeasureInfo: [
                     { cId: 'm_text' },
@@ -619,7 +621,7 @@ describe('rows that belong to one message', () => {
             rows: [wideRow({ id: '7', elemId: 7 })],
         });
         const warning = c.diagnostics.find((d) => d.code === 'unassigned-dimension');
-        expect(warning.message).toContain('Recipient');
+        expect(warning.message).toContain('Channel');
     });
 
     it('does not report truncation when every row is loaded — regression', () => {
@@ -657,5 +659,156 @@ describe('rows that belong to one message', () => {
         ];
         const c = normalize({ layout: makeLayout({ qcy: 2 }), rows });
         expect(c.messages.map((m) => m.key)).toEqual(['7', '7#2']);
+    });
+});
+
+describe('the From → To model', () => {
+    function fromToLayout({ qcy, thread = false } = {}) {
+        return {
+            qHyperCube: {
+                qSize: { qcx: thread ? 6 : 5, qcy },
+                qDimensionInfo: [
+                    { cId: 'd_msgid' },
+                    { cId: 'd_author' },
+                    { cId: 'd_recipient' },
+                    ...(thread ? [{ cId: 'd_thread' }] : []),
+                ],
+                qMeasureInfo: [{ cId: 'm_text' }, { cId: 'm_dupcheck' }],
+            },
+        };
+    }
+
+    const props = { conversationModel: 'fromTo' };
+
+    function ftRow({ id, elemId, from, fromElem, to, toElem, text = 'hello' }) {
+        return [
+            { qText: id, qElemNumber: elemId, qAttrExps: { qValues: [] } },
+            { qText: from, qElemNumber: fromElem, qState: 'O' },
+            { qText: to, qElemNumber: toElem },
+            { qText: text, qNum: 'NaN' },
+            { qText: '1', qNum: 1 },
+        ];
+    }
+
+    it('attaches the recipient to each message', () => {
+        const c = normalize({
+            layout: fromToLayout({ qcy: 1 }),
+            rows: [ftRow({ id: '1', elemId: 1, from: 'Ada', fromElem: 0, to: 'Bob', toElem: 5 })],
+            props,
+        });
+        expect(c.messages[0].recipients).toEqual([
+            { key: 'Bob', label: 'Bob', elem: 5, unknown: false },
+        ]);
+        // A recipient role is not an unused dimension.
+        expect(c.diagnostics.find((d) => d.code === 'unassigned-dimension')).toBeUndefined();
+    });
+
+    it('keeps each person’s element number per field — regression', () => {
+        // Ada is element 0 in From and element 9 in To. Selecting her in To with
+        // her From number would select somebody else entirely.
+        const c = normalize({
+            layout: fromToLayout({ qcy: 2 }),
+            rows: [
+                ftRow({ id: '1', elemId: 1, from: 'Ada', fromElem: 0, to: 'Bob', toElem: 5 }),
+                ftRow({ id: '2', elemId: 2, from: 'Bob', fromElem: 1, to: 'Ada', toElem: 9 }),
+            ],
+            props,
+        });
+        expect(c.participants.get('Ada').elem).toBe(0);
+        expect(c.recipientElems.get('Ada')).toBe(9);
+        expect(c.recipientElems.get('Bob')).toBe(5);
+    });
+
+    it('gathers a group message’s recipients into one bubble', () => {
+        const rows = [
+            ftRow({ id: '1', elemId: 1, from: 'Ada', fromElem: 0, to: 'Bob', toElem: 5 }),
+            ftRow({ id: '1', elemId: 1, from: 'Ada', fromElem: 0, to: 'Cy', toElem: 6 }),
+        ];
+        const c = normalize({ layout: fromToLayout({ qcy: 2 }), rows, props });
+        expect(c.messages).toHaveLength(1);
+        expect(c.messages[0].recipients.map((r) => r.label)).toEqual(['Bob', 'Cy']);
+    });
+
+    it('shows a null recipient as nobody, not as a person called "-"', () => {
+        const c = normalize({
+            layout: fromToLayout({ qcy: 1 }),
+            rows: [ftRow({ id: '1', elemId: 1, from: 'Ada', fromElem: 0, to: '-', toElem: -2 })],
+            props,
+        });
+        expect(c.messages[0].recipients).toEqual([
+            { key: null, label: '(no recipient)', elem: -2, unknown: true },
+        ]);
+        expect(c.recipientElems.size).toBe(0);
+    });
+
+    it('keeps the text of a synthetic recipient such as Others', () => {
+        const c = normalize({
+            layout: fromToLayout({ qcy: 1 }),
+            rows: [
+                ftRow({ id: '1', elemId: 1, from: 'Ada', fromElem: 0, to: 'Others', toElem: -3 }),
+            ],
+            props,
+        });
+        expect(c.messages[0].recipients[0]).toMatchObject({ label: 'Others', unknown: true });
+    });
+
+    it('flags only the last bubble’s recipients as possibly incomplete when truncated', () => {
+        const rows = [
+            ftRow({ id: '1', elemId: 1, from: 'Ada', fromElem: 0, to: 'Bob', toElem: 5 }),
+            ftRow({ id: '2', elemId: 2, from: 'Ada', fromElem: 0, to: 'Bob', toElem: 5 }),
+            ftRow({ id: '2', elemId: 2, from: 'Ada', fromElem: 0, to: 'Cy', toElem: 6 }),
+        ];
+        const truncated = normalize({ layout: fromToLayout({ qcy: 10 }), rows, props });
+        expect(truncated.messages.map((m) => Boolean(m.recipientsPartial))).toEqual([false, true]);
+
+        const complete = normalize({ layout: fromToLayout({ qcy: 3 }), rows, props });
+        expect(complete.messages.some((m) => m.recipientsPartial)).toBe(false);
+    });
+
+    it('is not configured without a To dimension', () => {
+        const layout = {
+            qHyperCube: {
+                qSize: { qcx: 3, qcy: 1 },
+                qDimensionInfo: [{ cId: 'd_msgid' }, { cId: 'd_author' }],
+                qMeasureInfo: [{ cId: 'm_text' }],
+            },
+        };
+        const c = normalize({ layout, rows: [], props });
+        const error = c.diagnostics.find((d) => d.code === 'missing-roles');
+        expect(error.message).toContain('recipient');
+    });
+
+    it('renders recipients from a fourth To dimension in the participant model', () => {
+        const layout = {
+            qHyperCube: {
+                qSize: { qcx: 6, qcy: 1 },
+                qDimensionInfo: [
+                    { cId: 'd_msgid' },
+                    { cId: 'd_author' },
+                    { cId: 'd_thread' },
+                    { cId: 'd_recipient' },
+                ],
+                qMeasureInfo: [{ cId: 'm_text' }, { cId: 'm_dupcheck' }],
+            },
+        };
+        const r = [
+            { qText: '1', qElemNumber: 1, qAttrExps: { qValues: [] } },
+            { qText: 'Ada', qElemNumber: 0, qState: 'O' },
+            { qText: 'T1', qElemNumber: 0 },
+            { qText: 'Bob', qElemNumber: 4 },
+            { qText: 'hi', qNum: 'NaN' },
+            { qText: '1', qNum: 1 },
+        ];
+        const c = normalize({ layout, rows: [r] });
+        expect(c.messages[0].recipients.map((x) => x.label)).toEqual(['Bob']);
+        expect(c.messages[0].threadId).toBe('T1');
+    });
+
+    it('carries no recipients at all in a participant cube', () => {
+        const c = normalize({
+            layout: makeLayout({ qcy: 1 }),
+            rows: [row({ id: '1', author: 'Ada', text: 'hi' })],
+        });
+        expect(c.messages[0].recipients).toBeNull();
     });
 });

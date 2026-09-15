@@ -245,3 +245,67 @@ describe('MessageRow — shared message ids', () => {
         expect(screen.queryByText('shared id')).not.toBeInTheDocument();
     });
 });
+
+describe('MessageRow — recipients', () => {
+    const to = (...names) => names.map((name) => ({ key: name, label: name, unknown: false }));
+
+    it('names the recipients after the author, with the arrow hidden from screen readers', () => {
+        const { container } = render(
+            <MessageRow
+                message={message({ recipients: to('Bob', 'Cy') })}
+                showAuthor
+                showAvatar
+                selectable={false}
+            />
+        );
+        // The author still matches on its own.
+        expect(screen.getByText('Ada Lovelace')).toBeInTheDocument();
+        expect(screen.getByText('Bob, Cy')).toBeInTheDocument();
+        expect(screen.getByText('→').getAttribute('aria-hidden')).toBe('true');
+        expect(container.textContent).toContain('to');
+    });
+
+    it('counts the recipients of a group message', () => {
+        render(
+            <MessageRow
+                message={message({ recipients: to('Bob', 'Cy', 'Dan', 'Eve') })}
+                showAuthor
+                showAvatar
+                selectable={false}
+            />
+        );
+        expect(screen.getByText('4 recipients')).toBeInTheDocument();
+        expect(screen.getByText('Bob, Cy, Dan and 1 more')).toBeInTheDocument();
+    });
+
+    it('shows no count for a one-to-one message', () => {
+        render(
+            <MessageRow
+                message={message({ recipients: to('Bob') })}
+                showAuthor
+                showAvatar
+                selectable={false}
+            />
+        );
+        expect(screen.queryByText(/recipients/)).not.toBeInTheDocument();
+    });
+
+    it('renders a recipient name that looks like markup as text', () => {
+        const evil = '<img src=x onerror="alert(1)">';
+        const { container } = render(
+            <MessageRow
+                message={message({ recipients: to(evil) })}
+                showAuthor
+                showAvatar
+                selectable={false}
+            />
+        );
+        expect(screen.getByText(evil)).toBeInTheDocument();
+        expect(container.querySelector('img[src="x"]')).toBeNull();
+    });
+
+    it('shows no arrow in the participant model', () => {
+        render(<MessageRow message={message()} showAuthor showAvatar selectable={false} />);
+        expect(screen.queryByText('→')).not.toBeInTheDocument();
+    });
+});

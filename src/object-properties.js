@@ -13,8 +13,8 @@ import { DEFAULT_CIDS, ROLES } from './qix/column-map';
 /**
  * Column budget for the initial fetch.
  *
- * Sized for the contract's 3 dimensions + 2 measures plus room for a few KPI
- * measures. A cube WIDER than this still works — paging refetches it properly —
+ * Sized for the contract's 4 dimensions (message id, author, recipient, thread)
+ * + 2 measures plus room for a few KPI measures. A cube WIDER than this still works — paging refetches it properly —
  * but only a cube that fits gets its first page for free, inside getLayout.
  */
 const COLS = 10;
@@ -82,6 +82,9 @@ export default {
         // repoint "author" at the message body.
         roles: { ...DEFAULT_CIDS },
 
+        // 'participant' | 'fromTo'. Steers which role a newly added dimension
+        // gets; rendering follows the roles that actually resolve.
+        conversationModel: 'participant',
         order: 'oldest', // 'oldest' | 'newest'
         layoutMode: 'rail', // 'rail' | 'sided' | 'lanes'
         density: 'auto', // 'auto' | 'comfortable' | 'compact' | 'ultra'
