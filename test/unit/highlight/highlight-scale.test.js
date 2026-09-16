@@ -182,3 +182,40 @@ describe('searching at scale: 12,000 messages', () => {
         expect(finder.find({ messages: list, query: 'user12', gapSec: 120 })).toBe(longer);
     });
 });
+
+describe('copying at scale: 12,000 messages', () => {
+    it('writes the JSON of the whole conversation in well under a second', async () => {
+        const { conversationJson } = await import('../../../src/export/conversation-export');
+        const { createHighlightView } = await import('../../../src/highlight/highlight-view');
+        const list = messages(COUNT).map((m) => ({ ...m, author: { label: 'Ada' }, kpis: [] }));
+        const layout = { chatbox: { highlight: { field: 'match' } } };
+        const highlights = createHighlightView().build({
+            tagged: {
+                answer: {
+                    kind: 'values',
+                    field: 'match',
+                    source: 'selected',
+                    total: ROWS.length,
+                    values: ROWS.map((r) => r.value),
+                    rows: ROWS,
+                    truncated: false,
+                    categories: null,
+                },
+                derivedFrom: layout,
+                version: 0,
+            },
+            layout,
+            version: 0,
+            messages: list,
+        });
+        const started = performance.now();
+        const text = JSON.stringify(
+            conversationJson(
+                { messages: list, meta: { total: COUNT }, diagnostics: [] },
+                { highlights, projectionOf: (b) => b, exportedAt: '', version: '1' }
+            )
+        );
+        expect(performance.now() - started).toBeLessThan(1000);
+        expect(text.length).toBeGreaterThan(1_000_000);
+    });
+});

@@ -11,6 +11,7 @@ import {
     useElement,
     useInteractionState,
     useKeyboard,
+    onContextMenu,
     onTakeSnapshot,
     useLayout,
     useModel,
@@ -50,7 +51,8 @@ import ChatLog from './ui/ChatLog';
 import { Empty, Failed, Loading, NotConfigured, emptyStateMessage } from './ui/states';
 import { themeVars } from './ui/theme-vars';
 import { extensionState } from './util/extension-state';
-import logger from './util/logger';
+import logger, { PACKAGE_VERSION } from './util/logger';
+import { copyConversation } from './export/copy-conversation';
 
 /** How long a notice stays in the corner, in milliseconds. */
 const NOTICE_MS = 5000;
@@ -146,6 +148,38 @@ export default function supernova(galaxy) {
             if (!highlightViewRef.current) highlightViewRef.current = createHighlightView();
             // Monotonic token for highlight loads, like runIdRef for rows.
             const highlightRunRef = useRef(0);
+
+            // Copy the conversation shown, as text or JSON, from the object's context menu. The hook is
+            // not in stardust's type declarations but is exported at runtime (7.4.0), as textview.qs
+            // and QvsView.qs use it. The items appear only while a conversation is shown.
+            onContextMenu((menu) => {
+                const view = lastViewRef.current;
+                if (!view?.conversation?.messages?.length) return;
+                for (const [format, label] of [
+                    ['text', 'Copy conversation as text'],
+                    ['json', 'Copy conversation as JSON'],
+                ]) {
+                    menu.addItem({
+                        translation: label,
+                        tid: `chatbox-copy-${format}`,
+                        icon: 'copy',
+                        /**
+                         * Copy the conversation last shown, and say how it went.
+                         *
+                         * @returns {Promise<void>} Resolves once the notice is set.
+                         */
+                        select: async () => {
+                            const message = await copyConversation({
+                                view: lastViewRef.current,
+                                format,
+                                projectionOf: highlightViewRef.current.projections.get,
+                                version: PACKAGE_VERSION,
+                            });
+                            if (message) setNotice({ ...message, id: ++noticeIdRef.current });
+                        },
+                    });
+                }
+            });
 
             // Search: the finder shares the markdown projections with the highlighter, and the query
             // is kept here, so it survives the conversation component unmounting and mounting again.
