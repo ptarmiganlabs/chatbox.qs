@@ -1,18 +1,15 @@
 /**
- * The conversation view.
+ * The conversation view: the bar, banners and details around the messages, and everything that finds
+ * its way through them — search, stepping, the ruler, keyboard focus.
  *
- * Virtualization is react-virtuoso, which covers the two things that are
- * genuinely hard here in one zero-dependency package: variable-height rows
- * (message bubbles are never uniform) and stick-to-bottom that survives
- * container resize — and a Qlik object is resized constantly, by sheet edits,
- * grid drags and fullscreen.
+ * The scrolling list itself, and keeping the reader's place in it, is src/ui/ConversationList.jsx; this
+ * view reaches it through the list's handle, by message index.
  *
  * `role="list"` rather than `role="log"`: a Qlik chart re-renders wholesale on
  * every selection change, and a polite live region would announce the entire
  * conversation each time.
  */
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { GroupedVirtuoso, Virtuoso } from 'react-virtuoso';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import styles from './chat.module.css';
 import { buildDayGroups, startsCluster } from '../chat/grouping';
 import DetailReveal, { resolveRevealMode } from './DetailReveal';
@@ -33,7 +30,8 @@ import { HIGHLIGHT_KINDS } from '../qix/highlight-source';
 import { counted } from '../util/format';
 import { readKindChipSettings } from '../chat/kind-chips';
 import { Empty } from './states';
-import { bubbleKey, messageAtTop, returnIndex } from './reader-place';
+import ConversationList from './ConversationList';
+import { bubbleKey } from './reader-place';
 
 export { bubbleKey, messageAtTop, returnIndex } from './reader-place';
 
@@ -164,87 +162,21 @@ export function ChatLog({
      */
     const closeDetail = useCallback(() => setOpenId(null), []);
 
-    // The first visible row, reported upward so a snapshot can capture where the
-    // reader was. Kept in a ref as well: the snapshot callback runs outside
-    // React and needs the current value, not the one from its closure.
-    const firstVisibleRef = useRef(0);
-    const listRef = useRef(null);
-    const virtuosoRef = useRef(null);
-    // The element that scrolls: Virtuoso's scroller, or the list itself when every row is rendered.
-    const scrollerRef = useRef(null);
-    /**
-     * Keep hold of the virtualizer's scrolling element.
-     *
-     * @param {?HTMLElement} node - The scroller, or null when it goes.
-     * @returns {void}
-     */
-    const handleScrollerRef = useCallback((node) => {
-        scrollerRef.current = node;
-    }, []);
-
-    // Where the reader is: the messages on screen, and the index of the one at the top of the view. A
-    // selection replaces the messages, and the reader's message can move to another index or go.
-    // `shownRef` holds the messages on screen, and `restoreRef` the place to return to once new messages
-    // are shown.
-    const shownRef = useRef(messages);
-    const restoreRef = useRef(null);
-    if (shownRef.current !== messages) {
-        // Read while rendering, while the rows on screen are still the messages the reader saw: once they
-        // are replaced, the virtualizer keeps its pixel offset and reports whatever now sits there. Read
-        // from the rows, because the virtualizer's range starts with rows drawn above the view, which a
-        // selection may remove. Its range is the fallback where nothing is laid out.
-        if (restoreRef.current === null) {
-            const atTop = renderAll ? -1 : messageAtTop(scrollerRef.current, listRef.current);
-            restoreRef.current = {
-                messages: shownRef.current,
-                index: atTop >= 0 ? atTop : firstVisibleRef.current,
-            };
-        }
-        shownRef.current = messages;
-    }
+    // The scrolling list, whose handle scrolls to messages and says where the reader is.
+    const bodyRef = useRef(null);
 
     /**
-     * Record the visible range and report it upward.
+     * Report where the reader is when the list's first drawn message changes.
      *
-     * @param {object} range - Virtuoso's { startIndex, endIndex }.
+     * @param {number} firstVisibleIndex - The index of the first message the list draws.
      * @returns {void}
      */
-    const handleRangeChanged = useCallback(
-        (range) => {
-            firstVisibleRef.current = range?.startIndex ?? 0;
-            onViewState?.({ firstVisibleIndex: firstVisibleRef.current, openId });
-        },
-        [onViewState, openId]
-    );
-
-    // When newer rows replace the messages, put the reader back at the message they were reading, or at
-    // the nearest one still shown when the selection removed it. After a selection, the kept pixel
-    // offset lands on whatever message now happens to sit there, or past the end of a shorter list. A
-    // layout effect, so the jump back happens before the new messages are painted at the wrong place.
-    useLayoutEffect(() => {
-        const place = restoreRef.current;
-        if (place === null) return;
-        restoreRef.current = null;
-        if (renderAll) return;
-        const index = returnIndex(place, messages);
-        if (index < 0 || index === place.index) return;
-        firstVisibleRef.current = index;
-        const location = { index, align: 'start' };
-        virtuosoRef.current?.scrollToIndex?.(location);
-        // Once more after this commit: the virtualizer draws the new list's height in an update of its
-        // own, and until then a message further down than the old list reached is out of the browser's
-        // reach, so the first scroll stops at the old end.
-        let current = true;
-        queueMicrotask(() => {
-            if (current) virtuosoRef.current?.scrollToIndex?.(location);
-        });
-        return () => {
-            current = false;
-        };
-    }, [messages, renderAll]);
+    const handleRange = (firstVisibleIndex) => {
+        onViewState?.({ firstVisibleIndex, openId });
+    };
 
     useEffect(() => {
-        onViewState?.({ firstVisibleIndex: firstVisibleRef.current, openId });
+        onViewState?.({ firstVisibleIndex: bodyRef.current?.firstVisibleIndex() ?? 0, openId });
     }, [onViewState, openId]);
 
     // Roving tabindex: exactly one message is tabbable at a time, so the whole
@@ -262,9 +194,10 @@ export function ChatLog({
         if (focusIndex < 0 || !tabbable) return undefined;
         const revealed = revealedRef.current;
         revealedRef.current = false;
-        if (!revealed) virtuosoRef.current?.scrollIntoView?.({ index: focusIndex });
+        if (!revealed) bodyRef.current?.reveal(focusIndex);
         const frame = requestAnimationFrame(() => {
-            const node = listRef.current?.querySelector(`[data-message-index="${focusIndex}"]`);
+            const { list } = bodyRef.current?.container(focusIndex) ?? {};
+            const node = list?.querySelector(`[data-message-index="${focusIndex}"]`);
             node?.focus?.({ preventScroll: true });
         });
         return () => cancelAnimationFrame(frame);
@@ -394,13 +327,7 @@ export function ChatLog({
      *
      * @returns {number} Its index.
      */
-    const readingIndex = () => {
-        const atTop = messageAtTop(
-            renderAll ? listRef.current : scrollerRef.current,
-            listRef.current
-        );
-        return atTop >= 0 ? atTop : firstVisibleRef.current;
-    };
+    const readingIndex = () => bodyRef.current?.readingIndex() ?? 0;
 
     /**
      * Scroll the current mark into view once its message is drawn, unless it already is.
@@ -409,8 +336,7 @@ export function ChatLog({
      * @returns {void}
      */
     const revealMark = (messageIndex) => {
-        const list = listRef.current;
-        const scroller = renderAll ? list : scrollerRef.current;
+        const { list, scroller } = bodyRef.current?.container(messageIndex) ?? {};
         if (!list || !scroller) return;
         const row = `[data-row="${messageIndex}"]`;
         const target = list.querySelector(`${row} mark[data-current]`) ?? list.querySelector(row);
@@ -440,14 +366,7 @@ export function ChatLog({
          * @returns {void}
          */
         const afterScroll = () => requestAnimationFrame(() => revealMark(messageIndex));
-        if (renderAll) afterScroll();
-        else {
-            virtuosoRef.current?.scrollIntoView?.({
-                index: messageIndex,
-                behavior: 'auto',
-                done: afterScroll,
-            });
-        }
+        bodyRef.current?.reveal(messageIndex, { behavior: 'auto', done: afterScroll });
         if (moveFocus && tabbable) {
             revealedRef.current = true;
             setFocusIndex(messageIndex);
@@ -646,7 +565,7 @@ export function ChatLog({
         }
         const direction = stepDirection(event);
         if (direction === null) return;
-        const fromList = Boolean(listRef.current?.contains(event.target));
+        const fromList = Boolean(bodyRef.current?.contains(event.target));
         if (step(direction, fromList)) event.preventDefault();
     };
 
@@ -699,31 +618,7 @@ export function ChatLog({
      */
     const jumpTo = (index) => {
         setCurrent(null);
-        if (!renderAll) {
-            virtuosoRef.current?.scrollToIndex?.({ index, align: 'start', behavior: 'auto' });
-            return;
-        }
-        const node = listRef.current?.querySelector(`[data-message-index="${index}"]`);
-        if (node) scrollToElement(listRef.current, node, { position: 0 });
-    };
-
-    /**
-     * Day label to show before a message, for the non-virtualized path.
-     *
-     * GroupedVirtuoso renders its own sticky headers, so this is only needed
-     * where virtualization is off — the export path, which re-renders every row.
-     *
-     * @param {number} index - Index of the message.
-     * @returns {?string} The label, or null when this message continues the day.
-     */
-    const separatorBefore = (index) => {
-        if (!dayGroups) return null;
-        let seen = 0;
-        for (let g = 0; g < dayGroups.groupCounts.length; g += 1) {
-            if (index === seen) return dayGroups.labels[g] || null;
-            seen += dayGroups.groupCounts[g];
-        }
-        return null;
+        bodyRef.current?.jumpTo(index);
     };
 
     /**
@@ -860,79 +755,19 @@ export function ChatLog({
                 />
             ) : null}
             <div className={styles.main}>
-                <div
-                    className={
-                        // Every row rendered in a live object: the list itself must scroll.
-                        renderAll && live ? `${styles.list} ${styles.listScroll}` : styles.list
-                    }
-                    role="list"
-                    aria-label={`Conversation, ${messages.length} messages`}
-                    aria-busy={reloading ? 'true' : undefined}
-                    ref={listRef}
+                <ConversationList
+                    ref={bodyRef}
+                    messages={messages}
+                    dayGroups={dayGroups}
+                    renderItem={renderRow}
+                    renderAll={renderAll}
+                    live={live}
+                    initialIndex={snapshot?.firstVisibleIndex ?? 0}
+                    label={`Conversation, ${messages.length} messages`}
+                    busy={Boolean(reloading)}
                     onKeyDown={handleKeyDown}
-                >
-                    {renderAll ? (
-                        // Export and print re-render from the layout in a headless
-                        // browser, where a virtualized window would capture only the
-                        // rows that happened to be visible.
-                        messages.map((_, i) => (
-                            <div key={bubbleKey(messages[i])}>
-                                {separatorBefore(i) ? (
-                                    <div className={styles.separator}>{separatorBefore(i)}</div>
-                                ) : null}
-                                {renderRow(i)}
-                            </div>
-                        ))
-                    ) : dayGroups ? (
-                        // GroupedVirtuoso gives genuinely sticky day headers. A
-                        // separator rendered as an ordinary item cannot stick,
-                        // because the virtualizer positions items itself.
-                        <GroupedVirtuoso
-                            ref={virtuosoRef}
-                            initialTopMostItemIndex={snapshot?.firstVisibleIndex ?? 0}
-                            rangeChanged={handleRangeChanged}
-                            scrollerRef={handleScrollerRef}
-                            // react-virtuoso makes its scroller tabbable by
-                            // default. Left alone that is a second tab stop for
-                            // the list, and it exists even when Sense has not
-                            // handed focus to this object — so the roving
-                            // tabindex below would not actually be the only one.
-                            tabIndex={-1}
-                            style={{ height: '100%' }}
-                            groupCounts={dayGroups.groupCounts}
-                            groupContent={(groupIndex) => (
-                                <div className={styles.separator}>
-                                    {dayGroups.labels[groupIndex]}
-                                </div>
-                            )}
-                            itemContent={renderRow}
-                            // No followOutput: a list short enough to fit counts as scrolled
-                            // to the bottom, so following the rows a cleared selection brings
-                            // back would carry the reader past their message (GOTCHAS 28).
-                            increaseViewportBy={200}
-                        />
-                    ) : (
-                        <Virtuoso
-                            ref={virtuosoRef}
-                            initialTopMostItemIndex={snapshot?.firstVisibleIndex ?? 0}
-                            rangeChanged={handleRangeChanged}
-                            scrollerRef={handleScrollerRef}
-                            // react-virtuoso makes its scroller tabbable by
-                            // default. Left alone that is a second tab stop for
-                            // the list, and it exists even when Sense has not
-                            // handed focus to this object — so the roving
-                            // tabindex below would not actually be the only one.
-                            tabIndex={-1}
-                            style={{ height: '100%' }}
-                            totalCount={messages.length}
-                            itemContent={renderRow}
-                            // No followOutput: a list short enough to fit counts as scrolled
-                            // to the bottom, so following the rows a cleared selection brings
-                            // back would carry the reader past their message (GOTCHAS 28).
-                            increaseViewportBy={200}
-                        />
-                    )}
-                </div>
+                    onRange={handleRange}
+                />
                 {ticks.length ? (
                     <HighlightRuler
                         ticks={ticks}
