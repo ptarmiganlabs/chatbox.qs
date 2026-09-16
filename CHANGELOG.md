@@ -1,5 +1,66 @@
 # Changelog
 
+## [0.4.0](https://github.com/ptarmiganlabs/chatbox.qs/compare/chatbox-qs-v0.3.0...chatbox-qs-v0.4.0) (2026-09-16)
+
+
+### Features
+
+* choose conversations side by side in the property panel ([ad31ef0](https://github.com/ptarmiganlabs/chatbox.qs/commit/ad31ef091c03bcafab863ced282f8ece27989958))
+* choose message kind chips in the property panel ([3f3a909](https://github.com/ptarmiganlabs/chatbox.qs/commit/3f3a9097af2a0ec23d4416d5162e0cc5f5575e5c))
+* choose the highlight and category fields in the property panel ([89928e1](https://github.com/ptarmiganlabs/chatbox.qs/commit/89928e10ec1fd9a4424d2955efad7d23205ba0f0))
+* copy the conversation as text or JSON from the context menu ([000f5af](https://github.com/ptarmiganlabs/chatbox.qs/commit/000f5afc8e0f45ca3ef53200c991029298cfd0f3))
+* highlight a field's values in messages, coloured by category ([d76f282](https://github.com/ptarmiganlabs/chatbox.qs/commit/d76f2829140b6e8a1d54b3498a92fefb946ce562))
+* highlight values in markdown messages ([2d6a422](https://github.com/ptarmiganlabs/chatbox.qs/commit/2d6a422a12654c59cda37f6ce30df17d7f10c402))
+* let readers select and copy message text ([64bdc99](https://github.com/ptarmiganlabs/chatbox.qs/commit/64bdc9976d24641f863f9dc455776b70629583ed))
+* let search, the ruler and copying follow conversations side by side ([da92421](https://github.com/ptarmiganlabs/chatbox.qs/commit/da924217dacd4928b01a9cc99a4bc494a9461262))
+* line conversations up in time with linked scrolling ([c9854ac](https://github.com/ptarmiganlabs/chatbox.qs/commit/c9854acf9e237cfcf46c655be2b537918aa3bcaa))
+* match field values and search text with a matcher built once ([66c8be6](https://github.com/ptarmiganlabs/chatbox.qs/commit/66c8be657b01dd002aca01d87284614f91d3c743))
+* read a highlight field's values and categories beside the conversation ([c8216bb](https://github.com/ptarmiganlabs/chatbox.qs/commit/c8216bbad9299204cf947e4bd21eb8c23e45692e))
+* read a message's kinds as a list of values ([d969887](https://github.com/ptarmiganlabs/chatbox.qs/commit/d969887aff2fad7f89c62a4f2d4dafd78ad1289e))
+* search the shown messages and step through the matches ([f9d846f](https://github.com/ptarmiganlabs/chatbox.qs/commit/f9d846fbdb33de147d856f66c95ff9d8fb77a145))
+* select values and categories by clicking highlights and chips ([dac94bf](https://github.com/ptarmiganlabs/chatbox.qs/commit/dac94bfa1d404854f29f2e8535f41bab4bf31692))
+* show conversations side by side, each lane scrolling freely ([649697c](https://github.com/ptarmiganlabs/chatbox.qs/commit/649697c0a5bbf711695a4501e6bc74fc73b3229e))
+* show message kinds as chips above the text ([92d82e9](https://github.com/ptarmiganlabs/chatbox.qs/commit/92d82e9d1066915e13e9ae845f0b46676fac3d1f))
+* step through highlights with F3 and an overview ruler ([47201d7](https://github.com/ptarmiganlabs/chatbox.qs/commit/47201d7ebb5292460063295ba1c7b4b58f8c82b4))
+* work out which conversations go side by side, and in what order ([2ac89c6](https://github.com/ptarmiganlabs/chatbox.qs/commit/2ac89c6e922ba98c34f5eb3963f6cddfb3bd003f))
+
+
+### Bug Fixes
+
+* drop the colour expression warning once the expression is fixed ([55dbf20](https://github.com/ptarmiganlabs/chatbox.qs/commit/55dbf2054e9cbe4443d907f47c914e8fb0e647ae))
+* keep keyboard focus on its message when the messages shown change ([e6575e0](https://github.com/ptarmiganlabs/chatbox.qs/commit/e6575e027d5a09a583b2cbf748399851f0ff42ba))
+* keep messages sent far apart out of one linked row ([1fd9f6b](https://github.com/ptarmiganlabs/chatbox.qs/commit/1fd9f6b80d067b7b9baa16e5b0d9e064d0f4bea8))
+* keep the conversation and its lanes while nothing they come from changed ([1c8eb79](https://github.com/ptarmiganlabs/chatbox.qs/commit/1c8eb79eb40cf804fb78f6974109a10b65202488))
+* keep the conversation on screen while it reloads after a selection ([c2bfd6f](https://github.com/ptarmiganlabs/chatbox.qs/commit/c2bfd6fea1c0d8e7935d8fefd39f92c6734830f7))
+* keep the newest messages when Newest first or lanes meet the limit ([33e6168](https://github.com/ptarmiganlabs/chatbox.qs/commit/33e61689362866a77c3ae1e3ff9af05e30d9e964))
+* keep the reader's place when a cleared selection brings messages back ([3523380](https://github.com/ptarmiganlabs/chatbox.qs/commit/35233806864927b2244ceca38c1b75b30af7b13e))
+* return to the message at the top of the view after a selection ([7d3be9d](https://github.com/ptarmiganlabs/chatbox.qs/commit/7d3be9d22b9354b27fc9aca72bf4768b1a6b8d4a))
+* say the lanes come from the rows read whenever rows were cut short ([76dc8df](https://github.com/ptarmiganlabs/chatbox.qs/commit/76dc8df45c34b8ce56eda4e5df3522ed697476b4))
+* say where the message limit cut the rows, at either end ([6edd28b](https://github.com/ptarmiganlabs/chatbox.qs/commit/6edd28bea6c220b54340a2d58dc30558a9958aa9))
+* say which day each part of a copied transcript is from ([f772aa4](https://github.com/ptarmiganlabs/chatbox.qs/commit/f772aa4d84d0998ea272ced850137e17f4729354))
+* stop redoing day headers over lanes and holding on to gone lanes ([5d7e2e5](https://github.com/ptarmiganlabs/chatbox.qs/commit/5d7e2e5c157b19e53f9b857d03bcd36377ed6b5f))
+
+
+### Miscellaneous
+
+* time scale ratios by the fastest of several runs ([3b36918](https://github.com/ptarmiganlabs/chatbox.qs/commit/3b36918668ec3402442ad94ce1ed9c2f3a8d2d91))
+
+
+### Refactoring
+
+* give the message list and its reader's place a component of its own ([1491440](https://github.com/ptarmiganlabs/chatbox.qs/commit/14914401d40191ea7dac367409a0a36db2c74ebf))
+* move the reader's-place helpers out of ChatLog ([6e358b3](https://github.com/ptarmiganlabs/chatbox.qs/commit/6e358b37328b25e625f1aa03cdd5770dcb55df30))
+* share one theme palette between participants and categories ([f5a49fb](https://github.com/ptarmiganlabs/chatbox.qs/commit/f5a49fbbdee5036f258d0cbb0da31ec1d5a10274))
+
+
+### Documentation
+
+* describe conversations side by side ([807858f](https://github.com/ptarmiganlabs/chatbox.qs/commit/807858f5f7c4f0c01d1be7bb5fdccf2c6239541d))
+* describe highlighting, categories, search, stepping and copying ([11ce7f4](https://github.com/ptarmiganlabs/chatbox.qs/commit/11ce7f48f16781861776e012e2c8a942593e3ba6))
+* describe message kind chips ([78c39a5](https://github.com/ptarmiganlabs/chatbox.qs/commit/78c39a58040ab6e63adaaec0e714869fa111cdc7))
+* note that the May 2026 server re-validates on island selections ([985426e](https://github.com/ptarmiganlabs/chatbox.qs/commit/985426eca811a4ce81cf6fb95c1957faa446e18b))
+* say which rows Maximum messages keeps ([f2b4090](https://github.com/ptarmiganlabs/chatbox.qs/commit/f2b40906c37514ae941aa37bbb70e90ebe24f285))
+
 ## [0.3.0](https://github.com/ptarmiganlabs/chatbox.qs/compare/chatbox-qs-v0.2.0...chatbox-qs-v0.3.0) (2026-09-15)
 
 
