@@ -11,7 +11,7 @@
  * every selection change, and a polite live region would announce the entire
  * conversation each time.
  */
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { GroupedVirtuoso, Virtuoso } from 'react-virtuoso';
 import styles from './chat.module.css';
 import { buildDayGroups, startsCluster } from '../chat/grouping';
@@ -57,6 +57,37 @@ export function isSelectable(message, mode) {
 }
 
 /**
+ * A thin line across the top of the conversation while newer rows load.
+ *
+ * Determinate when the paging progress is known, a moving sliver otherwise. It overlays the top edge
+ * rather than taking a row of its own, so the list does not shift down and back as it comes and goes.
+ *
+ * @param {object} props - Component props.
+ * @param {{loaded: ?number, total: ?number}} props.reloading - The paging progress, when known.
+ * @returns {object} The rendered line.
+ */
+function ReloadingLine({ reloading }) {
+    const { loaded, total } = reloading;
+    const known = Number.isFinite(loaded) && Number.isFinite(total) && total > 0;
+    const fraction = known ? Math.min(1, Math.max(0, loaded / total)) : null;
+    return (
+        <div
+            className={styles.reloading}
+            role="progressbar"
+            aria-label="Loading messages"
+            aria-valuemin={known ? 0 : undefined}
+            aria-valuemax={known ? total : undefined}
+            aria-valuenow={known ? loaded : undefined}
+        >
+            <div
+                className={known ? styles.reloadingBar : styles.reloadingSliver}
+                style={known ? { '--cqs-progress': String(fraction) } : undefined}
+            />
+        </div>
+    );
+}
+
+/**
  * Render the conversation.
  *
  * @param {object} props - Component props.
@@ -70,6 +101,8 @@ export function isSelectable(message, mode) {
  * @param {object} [props.keyboard] - The object returned by useKeyboard().
  * @param {object} [props.layout] - The object layout, for snapshot state.
  * @param {Function} [props.onViewState] - Reports { firstVisibleIndex, openId } as it changes.
+ * @param {?{loaded: ?number, total: ?number}} [props.reloading] - Set while newer rows load and
+ *   this is the conversation that was on screen; see src/ui/reload-view.js.
  * @returns {object} The rendered conversation.
  */
 export function ChatLog({
@@ -82,6 +115,7 @@ export function ChatLog({
     keyboard,
     layout,
     onViewState,
+    reloading = null,
 }) {
     // State captured when a snapshot was taken. Null for a normal render.
     const snapshot = readSnapshot(layout);
@@ -123,6 +157,22 @@ export function ChatLog({
     // reader was. Kept in a ref as well: the snapshot callback runs outside
     // React and needs the current value, not the one from its closure.
     const firstVisibleRef = useRef(0);
+    const listRef = useRef(null);
+    const virtuosoRef = useRef(null);
+
+    // Where the reader is, by message key. A selection replaces the messages, and the reader's message
+    // can move to another index or go; the key is what finds it again. `shownRef` holds the messages
+    // the key was read against, and `restoreRef` the key to return to once new messages are shown.
+    const anchorKeyRef = useRef(null);
+    const shownRef = useRef(messages);
+    const restoreRef = useRef(null);
+    if (shownRef.current !== messages) {
+        // Captured while rendering, before the virtualizer can report a range for the new messages:
+        // it keeps its pixel offset across a data change and reports whatever now sits there, which
+        // would otherwise overwrite where the reader actually was.
+        if (restoreRef.current === null) restoreRef.current = anchorKeyRef.current;
+        shownRef.current = messages;
+    }
 
     /**
      * Record the visible range and report it upward.
@@ -133,10 +183,33 @@ export function ChatLog({
     const handleRangeChanged = useCallback(
         (range) => {
             firstVisibleRef.current = range?.startIndex ?? 0;
+            // While a return to the reader's message is pending, a range is not where they were.
+            if (restoreRef.current === null) {
+                const first = shownRef.current[firstVisibleRef.current];
+                anchorKeyRef.current = first ? bubbleKey(first) : null;
+            }
             onViewState?.({ firstVisibleIndex: firstVisibleRef.current, openId });
         },
         [onViewState, openId]
     );
+
+    // When newer rows replace the messages, put the reader back at the message they were reading.
+    // After a selection, the kept pixel offset lands on whatever message now happens to sit there. A
+    // message the selection removed cannot be returned to; the list then stays where it is. A layout
+    // effect, so the jump back happens before the new messages are painted at the wrong place.
+    useLayoutEffect(() => {
+        const key = restoreRef.current;
+        if (key === null) return;
+        restoreRef.current = null;
+        if (renderAll) return;
+        const index = messages.findIndex((m) => bubbleKey(m) === key);
+        if (index < 0) return;
+        anchorKeyRef.current = key;
+        if (index !== firstVisibleRef.current) {
+            firstVisibleRef.current = index;
+            virtuosoRef.current?.scrollToIndex?.({ index, align: 'start' });
+        }
+    }, [messages, renderAll]);
 
     useEffect(() => {
         onViewState?.({ firstVisibleIndex: firstVisibleRef.current, openId });
@@ -145,8 +218,6 @@ export function ChatLog({
     // Roving tabindex: exactly one message is tabbable at a time, so the whole
     // conversation costs the sheet a single tab stop instead of one per message.
     const [focusIndex, setFocusIndex] = useState(-1);
-    const listRef = useRef(null);
-    const virtuosoRef = useRef(null);
     const tabbable = canReceiveTabStop(keyboard);
 
     // Move real DOM focus after the index changes. In a virtualized list the
@@ -306,6 +377,7 @@ export function ChatLog({
 
     return (
         <div className={rootClass} data-density={density}>
+            {reloading ? <ReloadingLine reloading={reloading} /> : null}
             {warnings.map((w) => (
                 <div key={w.code} className={`${styles.banner} ${styles.bannerWarning}`}>
                     {w.message}
@@ -316,6 +388,7 @@ export function ChatLog({
                     className={styles.list}
                     role="list"
                     aria-label={`Conversation, ${messages.length} messages`}
+                    aria-busy={reloading ? 'true' : undefined}
                     ref={listRef}
                     onKeyDown={handleKeyDown}
                 >

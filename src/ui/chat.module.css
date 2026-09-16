@@ -37,6 +37,7 @@
 }
 
 .root {
+    position: relative;
     display: flex;
     flex-direction: column;
     width: 100%;
@@ -449,4 +450,48 @@
 .bannerWarning {
     background: #fdf3e3;
     color: #7a4b00;
+}
+
+/* Newer rows are loading after a selection, and the conversation on screen is the one before it.
+   The line overlays the top edge instead of taking a row, so nothing shifts as it comes and goes. */
+.reloading {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 3;
+    height: 2px;
+    overflow: hidden;
+    pointer-events: none;
+}
+
+.reloadingBar {
+    height: 100%;
+    background: var(--cqs-muted, #6c6c6c);
+    transform: scaleX(var(--cqs-progress, 0));
+    transform-origin: left center;
+}
+
+.reloadingSliver {
+    width: 30%;
+    height: 100%;
+    background: var(--cqs-muted, #6c6c6c);
+    animation: cqs-reloading 1.2s ease-in-out infinite;
+}
+
+@keyframes cqs-reloading {
+    from {
+        transform: translateX(-100%);
+    }
+    to {
+        transform: translateX(340%);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .reloadingSliver {
+        width: 100%;
+        animation: none;
+        opacity: 0.5;
+    }
 }

@@ -33,6 +33,7 @@ import { buildSelection } from './qix/selection';
 import { describeAssignments } from './qix/role-labels';
 import { syncAttributeExpressions } from './qix/sync-attrs';
 import { isSnapshot, writeSnapshot } from './ui/snapshot';
+import { reloadingView } from './ui/reload-view';
 import { render, destroy } from './ui/chat-renderer';
 import ChatLog from './ui/ChatLog';
 import { Empty, Failed, Loading, NotConfigured, emptyStateMessage } from './ui/states';
@@ -118,6 +119,10 @@ export default function supernova(galaxy) {
 
             const [progress, setProgress] = useState(null);
 
+            // The props of the conversation last shown, so a reload after a selection can keep it
+            // on screen instead of swapping in Loading — see src/ui/reload-view.js.
+            const lastViewRef = useRef(null);
+
             // Stash the enigma handles for property-panel callbacks, which run
             // outside hook scope and cannot call useModel()/useApp() themselves.
             extensionState.model = model;
@@ -200,6 +205,7 @@ export default function supernova(galaxy) {
 
                 const conversationModel = conversationModelOf(settings);
                 if (!hc) {
+                    lastViewRef.current = null;
                     render(element, NotConfigured, { missing: [], conversationModel });
                     return undefined;
                 }
@@ -208,6 +214,7 @@ export default function supernova(galaxy) {
                     conversationModel,
                 });
                 if (missing.length) {
+                    lastViewRef.current = null;
                     render(element, NotConfigured, {
                         missing,
                         conversationModel,
@@ -219,12 +226,25 @@ export default function supernova(galaxy) {
                 // An aborted run is our own doing, not a failure to report.
                 if (fetchError && fetchError.name !== 'AbortError') {
                     logger.warn('paging failed:', fetchError);
+                    lastViewRef.current = null;
                     render(element, Failed, { error: fetchError });
                     return undefined;
                 }
 
                 if (!page || page.derivedFrom !== staleLayout) {
-                    render(element, Loading, { loaded: progress?.loaded, total: progress?.total });
+                    const reloading = reloadingView(lastViewRef.current, {
+                        rect,
+                        keyboard,
+                        progress,
+                    });
+                    if (reloading) {
+                        render(element, ChatLog, reloading);
+                    } else {
+                        render(element, Loading, {
+                            loaded: progress?.loaded,
+                            total: progress?.total,
+                        });
+                    }
                     return undefined;
                 }
 
@@ -303,11 +323,12 @@ export default function supernova(galaxy) {
                         liveLayout?.qHyperCube?.qCalcCondMsg ||
                         staleLayout?.qHyperCube?.qCalcCondMsg ||
                         null;
+                    lastViewRef.current = null;
                     render(element, Empty, { message: emptyStateMessage(conversation, calcMsg) });
                     return undefined;
                 }
 
-                render(element, ChatLog, {
+                const view = {
                     conversation,
                     settings,
                     canSelect,
@@ -317,7 +338,10 @@ export default function supernova(galaxy) {
                     keyboard,
                     layout: staleLayout,
                     onViewState: handleViewStateRef.current,
-                });
+                    reloading: null,
+                };
+                lastViewRef.current = view;
+                render(element, ChatLog, view);
                 return undefined;
             }, [
                 element,
