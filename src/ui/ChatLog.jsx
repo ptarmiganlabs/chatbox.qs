@@ -14,7 +14,14 @@ import styles from './chat.module.css';
 import { buildDayGroups, startsCluster } from '../chat/grouping';
 import DetailReveal, { resolveRevealMode } from './DetailReveal';
 import { resolveDensity } from './density';
-import { canReceiveTabStop, isFindKey, keyAction, nextFocusIndex, stepDirection } from './keyboard';
+import {
+    canReceiveTabStop,
+    isFindKey,
+    keyAction,
+    laneFocusIndex,
+    nextFocusIndex,
+    stepDirection,
+} from './keyboard';
 import { readSnapshot, shouldRenderAll } from './snapshot';
 import MessageRow from './render-message';
 import ConversationBar from './ConversationBar';
@@ -31,6 +38,8 @@ import { counted } from '../util/format';
 import { readKindChipSettings } from '../chat/kind-chips';
 import { Empty } from './states';
 import ConversationList from './ConversationList';
+import LaneBoard, { laneCaption } from './LaneBoard';
+import { lanePlace } from '../chat/lanes';
 import { bubbleKey } from './reader-place';
 
 export { bubbleKey, messageAtTop, returnIndex } from './reader-place';
@@ -109,6 +118,9 @@ function ReloadingLine({ reloading }) {
  * @param {?{id: number, text: string, level: string}} [props.notice] - A notice to show in the corner.
  * @param {?object} [props.search] - The search box: `finder`, `initialQuery` and `onQueryChange(query)`;
  *   null to leave it out.
+ * @param {?object} [props.board] - Conversations side by side, from src/chat/lanes.js; the conversation's
+ *   messages are then the board's, in its order. Null for one conversation.
+ * @param {?string} [props.laneNotice] - Why conversations cannot be shown side by side, as a banner.
  * @returns {object} The rendered conversation.
  */
 export function ChatLog({
@@ -125,6 +137,8 @@ export function ChatLog({
     highlights = null,
     notice = null,
     search = null,
+    board = null,
+    laneNotice = null,
 }) {
     // State captured when a snapshot was taken. Null for a normal render.
     const snapshot = readSnapshot(layout);
@@ -136,13 +150,22 @@ export function ChatLog({
     // have somewhere to read from.
     const [openId, setOpenId] = useState(snapshot?.openId ?? null);
 
-    const revealMode = resolveRevealMode(rect, settings.revealMode);
-    const density = resolveDensity(rect, settings.density);
+    // Side by side, a pane would squeeze every lane: an automatic choice overlays the details instead.
+    const resolvedReveal = resolveRevealMode(rect, settings.revealMode);
+    const revealMode =
+        board && resolvedReveal === 'pane' && (settings.revealMode ?? 'auto') === 'auto'
+            ? 'overlay'
+            : resolvedReveal;
+    // A lane is as narrow as a small tile, so spacing follows the lane's width.
+    const density = resolveDensity(
+        board && rect ? { width: rect.width / board.lanes.length, height: rect.height } : rect,
+        settings.density
+    );
 
     // Null when nothing can be dated — also the signal to fall back to the
     // ungrouped list rather than show a heading that means nothing.
     const dayGroups =
-        settings.dateSeparators === false ? null : buildDayGroups(conversation.messages);
+        settings.dateSeparators === false || board ? null : buildDayGroups(conversation.messages);
     const detailsOnClick = settings.onBubbleClick === 'showDetails';
 
     /**
@@ -212,6 +235,7 @@ export function ChatLog({
     // bubbles can both be live at once, and showing only one silently hides
     // the fact that messages were dropped.
     const warnings = (diagnostics ?? []).filter((d) => d.severity === 'warning');
+    if (laneNotice) warnings.push({ code: 'lanes', message: laneNotice });
     // A highlight problem stays in sight whatever the switches say: without it, "no highlights" looks
     // like "nothing to highlight".
     const highlightBanner = highlights?.placement?.banner ?? null;
@@ -262,7 +286,11 @@ export function ChatLog({
     useEffect(() => {
         onQueryChangeRef.current?.(appliedQuery);
     }, [appliedQuery]);
-    const finds = searchable ? finder.find({ messages, query: appliedQuery, gapSec }) : null;
+    // Side by side, a message's header line follows the previous message in its own lane.
+    const previous = board?.prevInLane ?? null;
+    const finds = searchable
+        ? finder.find({ messages, query: appliedQuery, gapSec, previous })
+        : null;
 
     // What stepping, the counter and the ruler go through: the search matches while a query is
     // typed, the highlights otherwise.
@@ -309,18 +337,25 @@ export function ChatLog({
     }
 
     const showRuler = settings.showRuler !== false;
-    const ticks = useMemo(
-        () =>
-            showRuler && stops && stopTotal > 0
-                ? rulerTicks({
-                      stops,
-                      count: messages.length,
-                      kind: stopKind,
-                      styles: stopKind === 'highlight' ? (highlights?.styles ?? null) : null,
-                  })
-                : [],
-        [showRuler, stops, stopTotal, messages.length, stopKind, highlights?.styles]
-    );
+    // One ruler for the conversation, or with free scrolling one per lane, over the lane's messages.
+    const laneRulers = board?.scroll === 'free';
+    const ticks = useMemo(() => {
+        if (!showRuler || !stops || stopTotal === 0)
+            return laneRulers ? board.lanes.map(() => []) : [];
+        const tickStyles = stopKind === 'highlight' ? (highlights?.styles ?? null) : null;
+        if (laneRulers) {
+            return board.lanes.map((lane) =>
+                rulerTicks({
+                    stops,
+                    count: lane.count,
+                    first: lane.start,
+                    kind: stopKind,
+                    styles: tickStyles,
+                })
+            );
+        }
+        return rulerTicks({ stops, count: messages.length, kind: stopKind, styles: tickStyles });
+    }, [showRuler, stops, stopTotal, messages.length, stopKind, highlights?.styles, board]);
 
     /**
      * Find the message the reader is at: the first one whose bottom is below the top of the view.
@@ -504,7 +539,17 @@ export function ChatLog({
     const handleKeyDown = (event) => {
         if (!tabbable) return;
 
-        const moved = nextFocusIndex(event.key, focusIndex, messages.length);
+        const moved = board
+            ? laneFocusIndex(event.key, focusIndex, board, {
+                  /**
+                   * Find where the reader is in a lane.
+                   *
+                   * @param {number} lane - The lane.
+                   * @returns {number} The board index of the message at the top of it.
+                   */
+                  anchor: (lane) => bodyRef.current?.readingIndex(lane) ?? -1,
+              })
+            : nextFocusIndex(event.key, focusIndex, messages.length);
         if (moved !== null) {
             event.preventDefault();
             // Moving on leaves the stop the reader stepped to.
@@ -586,7 +631,7 @@ export function ChatLog({
                 setAppliedQuery(query);
                 const typed = query.trim() !== '';
                 stopsNow = typed
-                    ? finder.find({ messages, query, gapSec })
+                    ? finder.find({ messages, query, gapSec, previous })
                     : highlightValues
                       ? highlights.result
                       : null;
@@ -629,8 +674,8 @@ export function ChatLog({
      */
     const renderRow = (index) => {
         const message = messages[index];
-        const previous = index > 0 ? messages[index - 1] : null;
-        const showAuthor = startsCluster(message, previous, gapSec);
+        const before = previous ? previous[index] : index - 1;
+        const showAuthor = startsCluster(message, before >= 0 ? messages[before] : null, gapSec);
         const isOpen = bubbleKey(message) === openId;
         return (
             <>
@@ -667,8 +712,7 @@ export function ChatLog({
                 {isOpen && revealMode === 'inline' ? (
                     <DetailReveal
                         message={message}
-                        messages={messages}
-                        index={index}
+                        {...lanePlace(board, messages, index)}
                         mode="inline"
                         onClose={closeDetail}
                         quote={quoteFor(message, index)}
@@ -678,12 +722,35 @@ export function ChatLog({
         );
     };
 
+    /**
+     * Render one lane's overview ruler, with free scrolling.
+     *
+     * @param {number} number - The lane.
+     * @returns {?object} The ruler, or null when the lane has nothing to show on it.
+     */
+    const renderLaneRuler = (number) => {
+        const lane = board.lanes[number];
+        const laneTicks = ticks[number] ?? [];
+        if (laneTicks.length === 0) return null;
+        return (
+            <HighlightRuler
+                ticks={laneTicks}
+                count={lane.count}
+                kind={stopKind}
+                interactive={live}
+                onJump={jumpTo}
+                indexAt={(fraction) =>
+                    lane.start + Math.min(lane.count - 1, Math.floor(fraction * lane.count))
+                }
+            />
+        );
+    };
+
     const detail =
         openMessage && revealMode !== 'inline' ? (
             <DetailReveal
                 message={openMessage}
-                messages={messages}
-                index={openIndex}
+                {...lanePlace(board, messages, openIndex)}
                 mode={revealMode}
                 onClose={closeDetail}
                 quote={quoteFor(openMessage, openIndex)}
@@ -755,20 +822,36 @@ export function ChatLog({
                 />
             ) : null}
             <div className={styles.main}>
-                <ConversationList
-                    ref={bodyRef}
-                    messages={messages}
-                    dayGroups={dayGroups}
-                    renderItem={renderRow}
-                    renderAll={renderAll}
-                    live={live}
-                    initialIndex={snapshot?.firstVisibleIndex ?? 0}
-                    label={`Conversation, ${messages.length} messages`}
-                    busy={Boolean(reloading)}
-                    onKeyDown={handleKeyDown}
-                    onRange={handleRange}
-                />
-                {ticks.length ? (
+                {board ? (
+                    <LaneBoard
+                        ref={bodyRef}
+                        board={board}
+                        renderRow={renderRow}
+                        dateSeparators={settings.dateSeparators !== false}
+                        renderAll={renderAll}
+                        live={live}
+                        busy={Boolean(reloading)}
+                        caption={laneCaption(board, conversation.meta)}
+                        onKeyDown={handleKeyDown}
+                        onRange={handleRange}
+                        renderRuler={laneRulers ? renderLaneRuler : undefined}
+                    />
+                ) : (
+                    <ConversationList
+                        ref={bodyRef}
+                        messages={messages}
+                        dayGroups={dayGroups}
+                        renderItem={renderRow}
+                        renderAll={renderAll}
+                        live={live}
+                        initialIndex={snapshot?.firstVisibleIndex ?? 0}
+                        label={`Conversation, ${messages.length} messages`}
+                        busy={Boolean(reloading)}
+                        onKeyDown={handleKeyDown}
+                        onRange={handleRange}
+                    />
+                )}
+                {!laneRulers && ticks.length ? (
                     <HighlightRuler
                         ticks={ticks}
                         count={messages.length}

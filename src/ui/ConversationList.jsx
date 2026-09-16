@@ -39,6 +39,8 @@ import { scrollToElement } from './scroll';
  * @param {Function} [props.onKeyDown] - Keyboard handler for the list.
  * @param {function(number): void} [props.onRange] - Called with the conversation index of the first
  *   message the virtualizer draws, as it changes.
+ * @param {object} [props.context] - Handed to the virtualizer as its context: which list it is.
+ * @param {object} [props.scrollerStyle] - Style for the virtualizer's scrolling element, beside its height.
  * @returns {object} The rendered list.
  */
 export function ConversationList({
@@ -54,6 +56,8 @@ export function ConversationList({
     busy = false,
     onKeyDown,
     onRange,
+    context,
+    scrollerStyle = null,
 }) {
     const listRef = useRef(null);
     const virtuosoRef = useRef(null);
@@ -299,7 +303,8 @@ export function ConversationList({
                     // handed focus to this object — so the roving
                     // tabindex would not actually be the only one.
                     tabIndex={-1}
-                    style={{ height: '100%' }}
+                    style={{ height: '100%', ...scrollerStyle }}
+                    context={context}
                     groupCounts={dayGroups.groupCounts}
                     groupContent={(groupIndex) => (
                         <div className={styles.separator}>{dayGroups.labels[groupIndex]}</div>
@@ -322,7 +327,8 @@ export function ConversationList({
                     // handed focus to this object — so the roving
                     // tabindex would not actually be the only one.
                     tabIndex={-1}
-                    style={{ height: '100%' }}
+                    style={{ height: '100%', ...scrollerStyle }}
+                    context={context}
                     totalCount={messages.length}
                     itemContent={itemContent}
                     // No followOutput: a list short enough to fit counts as scrolled
