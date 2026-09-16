@@ -12,6 +12,8 @@ Part of the [.qs Library](https://github.com/ptarmiganlabs) from Ptarmigan Labs.
   attribute expressions, which cost nothing against the engine's page budget
 - Virtualized rendering, so a long transcript stays responsive
 - Click-to-select on a participant or a message, honouring Sense selection state
+- **Conversations side by side**, a lane per thread, scrolling linked in time or freely
+- **Message kinds as chips** above the text
 - **Highlights keywords** — the values of a field — wherever they occur in the messages, coloured by
   category, with a legend, an overview ruler and click-to-select
 - **Search** within the conversation shown, stepping from match to match
@@ -88,6 +90,37 @@ on its own:
 Automatic sides are worked out from the messages currently loaded, so narrowing a selection to one
 conversation can move them. For sides that never move, set Own participant or the Own message
 expression.
+
+## Conversations side by side
+
+Switch on **Show conversations side by side** under **Conversation** to show several conversations next to
+each other: a lane per value of the _Conversation / thread_ dimension, each headed by its name and how
+many messages it has.
+
+- **Which conversations:** the ones with the latest activity — the latest timestamp, or where there is
+  none, the latest place in the cube — most recent on the left. **Most conversations side by side** (1–10,
+  default 4) caps them, and a narrow object fits fewer, each lane at least 220 pixels wide. When some are
+  not shown, a line above the lanes says so, e.g. **4 of 12 conversations**; select conversations to
+  choose which.
+- **Linked scrolling** (the default) lines the lanes up in time, with one scrollbar for all of them.
+  Messages are laid out in rows: a row holds at most one message per lane, everything in a row is later
+  than everything above it, and a row never crosses a day. A quiet lane shows gaps while another talks.
+- **Free scrolling** gives each lane its own list and scrollbar, packed without gaps, and each keeps its
+  place when a selection changes the others.
+- Messages without a thread share a **(no conversation)** lane.
+- Needs a _Conversation / thread_ dimension; without one, a banner says so and the conversation shows as
+  one.
+
+Everything else works across the lanes. Two-sided layout sides each lane's conversation on its own.
+Search and the step keys go through the matches in time order with linked scrolling, and lane by lane
+with free scrolling, where each lane has an overview ruler of its own. **↑** and **↓** move within a lane,
+**←** and **→** to the next one. Automatic details open as an overlay, not a side pane that would squeeze
+every lane, and automatic **Density** follows a lane's width. An image or PDF export shows the lanes the
+reader saw.
+
+Rows are read oldest first, up to **Maximum messages**. When that limit cuts the rows short, the lanes are
+the latest conversations among the rows read, and the line above the lanes says so, e.g. **4 of 12
+conversations among the first 5,000 of 9,000 rows**.
 
 ## Clicking a message
 
@@ -218,13 +251,14 @@ The **overview ruler** beside the conversation shows where the matches or highli
 place, in the categories' colours; hover to count them, click to go there. **Show overview ruler** under
 **Appearance** hides it.
 
-| Keys                                                                | What they do                                                         |
-| ------------------------------------------------------------------- | -------------------------------------------------------------------- |
-| **Ctrl+F** (**Cmd+F**)                                              | Goes to the search box, from inside the object.                      |
-| **Enter** / **Shift+Enter** in the search box                       | The next or the previous match.                                      |
-| **F3** / **Shift+F3**, **Ctrl+G** / **Ctrl+Shift+G** (Cmd on a Mac) | The next or the previous match, or highlight when nothing is typed.  |
-| **Enter** on a message                                              | Selects the value of the highlight stepped to; otherwise, details.   |
-| **Escape**                                                          | Clears the search, lets go of the highlight, then leaves the object. |
+| Keys                                                                | What they do                                                           |
+| ------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| **Ctrl+F** (**Cmd+F**)                                              | Goes to the search box, from inside the object.                        |
+| **Enter** / **Shift+Enter** in the search box                       | The next or the previous match.                                        |
+| **F3** / **Shift+F3**, **Ctrl+G** / **Ctrl+Shift+G** (Cmd on a Mac) | The next or the previous match, or highlight when nothing is typed.    |
+| **Enter** on a message                                              | Selects the value of the highlight stepped to; otherwise, details.     |
+| **←** / **→** on a message, with conversations side by side         | The neighbouring lane's message: in the same row, or where it is read. |
+| **Escape**                                                          | Clears the search, lets go of the highlight, then leaves the object.   |
 
 ## Copying a conversation
 
@@ -234,6 +268,8 @@ messages the object shows under the current selections, in the order shown.
 - **Text** is a transcript: the date (YYYY-MM-DD) where a new day starts, then for each message a line
   with the sender, every recipient and the time as the object shows it, then the message as it was
   written.
+- With **conversations side by side**, both copy the conversations shown one after another, each under
+  a line naming it, rather than interleaved as linked lanes show them.
 - **JSON** holds each message's id, sender, recipients, thread, time, kind, badge, format, body and KPIs,
   and, while highlighting is on, its highlights with their values, categories and offsets — into the
   body, or into `plainText`, the text a markdown message shows — after a summary of the highlight field
