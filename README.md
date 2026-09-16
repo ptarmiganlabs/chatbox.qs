@@ -103,6 +103,10 @@ Set under **Behaviour → Clicking a message**:
 A single value toggles, as a click in Sense always has. A set of values replaces that field's
 selection, because toggling a set flips each value on its own.
 
+As on a native chart, a click selects nothing while the sheet is being edited, in an image or PDF
+export, or while Sense holds the object inactive; the message then shows no pointer. **Opens the
+details** still opens them, and so does the **Details** link: reading a message selects nothing.
+
 Per-message metadata is configured under **Message metadata** in the property panel. Each expression
 must aggregate — `Only([Field])`, not a bare field reference.
 

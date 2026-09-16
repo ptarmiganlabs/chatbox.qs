@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildSelection } from '../../src/qix/selection';
+import { buildSelection, clicksMaySelect } from '../../src/qix/selection';
 import { DEFAULT_CIDS, resolveRoles } from '../../src/qix/column-map';
 
 const layout = (dimCIds) => ({
@@ -233,5 +233,32 @@ describe('buildSelection — selectConversation', () => {
                 participants,
             })
         ).toEqual([]);
+    });
+});
+
+describe('clicksMaySelect', () => {
+    const analysis = { active: true, passive: true, select: true, edit: false };
+
+    it('lets a click select in analysis', () => {
+        expect(clicksMaySelect({ interactions: analysis })).toBe(true);
+        // A host that does not say whether the object is active has not made it inactive.
+        expect(clicksMaySelect({ interactions: { select: true } })).toBe(true);
+    });
+
+    // Found on Qlik Sense May 2026: nebula reports selecting as allowed in edit mode, and a click on a
+    // message selected its author while the sheet was being edited.
+    it('refuses in edit mode, although nebula says selecting is allowed', () => {
+        expect(clicksMaySelect({ interactions: { ...analysis, edit: true } })).toBe(false);
+    });
+
+    it('refuses in an export render, whose server allows every interaction', () => {
+        expect(clicksMaySelect({ interactions: analysis, snapshot: true })).toBe(false);
+    });
+
+    it('refuses while Sense holds the object inactive, or selecting is off', () => {
+        expect(clicksMaySelect({ interactions: { ...analysis, active: false } })).toBe(false);
+        expect(clicksMaySelect({ interactions: { ...analysis, select: false } })).toBe(false);
+        expect(clicksMaySelect({ interactions: null })).toBe(false);
+        expect(clicksMaySelect()).toBe(false);
     });
 });
