@@ -121,8 +121,9 @@ every lane, and automatic **Density** follows a lane's width. An image or PDF ex
 reader saw.
 
 Rows are read oldest first, up to **Maximum messages**. When that limit cuts the rows short, the lanes are
-the latest conversations among the rows read, and the line above the lanes says so, e.g. **4 of 12
-conversations among the first 5,000 of 9,000 rows**.
+the latest conversations among the rows read — the newest may not have been read at all — and the line
+above the lanes always says so, e.g. **4 of 12 conversations among the first 5,000 of 9,000 rows**, or
+**3 conversations among the first 5,000 of 9,000 rows** when every conversation read has a lane.
 
 ## Clicking a message
 

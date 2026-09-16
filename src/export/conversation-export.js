@@ -18,7 +18,7 @@
  * Pure: it builds strings and objects, and copies nothing.
  */
 import { dayKey } from '../chat/grouping';
-import { counted } from '../util/format';
+import { conversationsShownText } from '../chat/lanes';
 import { HIGHLIGHT_KINDS } from '../qix/highlight-source';
 import { BLOCK_SEPARATOR } from '../highlight/markdown-projection';
 
@@ -54,20 +54,6 @@ function headerLine(message) {
 function runsOf(messages, board) {
     if (!board) return [{ label: null, indices: messages.map((_, index) => index) }];
     return board.lanes.map((lane) => ({ label: lane.label, indices: [...lane.indices] }));
-}
-
-/**
- * Say how many conversations are shown, when some are not.
- *
- * @param {?object} board - The board.
- * @returns {?string} For example "4 of 12 conversations"; null without a board.
- */
-export function conversationsShownText(board) {
-    if (!board) return null;
-    const shown = board.lanes.length;
-    return shown < board.total
-        ? `${shown} of ${counted(board.total, 'conversation', 'conversations')}`
-        : counted(shown, 'conversation', 'conversations');
 }
 
 /**

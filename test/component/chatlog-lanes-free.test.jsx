@@ -32,6 +32,7 @@ vi.mock('react-virtuoso', async (importOriginal) => {
 const { VirtuosoMockContext } = await import('react-virtuoso');
 const { default: ChatLog } = await import('../../src/ui/ChatLog');
 const { buildBoard } = await import('../../src/chat/lanes');
+const { laneCaption } = await import('../../src/ui/LaneBoard');
 
 /** Wrap in the mock viewport Virtuoso needs to render rows in jsdom. */
 function Viewport({ children }) {
@@ -133,6 +134,24 @@ describe('ChatLog with conversations side by side, scrolling freely', () => {
         renderLanes({ max: 2 });
         expect(screen.getByText('2 of 3 conversations')).toBeInTheDocument();
         expect(screen.queryByText('hello one')).not.toBeInTheDocument();
+    });
+
+    it('says the lanes come from the rows read, when the message limit cut them short', () => {
+        // Every conversation read has a lane, but newer ones may never have been read.
+        const board = buildBoard(MESSAGES, { max: 3, scroll: 'free' });
+        render(
+            <ChatLog
+                conversation={conversationOf(board, { truncated: true, rowsLoaded: 9, total: 900 })}
+                board={board}
+                settings={settings}
+                rect={{ width: 900, height: 600 }}
+                keyboard={active}
+            />,
+            { wrapper: Viewport }
+        );
+        expect(
+            screen.getByText('3 conversations among the first 9 of 900 rows')
+        ).toBeInTheDocument();
     });
 
     it('keeps exactly one tab stop for all the lanes, and none before Sense hands over focus', () => {
@@ -249,5 +268,31 @@ describe('ChatLog with conversations side by side, scrolling freely', () => {
         fireEvent.click(screen.getByText('two last'));
         const details = screen.getByLabelText('Message details');
         expect(details.className).toMatch(/detailOverlay/);
+    });
+});
+
+describe('laneCaption', () => {
+    const board = buildBoard(MESSAGES, { max: 2, scroll: 'free' });
+    const all = buildBoard(MESSAGES, { max: 3, scroll: 'free' });
+
+    it('says nothing when every conversation is shown and every row was read', () => {
+        expect(laneCaption(all, { truncated: false })).toBeNull();
+        expect(laneCaption(null)).toBeNull();
+    });
+
+    it('counts the conversations shown when some are not', () => {
+        expect(laneCaption(board, { truncated: false })).toBe('2 of 3 conversations');
+    });
+
+    it('says the rows were cut short, whether or not every conversation read has a lane', () => {
+        const meta = { truncated: true, rowsLoaded: 5000, total: 12000 };
+        expect(laneCaption(board, meta)).toBe(
+            '2 of 3 conversations among the first 5,000 of 12,000 rows'
+        );
+        expect(laneCaption(all, meta)).toBe('3 conversations among the first 5,000 of 12,000 rows');
+    });
+
+    it('leaves the rows out rather than print a count it does not have', () => {
+        expect(laneCaption(all, { truncated: true })).toBe('3 conversations');
     });
 });

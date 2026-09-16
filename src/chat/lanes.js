@@ -20,6 +20,7 @@
  * Pure: no DOM, no engine. The settings have one definition, as `src/highlight/settings.js` does for
  * highlighting, used by the object properties, the panel's defaults and the render code.
  */
+import { counted } from '../util/format';
 import { buildDayGroups, dayLabel, dayStarts } from './grouping';
 
 /** The most conversations side by side. Also keeps a row's lanes within a bitmask. */
@@ -332,6 +333,23 @@ export function laneBoardFor({ messages, settings, hasThread, width = 0, keys = 
         keys,
         gapSec,
     });
+}
+
+/**
+ * Say how many conversations are shown, of how many there are.
+ *
+ * The one wording for it, on screen above the lanes and at the top of a copied transcript.
+ *
+ * @param {?object} board - The board.
+ * @returns {?string} For example "4 of 12 conversations", or "3 conversations" when every one is shown;
+ *     null without a board.
+ */
+export function conversationsShownText(board) {
+    if (!board) return null;
+    const shown = board.lanes.length;
+    return shown < board.total
+        ? `${shown} of ${counted(board.total, 'conversation', 'conversations')}`
+        : counted(shown, 'conversation', 'conversations');
 }
 
 /**

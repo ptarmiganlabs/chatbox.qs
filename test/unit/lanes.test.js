@@ -18,6 +18,7 @@ import {
     rankLanes,
     readLaneSettings,
     rowDayGroups,
+    conversationsShownText,
 } from '../../src/chat/lanes';
 
 const DAY = 86_400_000;
@@ -367,6 +368,22 @@ describe('packRows', () => {
         const rows = packRows(new Int32Array(0), new Uint8Array(0));
         expect(rows.count).toBe(0);
         expect([...rows.start]).toEqual([0]);
+    });
+});
+
+describe('conversationsShownText', () => {
+    it('counts the conversations shown, and of how many when some are not', () => {
+        const messages = [msg('1', 'A'), msg('2', 'B'), msg('3', 'C')];
+        expect(conversationsShownText(buildBoard(messages, { max: 2, scroll: 'free' }))).toBe(
+            '2 of 3 conversations'
+        );
+        expect(conversationsShownText(buildBoard(messages, { max: 3, scroll: 'free' }))).toBe(
+            '3 conversations'
+        );
+        expect(
+            conversationsShownText(buildBoard([msg('1', 'A')], { max: 3, scroll: 'free' }))
+        ).toBe('1 conversation');
+        expect(conversationsShownText(null)).toBeNull();
     });
 });
 

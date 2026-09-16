@@ -11,25 +11,28 @@
  */
 import { useImperativeHandle, useRef } from 'react';
 import { buildDayGroups } from '../chat/grouping';
-import { rowDayGroups } from '../chat/lanes';
+import { conversationsShownText, rowDayGroups } from '../chat/lanes';
 import { counted, formatCount } from '../util/format';
 import ConversationList from './ConversationList';
 import styles from './chat.module.css';
 
 /**
- * Say how many conversations are shown, when some are not.
+ * Say which conversations the lanes show, when that is not simply all of them.
  *
  * Rows are read oldest first up to the message limit, so when the limit cut them short the conversations
- * with the latest activity are only the latest of those read, and the line says so.
+ * with the latest activity are only the latest of those read — even when every conversation read has a
+ * lane, the newest may never have been read — and the line says so.
  *
  * @param {object} board - The board.
  * @param {object} [meta] - The conversation's `meta`: `truncated`, `rowsLoaded` and `total`.
- * @returns {?string} For example "4 of 12 conversations"; null when every conversation is shown.
+ * @returns {?string} For example "4 of 12 conversations", or "3 conversations among the first 5,000 of
+ *     12,000 rows"; null when every conversation is shown and every row was read.
  */
 export function laneCaption(board, meta = {}) {
-    if (!board || board.lanes.length >= board.total) return null;
-    const shown = `${board.lanes.length} of ${counted(board.total, 'conversation', 'conversations')}`;
-    if (!meta?.truncated) return shown;
+    if (!board) return null;
+    const shown = conversationsShownText(board);
+    if (!meta?.truncated) return board.lanes.length < board.total ? shown : null;
+    if (!Number.isFinite(meta.rowsLoaded) || !Number.isFinite(meta.total)) return shown;
     return `${shown} among the first ${formatCount(meta.rowsLoaded)} of ${counted(meta.total, 'row', 'rows')}`;
 }
 
