@@ -1,12 +1,7 @@
 /**
  * Appearance settings.
  */
-
-/** Standard on/off options for a switch component. */
-const ON_OFF = [
-    { value: true, label: 'On' },
-    { value: false, label: 'Off' },
-];
+import { ON_OFF } from './items';
 
 /**
  * Build the Appearance accordion section.
