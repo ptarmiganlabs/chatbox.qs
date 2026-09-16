@@ -48,6 +48,20 @@ describe('emptyStateMessage', () => {
         );
     });
 
+    it('explains a cube whose phantom rows were skipped at its end, leaving nothing to read', () => {
+        const meta = { phantomRows: 0, phantomRowsSkipped: 7000, rowsLoaded: 0 };
+        expect(emptyStateMessage(conversation(meta), null)).toMatch(
+            /7000 row\(s\), but none of them is a message/
+        );
+    });
+
+    it('counts the phantom rows read and skipped together', () => {
+        const meta = { phantomRows: 2, phantomRowsSkipped: 5, rowsLoaded: 2 };
+        expect(emptyStateMessage(conversation(meta), null)).toMatch(/7 row\(s\)/);
+        // A message read among them is not an empty cube.
+        expect(emptyStateMessage(conversation({ ...meta, rowsLoaded: 3 }), null)).toBeNull();
+    });
+
     it('falls back to the default text otherwise', () => {
         expect(emptyStateMessage(conversation({ phantomRows: 0, rowsLoaded: 0 }), null)).toBeNull();
         expect(emptyStateMessage(undefined, null)).toBeNull();

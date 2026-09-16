@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { normalize } from '../../src/chat/normalize';
+import { normalize, phantomRowTest } from '../../src/chat/normalize';
 import { ATTR_IDS } from '../../src/qix/attr-map';
 
 /** Build a layout with the standard 3-dim / 2-measure chat cube. */
@@ -964,6 +964,87 @@ describe('the From → To model', () => {
         ]);
     });
 
+    describe('when the phantom rows at the end of the cube were skipped', () => {
+        // The lab fixture: 15 message rows, then 2 phantom rows (Dora and Gus in FtPeople), 17 rows in
+        // all. Newest first at a limit of 2 skips the phantoms and reads the last 2 message rows.
+        const lastTwo = () => [
+            ftRow({ id: '500', elemId: 12, from: 'Fay', fromElem: 4, to: 'Gus', toElem: 7 }),
+            ftRow({ id: '600', elemId: 13, from: 'Ada', fromElem: 0, to: 'Ada', toElem: 0 }),
+        ];
+
+        it('does not count them as messages left out', () => {
+            const c = normalize({
+                layout: fromToLayout({ qcy: 17 }),
+                rows: lastTwo(),
+                props: { ...props, order: 'newest' },
+                area: { qTop: 13, qLeft: 0 },
+                phantomTail: 2,
+            });
+            expect(c.messages.map((m) => m.id)).toEqual(['600', '500']);
+            expect(c.meta).toMatchObject({
+                total: 15,
+                rowsLoaded: 2,
+                phantomRows: 0,
+                phantomRowsSkipped: 2,
+                truncated: true,
+                truncatedTo: 'newest',
+            });
+            expect(c.diagnostics.find((d) => d.code === 'truncated').message).toBe(
+                'Showing the newest 2 of 15 messages. Filter to see the rest.'
+            );
+            expect(c.diagnostics.find((d) => d.code === 'phantom-rows')).toBeUndefined();
+        });
+
+        it('flags no bubble at the end, where only phantom rows were left out', () => {
+            const c = normalize({
+                layout: fromToLayout({ qcy: 17 }),
+                rows: lastTwo(),
+                props,
+                area: { qTop: 13, qLeft: 0 },
+                phantomTail: 2,
+            });
+            // Message 500 starts the rows read, so rows before the cut may be its own.
+            expect(partials(c)).toEqual([
+                ['500', true],
+                ['600', false],
+            ]);
+            const unskipped = normalize({
+                layout: fromToLayout({ qcy: 17 }),
+                rows: lastTwo(),
+                props,
+                area: { qTop: 13, qLeft: 0 },
+            });
+            expect(partials(unskipped)).toEqual([
+                ['500', true],
+                ['600', true],
+            ]);
+        });
+
+        it('is not truncated when every message row was read', () => {
+            const rows = Array.from({ length: 15 }, (_, i) =>
+                ftRow({
+                    id: String(101 + i),
+                    elemId: i,
+                    from: 'Ada',
+                    fromElem: 0,
+                    to: 'Bob',
+                    toElem: 5,
+                })
+            );
+            const c = normalize({
+                layout: fromToLayout({ qcy: 17 }),
+                rows,
+                props,
+                area: { qTop: 0, qLeft: 0 },
+                phantomTail: 2,
+            });
+            expect(c.meta.truncated).toBe(false);
+            expect(c.meta.truncatedTo).toBeNull();
+            expect(c.diagnostics.find((d) => d.code === 'truncated')).toBeUndefined();
+            expect(c.messages.some((m) => m.recipientsPartial)).toBe(false);
+        });
+    });
+
     it('is not configured without a To dimension', () => {
         const layout = {
             qHyperCube: {
@@ -1018,6 +1099,61 @@ describe('phantom rows from linked tables', () => {
     // null message id, no text, probe 0. On PTLAB a 1000-order cube returned 1035.
     const phantom = (over = {}) =>
         row({ id: '-', elemId: -2, author: 'Carol', authorElem: 12, text: '-', dup: 0, ...over });
+
+    describe('phantomRowTest', () => {
+        /** The test's cells for a whole row, in the order of its columns. */
+        const cellsOf = (test, r) => test.columns.map((column) => r[column]);
+
+        it('reads the message id, text and probe columns', () => {
+            expect(phantomRowTest(makeLayout({ qcy: 2 })).columns).toEqual([0, 3, 4]);
+        });
+
+        it('tells a phantom row from a message exactly as normalize does', () => {
+            const test = phantomRowTest(makeLayout({ qcy: 2 }));
+            const cases = [
+                phantom(),
+                row({ id: '1', elemId: 1, author: 'Ada', text: 'hi' }),
+                phantom({ text: 'I am a real message', dup: 1 }),
+                phantom({ dup: 3 }),
+                row({ id: '5', elemId: 5, author: 'Ada', text: '', dup: 0 }),
+            ];
+            expect(cases.map((r) => test.matches(cellsOf(test, r)))).toEqual([
+                true,
+                false,
+                false,
+                false,
+                false,
+            ]);
+            // normalize keeps exactly the rows the test does not match.
+            const c = normalize({ layout: makeLayout({ qcy: cases.length }), rows: cases });
+            expect(c.meta.phantomRows).toBe(1);
+        });
+
+        it('decides without a probe when the cube has none', () => {
+            const layout = {
+                qHyperCube: {
+                    qSize: { qcx: 4, qcy: 1 },
+                    qDimensionInfo: [{ cId: 'd_msgid' }, { cId: 'd_author' }, { cId: 'd_thread' }],
+                    qMeasureInfo: [{ cId: 'm_text' }],
+                },
+            };
+            const test = phantomRowTest(layout);
+            expect(test.columns).toEqual([0, 3]);
+            expect(test.matches(cellsOf(test, phantom().slice(0, 4)))).toBe(true);
+        });
+
+        it('has nothing to test until the roles are set up', () => {
+            const layout = {
+                qHyperCube: {
+                    qSize: { qcx: 1, qcy: 5 },
+                    qDimensionInfo: [{ cId: 'd_msgid' }],
+                    qMeasureInfo: [],
+                },
+            };
+            expect(phantomRowTest(layout)).toBeNull();
+            expect(phantomRowTest(undefined)).toBeNull();
+        });
+    });
 
     it('drops a row with a null id, no text and a zero probe', () => {
         const c = normalize({

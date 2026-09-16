@@ -155,7 +155,16 @@ text **and** its probe is 0 or absent — a null id with text or a positive prob
 message and is kept and reported. Phantoms still count as loaded rows, and are only reported when they
 used up the row limit.
 
-_See `isPhantomRecord` in `src/chat/collapse.js`._
+Null message ids sort **last** under every sort tried on Qlik Sense May 2026 — numeric and by expression,
+ascending and descending — so the phantom rows are one block at the end of the cube. Reading the newest
+rows (entry 31) read that block first: with as many phantom rows as the limit, an object showed no
+message at all. When the newest rows are read and the cube has more rows than the limit, the block is
+counted back from the last row first, over the message id, text and probe columns only, with the same
+test (`phantomRowTest`), and the rows read end before it; skipped phantom rows are not counted as rows
+left out.
+
+_See `isPhantomRecord` in `src/chat/collapse.js`, `src/qix/conversation-rows.js`. Guard:
+`test/unit/conversation-rows.test.js`, `test/unit/scale.test.js`._
 
 ## 14. One failed select resets the whole selection session
 
@@ -357,6 +366,6 @@ reusing the rows that came with the layout only where they reach into them, and 
 number absolute. `normalize` tells where the limit cut from where the rows read start: the bubble at a
 cut may be missing recipients, first as well as last, unless the row at the cut is a phantom; and the
 banner and the line above the lanes say whether the oldest or the newest rows were kept. Null message ids
-sort last, so the newest rows take in every phantom row, which the phantom warning reports. _Guard:
+sort last, so the newest rows would take in every phantom row: they are left out first (entry 13). _Guard:
 `test/unit/paging.test.js`, `test/unit/normalize.test.js`, `test/unit/message-limit.test.js`,
 `test/unit/scale.test.js`._

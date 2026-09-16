@@ -1,5 +1,12 @@
 import { describe, it, expect, vi } from 'vitest';
-import { MAX_CELLS, StaleError, fetchAllRows, rowsPerPage } from '../../src/qix/paging';
+import {
+    FIRST_SCAN_ROWS,
+    MAX_CELLS,
+    StaleError,
+    countTrailingRows,
+    fetchAllRows,
+    rowsPerPage,
+} from '../../src/qix/paging';
 import { absoluteRow } from '../../src/qix/read-cell';
 
 /** Build a fake row of n cells. */
@@ -478,5 +485,259 @@ describe('fetchAllRows — rows that came with the layout', () => {
             layout: mkLayout({ qcy: 2500, prefetched: 1000 }),
         });
         expect(area).toEqual({ qTop: 0, qLeft: 0, qWidth: 5, qHeight: 2500 });
+    });
+});
+
+describe('countTrailingRows', () => {
+    // A 5-column chat cube: message id, author, thread, text, probe. A phantom row has a null id, no
+    // text and a probe of 0; its cells are the ones the engine returns for a linked value with no message.
+    const message = (n) => [
+        { qText: String(n), qElemNumber: n },
+        { qText: 'Ada', qElemNumber: 0 },
+        { qText: 'T1', qElemNumber: 0 },
+        { qText: `message ${n}`, qNum: 'NaN' },
+        { qText: '1', qNum: 1 },
+    ];
+    const phantom = () => [
+        { qText: '-', qElemNumber: -2 },
+        { qText: 'Dora', qElemNumber: 3 },
+        { qText: '-', qElemNumber: -2 },
+        { qText: '-', qNum: 'NaN' },
+        { qText: '0', qNum: 0 },
+    ];
+    const isPhantom = ([id, text, probe]) =>
+        id.qElemNumber < 0 && text.qText === '-' && Number(probe.qNum) === 0;
+    const COLUMNS = [0, 3, 4];
+
+    /** A model serving any rectangles of a cube held as whole rows, recording each call's pages. */
+    function cubeModel(rows) {
+        const calls = [];
+        return {
+            calls,
+            getHyperCubeData: vi.fn(async (path, pages) => {
+                calls.push(pages);
+                return pages.map(({ qTop, qLeft, qWidth, qHeight }) => ({
+                    qArea: { qTop, qLeft, qWidth, qHeight },
+                    qMatrix: rows
+                        .slice(qTop, qTop + qHeight)
+                        .map((row) => row.slice(qLeft, qLeft + qWidth)),
+                }));
+            }),
+        };
+    }
+
+    const cube = (rows, pages = []) => ({
+        qHyperCube: { qSize: { qcx: 5, qcy: rows.length }, qDataPages: pages },
+    });
+    const messages = (count) => Array.from({ length: count }, (_, i) => message(i + 1));
+    const phantoms = (count) => Array.from({ length: count }, phantom);
+    const cells = (pages) => pages.reduce((sum, p) => sum + p.qWidth * p.qHeight, 0);
+
+    it('costs one small call when the last row does not match', async () => {
+        const rows = messages(9000);
+        const model = cubeModel(rows);
+        const count = await countTrailingRows({
+            model,
+            layout: cube(rows),
+            columns: COLUMNS,
+            matches: isPhantom,
+        });
+        expect(count).toBe(0);
+        expect(model.calls).toEqual([
+            COLUMNS.map((column) => ({
+                qTop: 9000 - FIRST_SCAN_ROWS,
+                qLeft: column,
+                qWidth: 1,
+                qHeight: FIRST_SCAN_ROWS,
+            })),
+        ]);
+    });
+
+    it('counts a long run back from the end, reading twice as many rows each call, within the budget', async () => {
+        const rows = [...messages(9000), ...phantoms(7000)];
+        const model = cubeModel(rows);
+        const count = await countTrailingRows({
+            model,
+            layout: cube(rows),
+            columns: COLUMNS,
+            matches: isPhantom,
+        });
+        expect(count).toBe(7000);
+        expect(model.calls.map((pages) => pages[0].qHeight)).toEqual([
+            100, 200, 400, 800, 1600, 3200, 3333,
+        ]);
+        for (const pages of model.calls) expect(cells(pages)).toBeLessThanOrEqual(MAX_CELLS);
+        // Each call reads the rows just before the ones already tested.
+        expect(model.calls.map((pages) => pages[0].qTop)).toEqual([
+            15900, 15700, 15300, 14500, 12900, 9700, 6367,
+        ]);
+    });
+
+    it('stops at the first row that does not match, whatever comes before it', async () => {
+        const rows = [...phantoms(3), message(1), ...phantoms(2)];
+        const count = await countTrailingRows({
+            model: cubeModel(rows),
+            layout: cube(rows),
+            columns: COLUMNS,
+            matches: isPhantom,
+        });
+        expect(count).toBe(2);
+    });
+
+    it('counts every row when every row matches', async () => {
+        const rows = phantoms(250);
+        const count = await countTrailingRows({
+            model: cubeModel(rows),
+            layout: cube(rows),
+            columns: COLUMNS,
+            matches: isPhantom,
+        });
+        expect(count).toBe(250);
+    });
+
+    it('tests the rows that came with the layout without a call', async () => {
+        const rows = [...messages(15), ...phantoms(2)];
+        const model = cubeModel(rows);
+        const page = { qArea: { qTop: 0, qLeft: 0, qWidth: 5, qHeight: 17 }, qMatrix: rows };
+        const count = await countTrailingRows({
+            model,
+            layout: cube(rows, [page]),
+            columns: COLUMNS,
+            matches: isPhantom,
+        });
+        expect(count).toBe(2);
+        expect(model.getHyperCubeData).not.toHaveBeenCalled();
+    });
+
+    it('calls the engine when the layout’s rows lack a column it needs', async () => {
+        const rows = [...messages(15), ...phantoms(2)];
+        const model = cubeModel(rows);
+        const narrow = rows.map((row) => row.slice(0, 3));
+        const page = { qArea: { qTop: 0, qLeft: 0, qWidth: 3, qHeight: 17 }, qMatrix: narrow };
+        const count = await countTrailingRows({
+            model,
+            layout: cube(rows, [page]),
+            columns: COLUMNS,
+            matches: isPhantom,
+        });
+        expect(count).toBe(2);
+        expect(model.getHyperCubeData).toHaveBeenCalledTimes(1);
+    });
+
+    it('ends the count at a page shorter than asked for: the cube changed after the layout', async () => {
+        // The layout says 16,000 rows; the engine now has 15,950.
+        const rows = [...messages(9000), ...phantoms(6950)];
+        const layout = cube([...rows, ...phantoms(50)]);
+        const count = await countTrailingRows({
+            model: cubeModel(rows),
+            layout,
+            columns: COLUMNS,
+            matches: isPhantom,
+        });
+        expect(count).toBe(0);
+    });
+
+    it('counts nothing without a cube or columns', async () => {
+        const model = cubeModel([]);
+        expect(
+            await countTrailingRows({ model, layout: {}, columns: COLUMNS, matches: isPhantom })
+        ).toBe(0);
+        expect(
+            await countTrailingRows({
+                model,
+                layout: cube(phantoms(3)),
+                columns: [],
+                matches: isPhantom,
+            })
+        ).toBe(0);
+        expect(model.getHyperCubeData).not.toHaveBeenCalled();
+    });
+
+    describe('cancellation', () => {
+        it('aborts before its first call when already stale', async () => {
+            const rows = [...messages(9000), ...phantoms(7000)];
+            const model = cubeModel(rows);
+            await expect(
+                countTrailingRows({
+                    model,
+                    layout: cube(rows),
+                    columns: COLUMNS,
+                    matches: isPhantom,
+                    isStale: () => true,
+                })
+            ).rejects.toThrow(StaleError);
+            expect(model.getHyperCubeData).not.toHaveBeenCalled();
+        });
+
+        it('aborts AFTER an in-flight call rather than counting what it brought back', async () => {
+            const rows = [...messages(9000), ...phantoms(7000)];
+            const model = cubeModel(rows);
+            await expect(
+                countTrailingRows({
+                    model,
+                    layout: cube(rows),
+                    columns: COLUMNS,
+                    matches: isPhantom,
+                    isStale: () => model.calls.length >= 2,
+                })
+            ).rejects.toThrow(StaleError);
+            expect(model.calls).toHaveLength(2);
+        });
+    });
+});
+
+describe('fetchAllRows — leaving out the last rows', () => {
+    const rowOf = (row) => Number(row[0].qText.split(':')[0]);
+
+    it('ends the last rows read just before the rows to skip', async () => {
+        const seen = [];
+        const model = mkModel(16000, 5, (p) => seen.push(p));
+        const { rows, area, truncated } = await fetchAllRows({
+            model,
+            layout: mkLayout({ qcy: 16000 }),
+            maxRows: 5000,
+            fromEnd: true,
+            skipLast: 7000,
+        });
+        expect(seen.map((p) => p.qTop)).toEqual([4000, 6000, 8000]);
+        expect(rows.map(rowOf)).toEqual(Array.from({ length: 5000 }, (_, i) => 4000 + i));
+        expect(area.qTop).toBe(4000);
+        expect(truncated).toBe(true);
+    });
+
+    it('reads every row before the skipped ones from row 0 when they fit the cap', async () => {
+        const model = mkModel(5100);
+        const { rows, area } = await fetchAllRows({
+            model,
+            layout: mkLayout({ qcy: 5100, prefetched: 1000 }),
+            maxRows: 5000,
+            fromEnd: true,
+            skipLast: 200,
+        });
+        expect(rows.map(rowOf)).toEqual(Array.from({ length: 4900 }, (_, i) => i));
+        expect(area.qTop).toBe(0);
+        expect(model.getHyperCubeData.mock.calls[0][1][0].qTop).toBe(1000);
+    });
+
+    it('never reads the skipped rows when reading from the start either', async () => {
+        const { rows } = await fetchAllRows({
+            model: mkModel(1000),
+            layout: mkLayout({ qcy: 1000, prefetched: 1000 }),
+            maxRows: 5000,
+            skipLast: 30,
+        });
+        expect(rows).toHaveLength(970);
+    });
+
+    it('skips nothing for a count that is not a number of rows', async () => {
+        for (const skipLast of [undefined, -5, Number.NaN]) {
+            const { rows } = await fetchAllRows({
+                model: mkModel(10),
+                layout: mkLayout({ qcy: 10, prefetched: 10 }),
+                fromEnd: true,
+                skipLast,
+            });
+            expect(rows).toHaveLength(10);
+        }
     });
 });

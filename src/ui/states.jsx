@@ -68,7 +68,8 @@ export function Loading({ loaded, total }) {
  * The app author's calculation-condition message wins: it is what they wrote
  * to explain why the chart is intentionally blank. After that, a cube whose
  * rows were all phantoms says so — "No messages" would hide that the engine
- * returned rows and that they came from a linked table.
+ * returned rows and that they came from a linked table. That holds whether the
+ * phantom rows were read or skipped at the end of the cube without reading.
  *
  * @param {object} [conversation] - The normalized Conversation.
  * @param {?string} [calcMsg] - The engine's calc-condition message, if any.
@@ -76,8 +77,9 @@ export function Loading({ loaded, total }) {
  */
 export function emptyStateMessage(conversation, calcMsg) {
     if (calcMsg) return calcMsg;
-    const phantoms = conversation?.meta?.phantomRows ?? 0;
-    if (phantoms > 0 && phantoms === conversation?.meta?.rowsLoaded) {
+    const read = conversation?.meta?.phantomRows ?? 0;
+    const phantoms = read + (conversation?.meta?.phantomRowsSkipped ?? 0);
+    if (phantoms > 0 && read === conversation?.meta?.rowsLoaded) {
         return (
             `The data returned ${phantoms} row(s), but none of them is a message: each is a ` +
             'value from a linked table that has no messages.'

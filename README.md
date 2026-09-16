@@ -85,6 +85,10 @@ A banner says which, e.g. **Showing the newest 5000 of 9000 messages. Filter to 
 limit falls part-way through a message's rows — one per recipient — its details say some recipients may
 be missing.
 
+A table linked to a dimension — people, threads — adds a row for each of its values that has no message,
+and those rows come last in the cube. When the newest rows are read, they are found and left out first,
+so they never take the place of a message. Oldest first reads them only once every message row fits.
+
 ## Two-sided layout
 
 With **Layout** set to _Two-sided_, every conversation — a thread, or a From → To pair — is resolved
