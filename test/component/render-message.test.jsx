@@ -309,3 +309,45 @@ describe('MessageRow — recipients', () => {
         expect(screen.queryByText('→')).not.toBeInTheDocument();
     });
 });
+
+describe('MessageRow — selectable text', () => {
+    it('does not act on the message when a click ends a text selection in it', () => {
+        const onSelect = vi.fn();
+        render(
+            <MessageRow message={message()} showAuthor showAvatar selectable onSelect={onSelect} />
+        );
+        const body = screen.getByText('hello');
+        const range = document.createRange();
+        range.setStart(body.firstChild, 0);
+        range.setEnd(body.firstChild, 4);
+        document.getSelection().removeAllRanges();
+        document.getSelection().addRange(range);
+
+        fireEvent.click(body);
+        expect(onSelect).not.toHaveBeenCalled();
+
+        document.getSelection().removeAllRanges();
+        fireEvent.click(body);
+        expect(onSelect).toHaveBeenCalledTimes(1);
+    });
+
+    it('lets a link in a markdown body open without also acting on the message', () => {
+        const onSelect = vi.fn();
+        render(
+            <MessageRow
+                message={message({
+                    body: 'See [the order](https://x.se/1)',
+                    bodyFormat: 'markdown',
+                })}
+                showAuthor
+                showAvatar
+                selectable
+                onSelect={onSelect}
+            />
+        );
+        fireEvent.click(screen.getByRole('link', { name: 'the order' }));
+        expect(onSelect).not.toHaveBeenCalled();
+        fireEvent.click(screen.getByText(/See/));
+        expect(onSelect).toHaveBeenCalledTimes(1);
+    });
+});

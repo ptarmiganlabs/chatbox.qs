@@ -14,6 +14,7 @@
  */
 import { formatRecipients } from '../chat/recipients';
 import BubbleBody from './BubbleBody';
+import { routeClick } from './click-route';
 import styles from './chat.module.css';
 
 /**
@@ -81,11 +82,13 @@ export function MessageRow({
         .join(' ');
 
     /**
-     * Forward a click to the selection handler.
+     * Forward a click to the selection handler, unless it was for copying text or a link.
      *
+     * @param {object} event - The React mouse event.
      * @returns {void}
      */
-    const handleClick = () => {
+    const handleClick = (event) => {
+        if (routeClick(event).kind === 'none') return;
         if (selectable) onSelect?.(message);
     };
 
