@@ -344,3 +344,19 @@ refused, so a copy from the context menu would silently copy nothing.
 
 **Rule:** fall back to `execCommand('copy')` from a focused, hidden textarea, and say when neither
 worked. _Guard: `test/unit/copy-text.test.js`, `test/unit/copy-conversation.test.js`._
+
+## 31. Reading rows from the first one keeps the oldest messages
+
+The cube is sorted oldest first, and the rows were read from row 0 up to **Maximum messages**. _Newest
+first_ reverses the messages read, so a cube over the limit showed its oldest messages, newest first, as
+if they were the latest. Conversations side by side ranked lanes by latest activity among those old rows
+only. The banner said "Showing 5000 of 9000 messages", which was true, and nothing said which 5000.
+
+**Rule:** _Newest first_ and lanes read the last rows (`readsFromEnd`, `fromEnd` in `fetchAllRows`),
+reusing the rows that came with the layout only where they reach into them, and the area keeps every row
+number absolute. `normalize` tells where the limit cut from where the rows read start: the bubble at a
+cut may be missing recipients, first as well as last, unless the row at the cut is a phantom; and the
+banner and the line above the lanes say whether the oldest or the newest rows were kept. Null message ids
+sort last, so the newest rows take in every phantom row, which the phantom warning reports. _Guard:
+`test/unit/paging.test.js`, `test/unit/normalize.test.js`, `test/unit/message-limit.test.js`,
+`test/unit/scale.test.js`._
