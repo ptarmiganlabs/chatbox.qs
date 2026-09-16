@@ -291,7 +291,11 @@ messages the object shows under the current selections, in the order shown.
   written.
 - With **conversations side by side**, both copy the conversations shown one after another, each under
   a line naming it, rather than interleaved as linked lanes show them.
-- **JSON** holds each message's id, sender, recipients, thread, time, kind, badge, format, body and KPIs,
+- **JSON** starts with a summary of what was copied, under `conversation`: the number of `messages`; the
+  `rows` the conversation holds and how many were read (`rowsRead`); whether **Maximum messages** cut them
+  short (`truncated`) and whether it kept the `"oldest"` or the `"newest"` (`truncatedTo`, null when
+  nothing was cut); the `order`; and, side by side, how many `conversations` are shown of how many.
+- It then holds each message's id, sender, recipients, thread, time, kind, badge, format, body and KPIs,
   and, while highlighting is on, its highlights with their values, categories and offsets — into the
   body, or into `plainText`, the text a markdown message shows — after a summary of the highlight field
   and the counts per category. Search matches are not included.
