@@ -9,6 +9,7 @@
  */
 import { ATTR_IDS } from './qix/attr-map';
 import { DEFAULT_CIDS, ROLES } from './qix/column-map';
+import { kindChipsBag } from './chat/kind-chips';
 import { textToolSettingsBag } from './highlight/settings';
 
 /**
@@ -98,6 +99,9 @@ export default {
         onBubbleClick: 'selectAuthor',
         revealMode: 'auto', // 'auto' | 'pane' | 'overlay' | 'inline'
         virtualize: true,
+
+        // Message kinds as chips above the text; see src/chat/kind-chips.js.
+        kindChips: kindChipsBag(),
 
         // highlight, match, category: keyword highlighting. One definition in
         // src/highlight/settings.js serves these defaults, the property panel and

@@ -552,6 +552,21 @@ describe('rows that belong to one message', () => {
         expect(m.rowCount).toBe(3);
     });
 
+    it('gathers the kinds of every row, while kinds show as chips', () => {
+        // One kind per recipient, say: the first row's kinds alone would drop the others.
+        const rows = [
+            wideRow({ id: '7', elemId: 7, extra: 'Bob', attrs: [{ qText: 'billing, urgent' }] }),
+            wideRow({ id: '7', elemId: 7, extra: 'Cy', attrs: [{ qText: 'urgent,vip' }] }),
+        ];
+        const layout = wideLayout({ qcy: 2, attrIds: [ATTR_IDS.KIND] });
+        const props = { kindChips: { show: true, max: 3, separator: ',' } };
+        const m = normalize({ layout, rows, props }).messages[0];
+        expect(m.rowsCollapsed).toBe(2);
+        expect(m.kinds).toEqual(['billing', 'urgent', 'vip']);
+        // The kind text itself is still the first row's, as it has always been.
+        expect(m.kind).toBe('billing, urgent');
+    });
+
     it('marks a KPI that differs between the rows as varying', () => {
         const rows = [
             wideRow({
@@ -1006,5 +1021,35 @@ describe('two-sided alignment per conversation', () => {
         });
         // Four people in the cube — today this was an all-left rail.
         expect(c.messages.map((m) => m.side)).toEqual(['right', 'left', 'right', 'left']);
+    });
+});
+
+describe('message kinds', () => {
+    const layout = makeLayout({ qcy: 1, attrIds: [ATTR_IDS.KIND] });
+    const kindRow = (text) => row({ id: '1', author: 'Ada', text: 'hi', attrs: [{ qText: text }] });
+    const chips = (over = {}) => ({ kindChips: { show: true, max: 3, separator: ',', ...over } });
+
+    it('reads the kind as text, and no list while chips are off', () => {
+        const m = normalize({ layout, rows: [kindRow('billing,urgent')] }).messages[0];
+        expect(m.kind).toBe('billing,urgent');
+        expect(m.kinds).toBeNull();
+        expect(m.kindsCapped).toBe(false);
+    });
+
+    it('splits the kind on the chosen separator while chips are on', () => {
+        const read = (text, separator) =>
+            normalize({ layout, rows: [kindRow(text)], props: chips({ separator }) }).messages[0]
+                .kinds;
+        expect(read('billing, urgent', ',')).toEqual(['billing', 'urgent']);
+        expect(read('billing; urgent', ';')).toEqual(['billing', 'urgent']);
+        expect(read('billing | urgent', '|')).toEqual(['billing', 'urgent']);
+        expect(read('billing, urgent', 'none')).toEqual(['billing, urgent']);
+    });
+
+    it("has no kinds where the expression gave the engine's null", () => {
+        // Only() over several kinds returns null, which arrives as '-'.
+        const m = normalize({ layout, rows: [kindRow('-')], props: chips() }).messages[0];
+        expect(m.kind).toBeNull();
+        expect(m.kinds).toEqual([]);
     });
 });

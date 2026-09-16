@@ -48,6 +48,24 @@ describe('collapseRecords', () => {
         expect(conflictCount).toBe(1);
     });
 
+    it('gathers kinds from every row, keeping the cap', () => {
+        const { messages } = collapseRecords([
+            record({ kinds: ['billing'], kindsCapped: false }),
+            record({ kinds: ['urgent', 'billing'], kindsCapped: true }),
+        ]);
+        expect(messages).toHaveLength(1);
+        expect(messages[0].kinds).toEqual(['billing', 'urgent']);
+        expect(messages[0].kindsCapped).toBe(true);
+    });
+
+    it('leaves kinds alone while they are not read as a list', () => {
+        const { messages } = collapseRecords([
+            record({ kinds: null }),
+            record({ kinds: null, kind: 'other' }),
+        ]);
+        expect(messages[0].kinds).toBeNull();
+    });
+
     it('treats a different timestamp as a different message', () => {
         const { messages } = collapseRecords([record({ ts: 1 }), record({ ts: 2 })]);
         expect(messages).toHaveLength(2);

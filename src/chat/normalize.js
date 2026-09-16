@@ -36,6 +36,7 @@ import {
     safeUrl,
 } from './sanitize';
 import { assignBubbleKeys, collapseRecords, isPhantomRecord } from './collapse';
+import { readKindChipSettings, splitKinds } from './kind-chips';
 import { resolveSides } from './participants';
 import { colorForElem, paletteFromTheme } from '../theme/palette';
 
@@ -119,6 +120,9 @@ function readRecord(row, i, ctx) {
     const tsValue = attrValue(idCell, ctx.attrMap, ATTR_IDS.TS);
 
     const mediaRaw = attrText(attrValue(idCell, ctx.attrMap, ATTR_IDS.MEDIA));
+    const kind = attrText(attrValue(idCell, ctx.attrMap, ATTR_IDS.KIND));
+    // Split only while kinds show as chips: the separator is one of those settings.
+    const kinds = ctx.kindChips.show ? splitKinds(kind, ctx.kindChips.separator) : null;
 
     return {
         id: cell.text(idCell) || `row-${i}`,
@@ -139,7 +143,9 @@ function readRecord(row, i, ctx) {
         // One per row; collapsing a message's rows gathers them into a list.
         // Null when there is no recipient role, so the view can tell the models apart.
         recipients: ctx.recipientCol ? [readRecipient(row[ctx.recipientCol.col])] : null,
-        kind: attrText(attrValue(idCell, ctx.attrMap, ATTR_IDS.KIND)),
+        kind,
+        kinds: kinds ? kinds.kinds : null,
+        kindsCapped: kinds ? kinds.capped : false,
         media: parseMediaRefs(mediaRaw)
             .map((m) => ({ ...m, ref: m.ref }))
             .filter((m) => m.ref),
@@ -252,6 +258,7 @@ export function normalize({ layout, rows, props = {}, theme, area }) {
         // Measures beyond the text and the integrity probe are per-message KPIs.
         kpiCols: kpiColumns(columns, byRole),
         bodyFormat: props.bodyFormat === 'markdown' ? 'markdown' : 'text',
+        kindChips: readKindChipSettings(props.kindChips),
         area,
     };
 
