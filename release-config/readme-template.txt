@@ -54,6 +54,18 @@ rather than showing a quietly wrong conversation.
 Per-message metadata -- timestamps, avatars, accent colours, badges -- is
 configured under "Message metadata" in the property panel.
 
+HIGHLIGHTS, SEARCH AND COPYING
+------------------------------
+Keywords from a field can be highlighted wherever they occur in the messages
+and coloured by a category field: see "Highlights" and "Categories" in the
+property panel. Clicking a highlight selects its value.
+
+A search box at the top of the object finds text in the conversation shown;
+F3 and Ctrl+G step from match to match. "Show search box" and "Show overview
+ruler" are under "Appearance".
+
+Right-click the object to copy the conversation as text or as JSON.
+
 DOCUMENTATION
 -------------
 https://github.com/ptarmiganlabs/chatbox.qs
