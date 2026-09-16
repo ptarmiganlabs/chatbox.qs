@@ -16,6 +16,7 @@ import { formatRecipients } from '../chat/recipients';
 import BubbleBody from './BubbleBody';
 import { routeClick } from './click-route';
 import HighlightedText from './HighlightedText';
+import KindChips from './KindChips';
 import styles from './chat.module.css';
 
 /**
@@ -58,6 +59,8 @@ function initials(label) {
  * @param {?{kind: string, ordinal: number, part?: string}} [props.current] - The current mark in this
  *   message: a highlight in its body, or a search match in the part it names.
  * @param {?object} [props.finds] - This message's search matches: `author`, `recipients` and `body`.
+ * @param {?{max: number}} [props.kindChips] - How many of the message's kinds to show as chips above its
+ *   text; null to show none.
  * @returns {object} The rendered row.
  */
 export function MessageRow({
@@ -78,6 +81,7 @@ export function MessageRow({
     onHighlightClick,
     current = null,
     finds = null,
+    kindChips = null,
 }) {
     /**
      * Find the current mark within one part of the message.
@@ -222,6 +226,13 @@ export function MessageRow({
                         onShowDetails || expanded !== undefined ? Boolean(expanded) : undefined
                     }
                 >
+                    {kindChips && message.kinds?.length ? (
+                        <KindChips
+                            kinds={message.kinds}
+                            max={kindChips.max}
+                            capped={message.kindsCapped}
+                        />
+                    ) : null}
                     {message.body ? (
                         <BubbleBody
                             body={message.body}
