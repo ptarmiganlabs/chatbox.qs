@@ -7,6 +7,8 @@ import {
     tidyKindChipSettings,
 } from '../../src/ext/metadata-section';
 import { KIND_CHIP_DEFAULTS } from '../../src/chat/kind-chips';
+import { LANE_DEFAULTS, LANE_MAX } from '../../src/chat/lanes';
+import { lanesShown } from '../../src/ext/conversation-section';
 import { categoryFieldIsSet } from '../../src/ext/category-section';
 import { clickHelpIsShown, highlightFieldIsSet } from '../../src/ext/highlight-section';
 import { ON_OFF } from '../../src/ext/items';
@@ -193,6 +195,46 @@ describe('conversation model', () => {
                 .map(([, i]) => i.component)
         );
         expect(shipped.has(item.component)).toBe(true);
+    });
+});
+
+describe('conversations side by side', () => {
+    const { items } = definition.items.conversation;
+    const laneItems = ['lanesShow', 'lanesHelp', 'lanesMax', 'lanesScroll'];
+
+    it('follows the conversation model, in the Conversation section', () => {
+        expect(Object.keys(items)).toEqual(['conversationModel', ...laneItems]);
+    });
+
+    it('binds under chatbox.lanes, with the defaults from src/chat/lanes.js, covering them all', () => {
+        const bound = laneItems.map((key) => items[key]).filter((item) => item.ref);
+        for (const item of bound) {
+            const setting = item.ref.replace(/^chatbox\.lanes\./, '');
+            expect(item.ref).toMatch(/^chatbox\.lanes\./);
+            expect(item.defaultValue, item.ref).toEqual(LANE_DEFAULTS[setting]);
+        }
+        expect(new Set(bound.map((item) => item.ref))).toEqual(
+            new Set(Object.keys(LANE_DEFAULTS).map((key) => `chatbox.lanes.${key}`))
+        );
+    });
+
+    it('shows the count, the scrolling and the help only while lanes are on', () => {
+        expect(items.lanesShow.show).toBeUndefined();
+        for (const key of ['lanesHelp', 'lanesMax', 'lanesScroll']) {
+            expect(items[key].show, key).toBe(lanesShown);
+        }
+        expect(lanesShown({ chatbox: { lanes: { show: true } } })).toBe(true);
+        expect(lanesShown({ chatbox: {} })).toBe(false);
+    });
+
+    it('offers linked and free scrolling, and a count from 1 to the maximum', () => {
+        expect(items.lanesScroll.options.map((o) => o.value)).toEqual(['linked', 'free']);
+        expect(items.lanesMax).toMatchObject({
+            component: 'slider',
+            min: 1,
+            max: LANE_MAX,
+            step: 1,
+        });
     });
 });
 

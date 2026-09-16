@@ -29,11 +29,18 @@ import dataTargets from './data';
 import ext from './ext/index';
 import { normalize } from './chat/normalize';
 import { fetchAllRows } from './qix/paging';
-import { conversationModelOf, resolveRoles } from './qix/column-map';
+import { ROLES, conversationModelOf, resolveRoles } from './qix/column-map';
 import { buildSelection } from './qix/selection';
 import { describeAssignments } from './qix/role-labels';
 import { syncAttributeExpressions } from './qix/sync-attrs';
-import { isSnapshot, shouldRenderAll, writeSnapshot } from './ui/snapshot';
+import {
+    isSnapshot,
+    readLaneSnapshot,
+    shouldRenderAll,
+    writeLaneSnapshot,
+    writeSnapshot,
+} from './ui/snapshot';
+import { createBoardCache, laneKeys, readLaneSettings } from './chat/lanes';
 import { reloadingView } from './ui/reload-view';
 import { createHighlightLoader } from './qix/highlight-loader';
 import { loadHighlightResult } from './highlight/highlight-result';
@@ -124,7 +131,10 @@ export default function supernova(galaxy) {
             // anything that must survive — scroll position, the open detail —
             // has to be written into the layout copy here.
             onTakeSnapshot(async (snapshotLayout) =>
-                writeSnapshot(snapshotLayout, viewStateRef.current)
+                writeLaneSnapshot(
+                    writeSnapshot(snapshotLayout, viewStateRef.current),
+                    laneKeys(lastViewRef.current?.board ?? null)
+                )
             );
 
             // Page against the STALE layout: it is pinned while a selection is
@@ -138,6 +148,14 @@ export default function supernova(galaxy) {
             // The props of the conversation last shown, so a reload after a selection can keep it
             // on screen instead of swapping in Loading — see src/ui/reload-view.js.
             const lastViewRef = useRef(null);
+
+            // The conversation and its lanes, kept while what they are built from is unchanged. Every
+            // step of a resize and every notice renders again, and new message arrays for the same
+            // conversation would make each list look again for where the reader is, and each ruler
+            // count its ticks again, for nothing.
+            const conversationCacheRef = useRef(null);
+            const boardCacheRef = useRef(null);
+            if (!boardCacheRef.current) boardCacheRef.current = createBoardCache();
 
             // Highlighting keywords. The loader owns the companion object that reads the highlight
             // field; the view keeps the matched conversation between renders. Both live in refs,
@@ -385,13 +403,28 @@ export default function supernova(galaxy) {
                     return undefined;
                 }
 
-                const conversation = normalize({
-                    layout: staleLayout,
-                    rows: page.rows,
-                    props: settings,
-                    theme,
-                    area: page.area,
-                });
+                const themeName = theme?.name?.();
+                const cached = conversationCacheRef.current;
+                if (
+                    cached === null ||
+                    cached.page !== page ||
+                    cached.layout !== staleLayout ||
+                    cached.themeName !== themeName
+                ) {
+                    conversationCacheRef.current = {
+                        page,
+                        layout: staleLayout,
+                        themeName,
+                        conversation: normalize({
+                            layout: staleLayout,
+                            rows: page.rows,
+                            props: settings,
+                            theme,
+                            area: page.area,
+                        }),
+                    };
+                }
+                const { conversation } = conversationCacheRef.current;
 
                 // The live layout carries current selection state; the stale one
                 // does not, so the highlight reads from the live cube.
@@ -465,6 +498,21 @@ export default function supernova(galaxy) {
                     return undefined;
                 }
 
+                // Conversations side by side: a board of lanes, whose order of messages everything below
+                // follows — the highlights, search, stepping and copying count messages by their index in
+                // it. An export shows the lanes a snapshot recorded, not the ones its size would fit.
+                const laneSettings = readLaneSettings(settings.lanes);
+                const hasThread = Boolean(byRole[ROLES.THREAD]);
+                const board = boardCacheRef.current.get({
+                    messages: conversation.messages,
+                    settings: laneSettings,
+                    hasThread,
+                    width: rect?.width ?? 0,
+                    keys: readLaneSnapshot(staleLayout)?.keys ?? null,
+                    gapSec: settings.groupGapSec,
+                });
+                const shown = board ? { ...conversation, messages: board.messages } : conversation;
+
                 // A click on a highlight or a chip selects in the highlight or category field: never in
                 // an export render, whose server reports every interaction as allowed, nor in edit mode.
                 const canSelectHighlights =
@@ -478,7 +526,7 @@ export default function supernova(galaxy) {
                     tagged: highlightResult,
                     layout: staleLayout,
                     version: companionVersion,
-                    messages: conversation.messages,
+                    messages: shown.messages,
                     theme,
                     renderAll: shouldRenderAll(staleLayout, settings),
                     canSelect: canSelectHighlights,
@@ -530,7 +578,14 @@ export default function supernova(galaxy) {
                 };
 
                 const view = {
-                    conversation,
+                    conversation: shown,
+                    board,
+                    // Lanes switched on without a thread to put in them: said in a banner, since the
+                    // conversation then shows as one.
+                    laneNotice:
+                        laneSettings.show && !hasThread
+                            ? 'Conversations side by side need a Conversation / thread dimension.'
+                            : null,
                     settings,
                     canSelect,
                     onSelect,

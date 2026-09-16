@@ -235,3 +235,88 @@ describe('conversationJson', () => {
         expect(empty.highlights).toEqual([]);
     });
 });
+
+describe('conversations side by side', () => {
+    const at = (day, hour) => new Date(2026, 8, day, hour, 5).getTime();
+    const message = (id, thread, ts, body = `message ${id}`) => ({
+        id,
+        key: `k${id}`,
+        author: person('Ada'),
+        body,
+        bodyFormat: 'text',
+        ts,
+        tsText: null,
+        threadId: thread,
+        kpis: [],
+    });
+    // Linked scrolling interleaves the lanes: B's message sits between A's two.
+    const messages = [
+        message('1', 'A', at(8, 8)),
+        message('2', 'B', at(8, 9), 'reload B'),
+        message('3', 'A', at(9, 10), 'reload A'),
+    ];
+    const board = {
+        total: 3,
+        lanes: [
+            { label: 'A', indices: Int32Array.from([0, 2]) },
+            { label: 'B', indices: Int32Array.from([1]) },
+        ],
+    };
+
+    it('writes each conversation under its name, with its own days', () => {
+        expect(conversationText({ messages, diagnostics: [] }, { board }).split('\n')).toEqual([
+            '2 of 3 conversations',
+            '',
+            'Conversation: A',
+            '',
+            '2026-09-08',
+            '',
+            'Ada',
+            'message 1',
+            '',
+            '2026-09-09',
+            '',
+            'Ada',
+            'reload A',
+            '',
+            'Conversation: B',
+            '',
+            '2026-09-08',
+            '',
+            'Ada',
+            'reload B',
+            '',
+        ]);
+    });
+
+    it('writes the JSON conversation by conversation, with each message’s own highlights', () => {
+        const view = createHighlightView();
+        const highlights = view.build({
+            tagged: {
+                answer: {
+                    kind: HIGHLIGHT_KINDS.VALUES,
+                    field: 'match',
+                    source: 'selected',
+                    values: ['reload'],
+                    rows: [{ value: 'reload', category: null }],
+                    truncated: false,
+                    categories: null,
+                },
+            },
+            layout: { chatbox: {} },
+            version: 0,
+            messages,
+        });
+        const json = conversationJson(
+            { messages, meta: { total: 3 }, diagnostics: [] },
+            { highlights, projectionOf: (body) => body, exportedAt: 'now', version: '1', board }
+        );
+        expect(json.conversation.conversations).toEqual({ shown: 2, total: 3 });
+        expect(json.messages.map((m) => [m.id, m.thread, m.highlights.length])).toEqual([
+            ['1', 'A', 0],
+            ['3', 'A', 1],
+            ['2', 'B', 1],
+        ]);
+        expect(json.messages[2].highlights[0].text).toBe('reload');
+    });
+});

@@ -25,6 +25,12 @@ describe('reloadingView', () => {
         expect(view.reloading).toEqual({ loaded: null, total: null });
     });
 
+    it('keeps the conversations that were side by side, board and all', () => {
+        const board = { scroll: 'linked', lanes: [], messages: [] };
+        const view = reloadingView({ ...previous, board, laneNotice: null }, {});
+        expect(view.board).toBe(board);
+    });
+
     it('turns selecting off, since the new selection may have removed the message clicked', () => {
         expect(reloadingView(previous, {}).canSelect).toBe(false);
     });

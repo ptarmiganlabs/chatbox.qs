@@ -57,6 +57,34 @@ export function dayKey(ts) {
 }
 
 /**
+ * Day label formatters, by whether they name the year.
+ *
+ * Making an Intl.DateTimeFormat costs far more than formatting with one, and a conversation over many days
+ * labels a day header for every one of them, so each formatter is made once.
+ */
+const dayFormatters = new Map();
+
+/**
+ * Get the formatter for day labels.
+ *
+ * @param {boolean} withYear - Whether the label names the year.
+ * @returns {Intl.DateTimeFormat} The formatter, made on first use.
+ */
+function dayFormatter(withYear) {
+    let formatter = dayFormatters.get(withYear);
+    if (!formatter) {
+        formatter = new Intl.DateTimeFormat(undefined, {
+            weekday: 'short',
+            day: 'numeric',
+            month: 'short',
+            year: withYear ? 'numeric' : undefined,
+        });
+        dayFormatters.set(withYear, formatter);
+    }
+    return formatter;
+}
+
+/**
  * Human label for a day separator.
  *
  * `now` is a parameter rather than read from the clock so the relative labels
@@ -73,17 +101,50 @@ export function dayLabel(ts, now = Date.now()) {
 
     const d = new Date(ts);
     try {
-        return new Intl.DateTimeFormat(undefined, {
-            weekday: 'short',
-            day: 'numeric',
-            month: 'short',
-            // Only name the year when it is not the current one — "12 Mar" reads
-            // better than "12 Mar 2026" for a conversation from this year.
-            year: d.getFullYear() === new Date(now).getFullYear() ? undefined : 'numeric',
-        }).format(d);
+        // Only name the year when it is not the current one — "12 Mar" reads
+        // better than "12 Mar 2026" for a conversation from this year.
+        return dayFormatter(d.getFullYear() !== new Date(now).getFullYear()).format(d);
     } catch {
         return key;
     }
+}
+
+/**
+ * Mark where each day group starts.
+ *
+ * The one definition of where a day starts, shared by the day groups and by the rows that line
+ * conversations up side by side: rows never cross a day, so the day groups can count rows. Messages
+ * with no timestamp cannot be dated, so they join the group that precedes them; a conversation that
+ * starts with undated messages opens with an unlabelled group of its own.
+ *
+ * @param {object[]} messages - The conversation, in display order.
+ * @returns {Uint8Array} 1 at each message that starts a group, 0 elsewhere; all 0 when nothing can be
+ *     dated, since then there are no day groups at all.
+ */
+export function dayStarts(messages) {
+    const list = Array.isArray(messages) ? messages : [];
+    const starts = new Uint8Array(list.length);
+    if (!list.some((m) => typeof m.ts === 'number')) return starts;
+
+    let currentKey = null;
+    let open = false;
+    list.forEach((message, index) => {
+        if (typeof message.ts !== 'number') {
+            // Undated: fold into whatever group is open, or start one if this is the very first message.
+            if (!open) {
+                starts[index] = 1;
+                open = true;
+            }
+            return;
+        }
+        const key = dayKey(message.ts);
+        if (key !== currentKey) {
+            currentKey = key;
+            starts[index] = 1;
+            open = true;
+        }
+    });
+    return starts;
 }
 
 /**
@@ -102,30 +163,16 @@ export function buildDayGroups(messages, now = Date.now()) {
     if (!Array.isArray(messages) || messages.length === 0) return null;
     if (!messages.some((m) => typeof m.ts === 'number')) return null;
 
+    const starts = dayStarts(messages);
     const groupCounts = [];
     const labels = [];
-    let currentKey = null;
-
-    for (const message of messages) {
-        if (typeof message.ts !== 'number') {
-            // Undated: fold into whatever group is open, or start one if this is
-            // the very first message.
-            if (groupCounts.length === 0) {
-                groupCounts.push(0);
-                labels.push('');
-            }
-            groupCounts[groupCounts.length - 1] += 1;
-            continue;
-        }
-
-        const key = dayKey(message.ts);
-        if (key !== currentKey) {
-            currentKey = key;
+    messages.forEach((message, index) => {
+        if (starts[index] === 1) {
             groupCounts.push(0);
-            labels.push(dayLabel(message.ts, now));
+            labels.push(typeof message.ts === 'number' ? dayLabel(message.ts, now) : '');
         }
         groupCounts[groupCounts.length - 1] += 1;
-    }
+    });
 
     return { groupCounts, labels };
 }

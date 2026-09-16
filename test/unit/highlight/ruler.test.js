@@ -56,6 +56,31 @@ describe('rulerTicks', () => {
         );
     });
 
+    it('covers one lane’s stretch of the messages, keeping their indices', () => {
+        const stops = {
+            firstStop: Int32Array.from([0, 1, 1, 1, 3, 3]),
+            byMessage: [entry({ ops: 1 }), EMPTY, EMPTY, entry({ ops: 2 }), EMPTY],
+        };
+        // A lane of messages 2 to 4: the tick for message 3 sits in the middle of the lane.
+        const ticks = rulerTicks({ stops, count: 3, kind: 'find', first: 2 });
+        expect(ticks.map((t) => [t.messageIndex, t.position])).toEqual([[3, 1.5 / 3]]);
+    });
+
+    it('places messages that share a row at the row', () => {
+        const stops = {
+            firstStop: Int32Array.from([0, 1, 2, 2, 3]),
+            byMessage: [EMPTY, EMPTY, EMPTY, EMPTY],
+        };
+        // Rows [0 1] [2] [3]: messages 0 and 1 share the first of three places.
+        const of = [0, 0, 1, 2];
+        const ticks = rulerTicks({ stops, count: 4, kind: 'find', slots: 3, slotOf: (i) => of[i] });
+        expect(ticks.map((t) => [t.messageIndex, t.position])).toEqual([
+            [0, 0.5 / 3],
+            [3, 2.5 / 3],
+        ]);
+        expect(ticks[0].title).toBe('2 matches in 2 messages');
+    });
+
     it('counts matches, in no category colour, for search', () => {
         const stops = { firstStop: Int32Array.from([0, 3]), byMessage: [EMPTY] };
         const [tick] = rulerTicks({ stops, count: 1, kind: 'find' });

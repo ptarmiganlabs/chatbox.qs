@@ -11,9 +11,14 @@
  * message renders, for a markdown one. Search matches are the reader's, not the data's, and are left
  * out.
  *
+ * With conversations side by side, both hold the conversations shown, one after another in lane order,
+ * each under a line naming it: read top to bottom, lanes that were beside each other would otherwise
+ * interleave.
+ *
  * Pure: it builds strings and objects, and copies nothing.
  */
 import { dayKey } from '../chat/grouping';
+import { conversationsShownText } from '../chat/lanes';
 import { HIGHLIGHT_KINDS } from '../qix/highlight-source';
 import { BLOCK_SEPARATOR } from '../highlight/markdown-projection';
 
@@ -39,24 +44,45 @@ function headerLine(message) {
 }
 
 /**
+ * List the messages to write, conversation by conversation when they are side by side.
+ *
+ * @param {Array<object>} messages - The messages shown.
+ * @param {?object} board - The board they are shown in, or null.
+ * @returns {Array<{label: ?string, indices: Array<number>}>} Runs of message indices: one per lane, named
+ *     after its conversation, or a single unnamed run of every message.
+ */
+function runsOf(messages, board) {
+    if (!board) return [{ label: null, indices: messages.map((_, index) => index) }];
+    return board.lanes.map((lane) => ({ label: lane.label, indices: [...lane.indices] }));
+}
+
+/**
  * Write the conversation as a transcript.
  *
  * @param {object} conversation - The normalized conversation.
+ * @param {object} [options] - Options.
+ * @param {?object} [options.board] - The board the messages are shown in, with conversations side by side.
  * @returns {string} The transcript. A dated message on a new day is preceded by the day, as YYYY-MM-DD
- *     in the reader's time zone, the day its separator shows; a message without a time is not.
+ *     in the reader's time zone, the day its separator shows; a message without a time is not. Side by
+ *     side, each conversation starts with a line naming it, and its first dated message with its day.
  */
-export function conversationText(conversation) {
+export function conversationText(conversation, { board = null } = {}) {
     const messages = conversation?.messages ?? [];
     const parts = [];
     const truncated = (conversation?.diagnostics ?? []).find((d) => d.code === 'truncated');
     if (truncated) parts.push(`${truncated.message}\n`);
-    let day = null;
-    for (const message of messages) {
-        if (Number.isFinite(message.ts) && dayKey(message.ts) !== day) {
-            day = dayKey(message.ts);
-            parts.push(`${day}\n`);
+    if (board) parts.push(`${conversationsShownText(board)}\n`);
+    for (const run of runsOf(messages, board)) {
+        if (run.label !== null) parts.push(`Conversation: ${run.label}\n`);
+        let day = null;
+        for (const index of run.indices) {
+            const message = messages[index];
+            if (Number.isFinite(message.ts) && dayKey(message.ts) !== day) {
+                day = dayKey(message.ts);
+                parts.push(`${day}\n`);
+            }
+            parts.push(`${headerLine(message)}\n${message.body ? message.body : '(no text)'}\n`);
         }
-        parts.push(`${headerLine(message)}\n${message.body ? message.body : '(no text)'}\n`);
     }
     return parts.join('\n');
 }
@@ -150,11 +176,13 @@ function messageJson(message, entry, projectionOf) {
  * @param {string} options.exportedAt - When, as an ISO date.
  * @param {string} options.version - The extension's version.
  * @param {string} [options.order] - 'oldest' or 'newest' first, as shown.
- * @returns {object} The data; `JSON.stringify` it.
+ * @param {?object} [options.board] - The board the messages are shown in, with conversations side by side.
+ * @returns {object} The data; `JSON.stringify` it. Side by side, the messages come conversation by
+ *     conversation, and `conversation.conversations` says how many are shown of how many.
  */
 export function conversationJson(
     conversation,
-    { highlights = null, projectionOf, exportedAt, version, order = 'oldest' }
+    { highlights = null, projectionOf, exportedAt, version, order = 'oldest', board = null }
 ) {
     const messages = conversation?.messages ?? [];
     const meta = conversation?.meta ?? {};
@@ -169,13 +197,17 @@ export function conversationJson(
             rows: Number.isFinite(meta.total) ? meta.total : messages.length,
             truncated: Boolean(meta.truncated),
             order: order === 'newest' ? 'newest' : 'oldest',
+            ...(board ? { conversations: { shown: board.lanes.length, total: board.total } } : {}),
         },
         highlights: highlighting,
-        messages: messages.map((message, index) =>
-            messageJson(
-                message,
-                highlighting ? highlights.result.byMessage[index] : null,
-                projectionOf
+        // Highlights are found by the index a message is shown at, whatever order it is written in.
+        messages: runsOf(messages, board).flatMap((run) =>
+            run.indices.map((index) =>
+                messageJson(
+                    messages[index],
+                    highlighting ? highlights.result.byMessage[index] : null,
+                    projectionOf
+                )
             )
         ),
     };

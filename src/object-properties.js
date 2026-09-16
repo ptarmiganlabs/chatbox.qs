@@ -10,6 +10,7 @@
 import { ATTR_IDS } from './qix/attr-map';
 import { DEFAULT_CIDS, ROLES } from './qix/column-map';
 import { kindChipsBag } from './chat/kind-chips';
+import { lanesBag } from './chat/lanes';
 import { textToolSettingsBag } from './highlight/settings';
 
 /**
@@ -88,7 +89,7 @@ export default {
         // gets; rendering follows the roles that actually resolve.
         conversationModel: 'participant',
         order: 'oldest', // 'oldest' | 'newest'
-        layoutMode: 'rail', // 'rail' | 'sided' | 'lanes'
+        layoutMode: 'rail', // 'rail' | 'sided'
         density: 'auto', // 'auto' | 'comfortable' | 'compact' | 'ultra'
         groupGapSec: 120,
         showAvatars: true,
@@ -102,6 +103,10 @@ export default {
 
         // Message kinds as chips above the text; see src/chat/kind-chips.js.
         kindChips: kindChipsBag(),
+
+        // Conversations side by side, one lane per thread; see src/chat/lanes.js. Lanes combine with
+        // either layout, so they are not a layoutMode.
+        lanes: lanesBag(),
 
         // highlight, match, category: keyword highlighting. One definition in
         // src/highlight/settings.js serves these defaults, the property panel and

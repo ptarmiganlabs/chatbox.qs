@@ -66,6 +66,19 @@ function searchedTexts(message, headerShown, projections) {
 }
 
 /**
+ * Find the message whose header line a message follows.
+ *
+ * @param {Array<object>} messages - The messages.
+ * @param {?(Int32Array|Array<number>)} previous - The index of each one's predecessor, or null for the one before.
+ * @param {number} index - The message's index.
+ * @returns {?object} The predecessor, or null when the message starts its list.
+ */
+function previousOf(messages, previous, index) {
+    const before = previous ? previous[index] : index - 1;
+    return before >= 0 ? messages[before] : null;
+}
+
+/**
  * Find which part a stop in a message belongs to.
  *
  * @param {object} entry - The message's matches.
@@ -120,12 +133,15 @@ export function createConversationFinder({
      * @param {Array<object>} request.messages - The messages, in display order.
      * @param {string} request.query - What was typed.
      * @param {number} request.gapSec - How far apart one sender's messages still share a header line.
+     * @param {?(Int32Array|Array<number>)} [request.previous] - For each message, the index of the message whose
+     *     header line it follows, -1 for none; the one before it when not given. With conversations side by
+     *     side, that is the previous message in the same lane.
      * @returns {?object} `byMessage` (each message's `author`, `recipients` and `body` matches, the
      *     body's searched `text`, and their `count`), `firstStop`, `total`, `messagesWith`, `truncated`
      *     and `indexByKey`; null for a query with nothing to search for. The same object while the
      *     query and what is searched are unchanged.
      */
-    function find({ messages, query, gapSec }) {
+    function find({ messages, query, gapSec, previous = null }) {
         if (typeof query !== 'string' || query.trim() === '') return null;
 
         // What is searched, message by message. Compared as text, since every render builds new
@@ -134,7 +150,7 @@ export function createConversationFinder({
         const texts = messages.map((message, index) =>
             searchedTexts(
                 message,
-                startsCluster(message, index > 0 ? messages[index - 1] : null, gapSec),
+                startsCluster(message, previousOf(messages, previous, index), gapSec),
                 projections
             )
         );

@@ -25,18 +25,38 @@ export const RULER_BUCKETS = 400;
  * @param {number} request.count - How many messages there are.
  * @param {string} request.kind - 'highlight' or 'find'.
  * @param {?object} [request.styles] - The category styles, for highlight ticks.
+ * @param {number} [request.first] - The index of the first message the ruler covers: a lane's first,
+ *     when each lane has a ruler of its own.
+ * @param {number} [request.slots] - How many places the ruler is divided into; one per message by default.
+ * @param {function(number): number} [request.slotOf] - The place a message is at, from 0; its index
+ *     from `first` by default. Messages that share a row share a place.
  * @returns {Array<{position: number, messageIndex: number, color: ?string, title: string}>} Ticks in
  *     order: where each sits (0 to 1), the first message it stands for, its colour, and its tooltip.
  */
-export function rulerTicks({ stops, count, kind, styles = null }) {
+export function rulerTicks({
+    stops,
+    count,
+    kind,
+    styles = null,
+    first = 0,
+    slots = count,
+    slotOf = null,
+}) {
     const ticks = [];
-    if (!stops || count <= 0) return ticks;
+    if (!stops || count <= 0 || slots <= 0) return ticks;
     const categorised = kind === 'highlight' && styles?.enabled === true;
+    /**
+     * Find the place a message is at on the ruler.
+     *
+     * @param {number} index - The message's index.
+     * @returns {number} Its place, from 0.
+     */
+    const place = (index) => (slotOf ? slotOf(index) : index - first);
     let tick = null;
-    for (let index = 0; index < count; index++) {
+    for (let index = first; index < first + count; index++) {
         const here = stops.firstStop[index + 1] - stops.firstStop[index];
         if (here <= 0) continue;
-        const bucket = Math.floor((index / count) * RULER_BUCKETS);
+        const bucket = Math.floor((place(index) / slots) * RULER_BUCKETS);
         if (tick === null || tick.bucket !== bucket) {
             tick = { bucket, index, stops: 0, messages: 0, parts: new Set() };
             ticks.push(tick);
@@ -59,7 +79,7 @@ export function rulerTicks({ stops, count, kind, styles = null }) {
         const names = parts.map((part) => part.name ?? NO_CATEGORY_LABEL);
         const summary = `${counted(entry.stops, one, many)} in ${counted(entry.messages, 'message', 'messages')}`;
         return {
-            position: (entry.index + 0.5) / count,
+            position: (place(entry.index) + 0.5) / slots,
             messageIndex: entry.index,
             color: parts.length > 0 ? stripes(parts.map((part) => part.line)) : null,
             title: names.length > 0 ? `${summary}: ${names.join(', ')}` : summary,

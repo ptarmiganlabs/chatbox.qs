@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { canReceiveTabStop, keyAction, nextFocusIndex } from '../../src/ui/keyboard';
+import {
+    canReceiveTabStop,
+    keyAction,
+    laneFocusIndex,
+    nextFocusIndex,
+} from '../../src/ui/keyboard';
+import { buildBoard } from '../../src/chat/lanes';
 
 describe('canReceiveTabStop', () => {
     it('allows tab stops when Sense is not managing keyboard handling', () => {
@@ -114,5 +120,81 @@ describe('isFindKey', () => {
         expect(isFindKey({ key: 'f', ctrlKey: true, shiftKey: true })).toBe(false);
         expect(isFindKey({ key: 'f', ctrlKey: true, altKey: true })).toBe(false);
         expect(isFindKey(undefined)).toBe(false);
+    });
+});
+
+describe('laneFocusIndex', () => {
+    /** A message in a thread at a cube row. */
+    const msg = (id, thread) => ({
+        id,
+        key: `k${id}`,
+        threadId: thread,
+        threadElem: thread.charCodeAt(0),
+        rowIdx: Number(id),
+        ts: null,
+    });
+    // Lanes by latest activity: A (row 7), B (row 6), C (row 5).
+    const messages = [
+        msg('1', 'A'),
+        msg('2', 'B'),
+        msg('3', 'A'),
+        msg('4', 'A'),
+        msg('5', 'C'),
+        msg('6', 'B'),
+        msg('7', 'A'),
+    ];
+
+    describe('with linked scrolling', () => {
+        const board = buildBoard(messages, { max: 3, scroll: 'linked' });
+        // Board order is display order: 1:A 2:B 3:A 4:A 5:C 6:B 7:A.
+        // Rows: [1:A 2:B] [3:A] [4:A 5:C 6:B] [7:A].
+
+        it('enters the most recent lane from nowhere', () => {
+            expect(laneFocusIndex('ArrowDown', -1, board)).toBe(0);
+            expect(laneFocusIndex('ArrowUp', -1, board)).toBe(6);
+            expect(laneFocusIndex('ArrowRight', -1, board)).toBe(0);
+        });
+
+        it('moves up and down within the lane, clamped', () => {
+            expect(laneFocusIndex('ArrowDown', 0, board)).toBe(2);
+            expect(laneFocusIndex('ArrowDown', 1, board)).toBe(5);
+            expect(laneFocusIndex('ArrowDown', 5, board)).toBe(5);
+            expect(laneFocusIndex('Home', 6, board)).toBe(0);
+            expect(laneFocusIndex('End', 0, board)).toBe(6);
+        });
+
+        it('goes to the neighbouring lane in the same row, else the nearest row, above on a tie', () => {
+            expect(laneFocusIndex('ArrowRight', 0, board)).toBe(1);
+            expect(laneFocusIndex('ArrowRight', 3, board)).toBe(5);
+            // Row [3:A] has no B: rows above and below are one away, so the one above wins.
+            expect(laneFocusIndex('ArrowRight', 2, board)).toBe(1);
+            expect(laneFocusIndex('ArrowLeft', 4, board)).toBe(5);
+            expect(laneFocusIndex('ArrowLeft', 0, board)).toBe(0);
+            expect(laneFocusIndex('ArrowRight', 4, board)).toBe(4);
+        });
+
+        it('leaves other keys alone', () => {
+            expect(laneFocusIndex('Enter', 0, board)).toBeNull();
+            expect(laneFocusIndex('ArrowDown', 0, null)).toBeNull();
+        });
+    });
+
+    describe('with free scrolling', () => {
+        const board = buildBoard(messages, { max: 3, scroll: 'free' });
+        // Board order is lane by lane: A 1,3,4,7 (0-3), B 2,6 (4-5), C 5 (6).
+
+        it('moves within the lane, never into the next one', () => {
+            expect(laneFocusIndex('ArrowDown', 3, board)).toBe(3);
+            expect(laneFocusIndex('ArrowUp', 4, board)).toBe(4);
+            expect(laneFocusIndex('PageDown', 4, board)).toBe(5);
+        });
+
+        it('goes to where the reader is in the neighbouring lane, else its first message', () => {
+            expect(laneFocusIndex('ArrowRight', 1, board, { anchor: () => 5 })).toBe(5);
+            // An anchor outside the lane is ignored.
+            expect(laneFocusIndex('ArrowRight', 1, board, { anchor: () => 2 })).toBe(4);
+            expect(laneFocusIndex('ArrowRight', 5, board)).toBe(6);
+            expect(laneFocusIndex('ArrowLeft', 6, board, { anchor: () => -1 })).toBe(4);
+        });
     });
 });

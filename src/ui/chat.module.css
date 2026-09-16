@@ -811,6 +811,116 @@ button.chip:focus-visible {
     background: var(--cqs-find-line, #c26a00);
 }
 
+/* ---- Conversations side by side ------------------------------------------------------------------
+   A lane per conversation, headed by its name. The caption and the headers are flex: none, or a long
+   conversation squeezes them to nothing, as it would the bar (GOTCHAS 25). */
+.lanes {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
+}
+
+.rootPaned .lanes {
+    flex: 1 1 68%;
+}
+
+.laneCaption {
+    flex: none;
+    padding: 2px 8px;
+    border-bottom: 1px solid var(--cqs-border, #d9d9d9);
+    font-size: 11px;
+    color: var(--cqs-muted, #6c6c6c);
+}
+
+.laneColumns {
+    display: flex;
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
+}
+
+.lane {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 0;
+}
+
+.lane + .lane {
+    border-inline-start: 1px solid var(--cqs-border, #d9d9d9);
+}
+
+.laneHeader {
+    flex: none;
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    min-width: 0;
+    padding: 3px 8px;
+    border-bottom: 1px solid var(--cqs-border, #d9d9d9);
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.laneName {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.laneCount {
+    flex: none;
+    margin-left: auto;
+    font-weight: 400;
+    color: var(--cqs-muted, #6c6c6c);
+    font-variant-numeric: tabular-nums;
+}
+
+.laneBody {
+    display: flex;
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
+}
+
+/* Linked scrolling: the lanes are the columns of one list of rows. The headers reserve the gutter the
+   scroller's scrollbar takes, and the ruler's width when it shows, so their columns line up with the
+   rows' cells. */
+.laneHeaders {
+    flex: none;
+    display: grid;
+    grid-template-columns: repeat(var(--cqs-lanes, 1), minmax(0, 1fr));
+    overflow: hidden;
+    scrollbar-gutter: stable;
+}
+
+.laneHeaders[data-ruler='true'] {
+    padding-right: 14px;
+}
+
+.laneRow {
+    display: grid;
+    grid-template-columns: repeat(var(--cqs-lanes, 1), minmax(0, 1fr));
+}
+
+.laneCell {
+    min-width: 0;
+}
+
+.laneHeaders > section + section,
+.laneCell + .laneCell {
+    border-inline-start: 1px solid var(--cqs-border, #d9d9d9);
+}
+
+/* A lane is narrow: an inline detail keeps to it. */
+.lanes .detailInline {
+    margin: 0 6px 6px;
+}
+
 /* Every row rendered in a live object: without the virtualizer, the list must scroll itself. */
 .listScroll {
     overflow-y: auto;

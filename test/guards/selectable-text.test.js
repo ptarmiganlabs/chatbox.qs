@@ -66,6 +66,11 @@ describe('highlights in the stylesheet', () => {
         expect(declarationsOf('.bar')).toMatch(/flex:\s*none/);
     });
 
+    it('keeps the lane headers and the caption above the lanes from being squeezed too', () => {
+        expect(declarationsOf('.laneHeader')).toMatch(/flex:\s*none/);
+        expect(declarationsOf('.laneCaption')).toMatch(/flex:\s*none/);
+    });
+
     it('uses no color-mix(), which the browser that renders exports may not know', () => {
         // Comments may name it; rules may not.
         expect(css.replace(/\/\*[\s\S]*?\*\//g, '')).not.toMatch(/color-mix\(/);

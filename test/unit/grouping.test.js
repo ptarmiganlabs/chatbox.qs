@@ -1,5 +1,11 @@
-import { describe, it, expect } from 'vitest';
-import { buildDayGroups, dayKey, dayLabel, startsCluster } from '../../src/chat/grouping';
+import { describe, it, expect, vi } from 'vitest';
+import {
+    buildDayGroups,
+    dayKey,
+    dayLabel,
+    dayStarts,
+    startsCluster,
+} from '../../src/chat/grouping';
 import { resolveDensity, DENSITIES } from '../../src/ui/density';
 
 /** Local-time epoch ms for a given calendar moment. */
@@ -169,5 +175,49 @@ describe('startsCluster across sides', () => {
         const previous = { authorKey: 'Ada', ts: null, recipients: null, side: 'left' };
         const message = { authorKey: 'Ada', ts: null, recipients: null, side: 'right' };
         expect(startsCluster(message, previous, 120)).toBe(true);
+    });
+});
+
+describe('day label formatters', () => {
+    it('labels days with a formatter made once, not once a label', () => {
+        const made = vi.spyOn(Intl, 'DateTimeFormat');
+        const now = at(2026, 9, 16);
+        const labels = [];
+        for (let day = 1; day <= 40; day += 1) labels.push(dayLabel(at(2026, 3, day), now));
+        for (let day = 1; day <= 5; day += 1) labels.push(dayLabel(at(2024, 3, day), now));
+        // One formatter for this year's days and one naming the year, at most, and none if earlier
+        // labels in this file already made them.
+        expect(made.mock.calls.length).toBeLessThanOrEqual(2);
+        made.mockRestore();
+        expect(new Set(labels).size).toBe(45);
+        expect(labels[40]).toContain('2024');
+    });
+});
+
+describe('dayStarts', () => {
+    const at = (d, h = 12) => new Date(2026, 8, d, h).getTime();
+    const m = (ts) => ({ ts });
+
+    it('marks exactly where buildDayGroups starts a group', () => {
+        const cases = [
+            [m(at(7)), m(at(7, 13)), m(at(8)), m(null), m(at(8, 14)), m(at(9))],
+            [m(null), m(null), m(at(7)), m(null), m(at(8))],
+            [m(at(7))],
+        ];
+        for (const messages of cases) {
+            const starts = dayStarts(messages);
+            const groups = buildDayGroups(messages);
+            const sizes = [];
+            messages.forEach((_, i) => {
+                if (starts[i] === 1) sizes.push(0);
+                sizes[sizes.length - 1] += 1;
+            });
+            expect(sizes).toEqual(groups.groupCounts);
+        }
+    });
+
+    it('marks nothing when nothing can be dated', () => {
+        expect([...dayStarts([m(null), m(null)])]).toEqual([0, 0]);
+        expect(dayStarts(undefined)).toHaveLength(0);
     });
 });
