@@ -3,6 +3,9 @@ import { normalize } from '../../src/chat/normalize';
 import { buildDayGroups } from '../../src/chat/grouping';
 import { fetchAllRows, rowsPerPage } from '../../src/qix/paging';
 import { assignBubbleKeys, collapseRecords } from '../../src/chat/collapse';
+import { buildBoard } from '../../src/chat/lanes';
+import { readsFromEnd } from '../../src/chat/message-limit';
+import { laneCaption } from '../../src/ui/LaneBoard';
 import { fastestTime } from '../helpers/timing';
 
 /**
@@ -272,5 +275,71 @@ describe('scale: paging 12,000 rows', () => {
         expect(c.meta.truncated).toBe(true);
         const warning = c.diagnostics.find((d) => d.code === 'truncated');
         expect(warning.message).toContain('12000');
+    });
+});
+
+describe('scale: 12,000 messages over a limit of 5,000', () => {
+    /** A model serving the generated rows, each page from the row it starts at. */
+    const cubeModel = () => ({
+        getHyperCubeData: vi.fn(async (path, pages) => {
+            const { qTop, qHeight } = pages[0];
+            const available = Math.max(0, Math.min(qHeight, COUNT - qTop));
+            return [
+                {
+                    qArea: { qTop, qLeft: 0, qWidth: COLS, qHeight: available },
+                    qMatrix: bigRows(qTop + available).slice(qTop),
+                },
+            ];
+        }),
+    });
+
+    /** Read the rows as the object does for these settings, and normalize them. */
+    async function conversationFor(settings) {
+        const { rows, area } = await fetchAllRows({
+            model: cubeModel(),
+            layout: bigLayout(),
+            maxRows: 5000,
+            fromEnd: readsFromEnd(settings),
+        });
+        return normalize({ layout: bigLayout(), rows, area, props: settings });
+    }
+
+    const truncation = (c) => c.diagnostics.find((d) => d.code === 'truncated').message;
+
+    it('shows the newest 5,000 newest first, not the oldest 5,000 — regression', async () => {
+        const c = await conversationFor({ order: 'newest' });
+        expect(c.messages).toHaveLength(5000);
+        expect(c.messages[0].body).toBe('Generated message 12000');
+        expect(c.messages[0].rowIdx).toBe(11999);
+        expect(c.messages.at(-1).body).toBe('Generated message 7001');
+        expect(c.messages.at(-1).rowIdx).toBe(7000);
+        expect(truncation(c)).toBe(
+            'Showing the newest 5000 of 12000 messages. Filter to see the rest.'
+        );
+    });
+
+    it('still shows the oldest 5,000 oldest first', async () => {
+        const c = await conversationFor({ order: 'oldest' });
+        expect(c.messages[0].body).toBe('Generated message 1');
+        expect(c.messages.at(-1).body).toBe('Generated message 5000');
+        expect(truncation(c)).toBe(
+            'Showing the oldest 5000 of 12000 messages. Filter to see the rest.'
+        );
+    });
+
+    it('gives the conversations with the latest activity lanes, and says which rows they come from', async () => {
+        // A thread every 500 messages: the newest 5,000 rows hold threads 15 to 24.
+        const settings = { order: 'oldest', lanes: { show: true } };
+        const c = await conversationFor(settings);
+        const board = buildBoard(c.messages, { max: 4, scroll: 'linked' });
+        expect(board.lanes.map((lane) => lane.label)).toEqual([
+            'Thread 24',
+            'Thread 23',
+            'Thread 22',
+            'Thread 21',
+        ]);
+        expect(laneCaption(board, c.meta)).toBe(
+            '4 of 10 conversations among the newest 5,000 of 12,000 rows'
+        );
     });
 });

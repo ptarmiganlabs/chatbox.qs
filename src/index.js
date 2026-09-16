@@ -28,6 +28,7 @@ import definition from './object-properties';
 import dataTargets from './data';
 import ext from './ext/index';
 import { normalize } from './chat/normalize';
+import { readsFromEnd } from './chat/message-limit';
 import { fetchAllRows } from './qix/paging';
 import { ROLES, conversationModelOf, resolveRoles } from './qix/column-map';
 import { buildSelection } from './qix/selection';
@@ -307,6 +308,8 @@ export default function supernova(galaxy) {
                     model,
                     layout: staleLayout,
                     maxRows: Number(settings.maxMessages) || 5000,
+                    // Newest first and lanes keep the newest rows when the limit cuts them short.
+                    fromEnd: readsFromEnd(settings),
                     /**
                      * Report whether this run has been superseded.
                      *

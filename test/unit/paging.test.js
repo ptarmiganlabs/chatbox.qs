@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { MAX_CELLS, StaleError, fetchAllRows, rowsPerPage } from '../../src/qix/paging';
+import { absoluteRow } from '../../src/qix/read-cell';
 
 /** Build a fake row of n cells. */
 const mkRow = (id, n = 5) => Array.from({ length: n }, (_, i) => ({ qText: `${id}:${i}` }));
@@ -253,5 +254,229 @@ describe('fetchAllRows — stopping when the caller has enough', () => {
         });
         expect(model.getHyperCubeData).toHaveBeenCalledTimes(3);
         expect(result.rows).toHaveLength(25000);
+    });
+});
+
+describe('fetchAllRows — reading the last rows', () => {
+    /** The cube row a fake row was made for, from its first cell. */
+    const rowOf = (row) => Number(row[0].qText.split(':')[0]);
+
+    it('reads the last rows in cube order, starting where they start', async () => {
+        const seen = [];
+        const model = mkModel(9000, 5, (p) => seen.push(p));
+        const result = await fetchAllRows({
+            model,
+            layout: mkLayout({ qcy: 9000 }),
+            maxRows: 5000,
+            fromEnd: true,
+        });
+
+        expect(seen.map((p) => [p.qTop, p.qHeight])).toEqual([
+            [4000, 2000],
+            [6000, 2000],
+            [8000, 1000],
+        ]);
+        for (const p of seen) expect(p.qWidth * p.qHeight).toBeLessThanOrEqual(MAX_CELLS);
+        expect(result.rows).toHaveLength(5000);
+        expect(rowOf(result.rows[0])).toBe(4000);
+        expect(rowOf(result.rows.at(-1))).toBe(8999);
+        expect(result.total).toBe(9000);
+        expect(result.truncated).toBe(true);
+    });
+
+    it('keeps row numbers absolute, so a message knows its cube row', async () => {
+        const { rows, area } = await fetchAllRows({
+            model: mkModel(9000),
+            layout: mkLayout({ qcy: 9000, prefetched: 1000 }),
+            maxRows: 5000,
+            fromEnd: true,
+        });
+        expect(area.qTop).toBe(4000);
+        for (const index of [0, 1, 2499, 4999]) {
+            expect(absoluteRow(area, index)).toBe(rowOf(rows[index]));
+        }
+    });
+
+    it('reads every row from row 0 when the cube fits the cap, reusing the layout’s rows', async () => {
+        const seen = [];
+        const model = mkModel(2500, 5, (p) => seen.push(p));
+        const { rows, area, truncated } = await fetchAllRows({
+            model,
+            layout: mkLayout({ qcy: 2500, prefetched: 1000 }),
+            maxRows: 5000,
+            fromEnd: true,
+        });
+        expect(seen.map((p) => p.qTop)).toEqual([1000]);
+        expect(rows.map(rowOf)).toEqual(Array.from({ length: 2500 }, (_, i) => i));
+        expect(area.qTop).toBe(0);
+        expect(truncated).toBe(false);
+    });
+
+    it('uses only the part of the layout’s rows that reaches into the last rows', async () => {
+        // 5,500 rows, 5,000 wanted: rows 500 to 999 came with the layout, rows 0 to 499 are not wanted.
+        const seen = [];
+        const model = mkModel(5500, 5, (p) => seen.push(p));
+        const { rows, area } = await fetchAllRows({
+            model,
+            layout: mkLayout({ qcy: 5500, prefetched: 1000 }),
+            maxRows: 5000,
+            fromEnd: true,
+        });
+        expect(seen.map((p) => [p.qTop, p.qHeight])).toEqual([
+            [1000, 2000],
+            [3000, 2000],
+            [5000, 500],
+        ]);
+        expect(rows.map(rowOf)).toEqual(Array.from({ length: 5000 }, (_, i) => 500 + i));
+        expect(area.qTop).toBe(500);
+    });
+
+    it('fetches every row wanted when the layout’s rows end before them', async () => {
+        const seen = [];
+        const model = mkModel(12000, 5, (p) => seen.push(p));
+        const { rows } = await fetchAllRows({
+            model,
+            layout: mkLayout({ qcy: 12000, prefetched: 1000 }),
+            maxRows: 5000,
+            fromEnd: true,
+        });
+        expect(seen.map((p) => p.qTop)).toEqual([7000, 9000, 11000]);
+        expect(rows.map(rowOf)).toEqual(Array.from({ length: 5000 }, (_, i) => 7000 + i));
+    });
+
+    it('makes no call when the layout’s rows reach the last row', async () => {
+        const model = mkModel(800);
+        const { rows, area, truncated } = await fetchAllRows({
+            model,
+            layout: mkLayout({ qcy: 800, prefetched: 800 }),
+            maxRows: 500,
+            fromEnd: true,
+        });
+        expect(model.getHyperCubeData).not.toHaveBeenCalled();
+        expect(rows.map(rowOf)).toEqual(Array.from({ length: 500 }, (_, i) => 300 + i));
+        expect(area.qTop).toBe(300);
+        expect(truncated).toBe(true);
+    });
+
+    it('discards narrow layout rows here too, and fetches the last rows full width', async () => {
+        const qcx = 8;
+        const model = mkModel(3000, qcx);
+        const layout = mkLayout({ qcy: 3000, qcx, prefetched: 1000 });
+        layout.qHyperCube.qDataPages[0].qArea.qWidth = 5;
+        layout.qHyperCube.qDataPages[0].qMatrix = Array.from({ length: 1000 }, (_, i) =>
+            mkRow(i, 5)
+        );
+        const { rows } = await fetchAllRows({ model, layout, maxRows: 2500, fromEnd: true });
+        expect(model.getHyperCubeData.mock.calls[0][1][0].qTop).toBe(500);
+        expect(rows).toHaveLength(2500);
+        expect(rows.every((row) => row.length === qcx)).toBe(true);
+    });
+
+    it('stops at a short page and says the rows were cut short', async () => {
+        // The engine claims 9,000 rows but has 7,000: the cube changed after the layout.
+        const model = mkModel(7000);
+        const { rows, area, truncated } = await fetchAllRows({
+            model,
+            layout: mkLayout({ qcy: 9000 }),
+            maxRows: 5000,
+            fromEnd: true,
+        });
+        expect(model.getHyperCubeData).toHaveBeenCalledTimes(2);
+        expect(rows.map(rowOf)).toEqual(Array.from({ length: 3000 }, (_, i) => 4000 + i));
+        expect(area.qTop).toBe(4000);
+        expect(truncated).toBe(true);
+    });
+
+    it('reports progress towards the rows wanted', async () => {
+        const progress = [];
+        await fetchAllRows({
+            model: mkModel(9000),
+            layout: mkLayout({ qcy: 9000 }),
+            maxRows: 5000,
+            fromEnd: true,
+            onProgress: (loaded, total) => progress.push([loaded, total]),
+        });
+        expect(progress).toEqual([
+            [2000, 5000],
+            [4000, 5000],
+            [5000, 5000],
+        ]);
+    });
+
+    it('asks the engine for whole rows when the limit is not a whole number', async () => {
+        const seen = [];
+        const model = mkModel(9000, 5, (p) => seen.push(p));
+        const { rows } = await fetchAllRows({
+            model,
+            layout: mkLayout({ qcy: 9000 }),
+            maxRows: 2500.5,
+            fromEnd: true,
+        });
+        expect(seen.map((p) => [p.qTop, p.qHeight])).toEqual([
+            [6500, 2000],
+            [8500, 500],
+        ]);
+        expect(rows).toHaveLength(2500);
+    });
+
+    describe('cancellation', () => {
+        it('aborts before its first request when already stale', async () => {
+            const model = mkModel(9000);
+            await expect(
+                fetchAllRows({
+                    model,
+                    layout: mkLayout({ qcy: 9000 }),
+                    maxRows: 5000,
+                    fromEnd: true,
+                    isStale: () => true,
+                })
+            ).rejects.toThrow(StaleError);
+            expect(model.getHyperCubeData).not.toHaveBeenCalled();
+        });
+
+        it('aborts AFTER an in-flight request rather than keeping stale rows', async () => {
+            let calls = 0;
+            const model = mkModel(9000, 5, () => {
+                calls += 1;
+            });
+            await expect(
+                fetchAllRows({
+                    model,
+                    layout: mkLayout({ qcy: 9000 }),
+                    maxRows: 5000,
+                    fromEnd: true,
+                    isStale: () => calls >= 2,
+                })
+            ).rejects.toThrow(StaleError);
+            expect(calls).toBe(2);
+        });
+    });
+});
+
+describe('fetchAllRows — rows that came with the layout', () => {
+    it('ignores layout rows that do not start at the first row wanted', async () => {
+        // Rows after a gap would sit at the wrong row numbers.
+        const model = mkModel(50);
+        const layout = mkLayout({ qcy: 50 });
+        layout.qHyperCube.qDataPages = [
+            {
+                qArea: { qTop: 5, qLeft: 0, qWidth: 5, qHeight: 10 },
+                qMatrix: Array.from({ length: 10 }, (_, i) => mkRow(5 + i)),
+            },
+        ];
+        const { rows, area } = await fetchAllRows({ model, layout, maxRows: 50 });
+        expect(model.getHyperCubeData.mock.calls[0][1][0].qTop).toBe(0);
+        expect(rows.map((row) => row[0].qText)).toEqual(
+            Array.from({ length: 50 }, (_, i) => `${i}:0`)
+        );
+        expect(area.qTop).toBe(0);
+    });
+
+    it('describes the rows read in one area, from the first read', async () => {
+        const { area } = await fetchAllRows({
+            model: mkModel(2500),
+            layout: mkLayout({ qcy: 2500, prefetched: 1000 }),
+        });
+        expect(area).toEqual({ qTop: 0, qLeft: 0, qWidth: 5, qHeight: 2500 });
     });
 });

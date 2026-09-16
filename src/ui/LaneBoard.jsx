@@ -19,13 +19,14 @@ import styles from './chat.module.css';
 /**
  * Say which conversations the lanes show, when that is not simply all of them.
  *
- * Rows are read oldest first up to the message limit, so when the limit cut them short the conversations
- * with the latest activity are only the latest of those read — even when every conversation read has a
- * lane, the newest may never have been read — and the line says so.
+ * With lanes, the newest rows are read up to the message limit, so the conversations with the latest
+ * activity are read even when the limit cuts the rows short. The conversations are counted among the rows
+ * read, though — older ones may not have been read, and with fewer conversations read than lanes allowed,
+ * one of them would have had a lane — so the line says which rows it counted.
  *
  * @param {object} board - The board.
- * @param {object} [meta] - The conversation's `meta`: `truncated`, `rowsLoaded` and `total`.
- * @returns {?string} For example "4 of 12 conversations", or "3 conversations among the first 5,000 of
+ * @param {object} [meta] - The conversation's `meta`: `truncated`, `truncatedTo`, `rowsLoaded` and `total`.
+ * @returns {?string} For example "4 of 12 conversations", or "3 conversations among the newest 5,000 of
  *     12,000 rows"; null when every conversation is shown and every row was read.
  */
 export function laneCaption(board, meta = {}) {
@@ -33,7 +34,8 @@ export function laneCaption(board, meta = {}) {
     const shown = conversationsShownText(board);
     if (!meta?.truncated) return board.lanes.length < board.total ? shown : null;
     if (!Number.isFinite(meta.rowsLoaded) || !Number.isFinite(meta.total)) return shown;
-    return `${shown} among the first ${formatCount(meta.rowsLoaded)} of ${counted(meta.total, 'row', 'rows')}`;
+    const which = meta.truncatedTo ? `the ${meta.truncatedTo} ` : '';
+    return `${shown} among ${which}${formatCount(meta.rowsLoaded)} of ${counted(meta.total, 'row', 'rows')}`;
 }
 
 /**
