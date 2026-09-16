@@ -3,14 +3,21 @@ import { fireEvent, render, screen } from '@testing-library/react';
 
 // Virtuoso cannot scroll in jsdom, so its handle is spied on, and the range callback it would call
 // while scrolling is captured for the test to call.
-const virtuoso = vi.hoisted(() => ({ scrollToIndex: vi.fn(), rangeChanged: null }));
+const virtuoso = vi.hoisted(() => ({
+    scrollToIndex: vi.fn(),
+    rangeChanged: null,
+    props: null,
+    component: null,
+}));
 
 vi.mock('react-virtuoso', async (importOriginal) => {
     const actual = await importOriginal();
     const React = await import('react');
-    const wrap = (Component) =>
+    const wrap = (Component, name) =>
         React.forwardRef(function Spied(props, ref) {
             virtuoso.rangeChanged = props.rangeChanged;
+            virtuoso.props = props;
+            virtuoso.component = name;
             React.useImperativeHandle(ref, () => ({
                 scrollToIndex: virtuoso.scrollToIndex,
                 scrollIntoView: vi.fn(),
@@ -21,8 +28,8 @@ vi.mock('react-virtuoso', async (importOriginal) => {
         });
     return {
         ...actual,
-        Virtuoso: wrap(actual.Virtuoso),
-        GroupedVirtuoso: wrap(actual.GroupedVirtuoso),
+        Virtuoso: wrap(actual.Virtuoso, 'Virtuoso'),
+        GroupedVirtuoso: wrap(actual.GroupedVirtuoso, 'GroupedVirtuoso'),
     };
 });
 
@@ -143,6 +150,36 @@ describe('ChatLog while newer rows load', () => {
         rerender(
             <ChatLog conversation={conversation(['3', '4', '5'])} settings={settings} rect={rect} />
         );
+        expect(virtuoso.scrollToIndex).toHaveBeenCalledWith({ index: 1, align: 'start' });
+    });
+
+    // Found on the server: after a highlight click narrowed the list to one message, clearing the
+    // selection threw the reader to the last message. A list short enough to fit counts as scrolled
+    // to the bottom, and following the returning rows there overrode the return to the reader's
+    // message. The virtualizer's scrolling cannot run in jsdom, so the option itself is checked.
+    it.each([
+        ['Virtuoso', { dateSeparators: false }, (id) => message(id)],
+        [
+            'GroupedVirtuoso',
+            { dateSeparators: true },
+            (id) => message(id, { ts: Date.UTC(2026, 8, 8, 8, Number(id)) }),
+        ],
+    ])('does not follow returning rows to the bottom (%s)', (component, over, make) => {
+        const rows = (ids) => ({ ...conversation(ids), messages: ids.map(make) });
+        const { rerender } = render(
+            <ChatLog conversation={rows(['2'])} settings={{ ...settings, ...over }} rect={rect} />,
+            { wrapper: Viewport }
+        );
+        virtuoso.rangeChanged({ startIndex: 0, endIndex: 0 });
+        rerender(
+            <ChatLog
+                conversation={rows(['1', '2', '3', '4', '5'])}
+                settings={{ ...settings, ...over }}
+                rect={rect}
+            />
+        );
+        expect(virtuoso.component).toBe(component);
+        expect(virtuoso.props.followOutput).toBeUndefined();
         expect(virtuoso.scrollToIndex).toHaveBeenCalledWith({ index: 1, align: 'start' });
     });
 

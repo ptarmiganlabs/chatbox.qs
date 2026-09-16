@@ -910,7 +910,9 @@ export function ChatLog({
                                 </div>
                             )}
                             itemContent={renderRow}
-                            followOutput="smooth"
+                            // No followOutput: a list short enough to fit counts as scrolled
+                            // to the bottom, so following the rows a cleared selection brings
+                            // back would carry the reader past their message (GOTCHAS 28).
                             increaseViewportBy={200}
                         />
                     ) : (
@@ -928,7 +930,9 @@ export function ChatLog({
                             style={{ height: '100%' }}
                             totalCount={messages.length}
                             itemContent={renderRow}
-                            followOutput="smooth"
+                            // No followOutput: a list short enough to fit counts as scrolled
+                            // to the bottom, so following the rows a cleared selection brings
+                            // back would carry the reader past their message (GOTCHAS 28).
                             increaseViewportBy={200}
                         />
                     )}

@@ -307,9 +307,15 @@ react-virtuoso keeps its pixel offset when the data changes and reports whatever
 the top — before an effect can read where the reader was. The first version of the return to the
 reader's message read the key in an effect, and so returned to the wrong message.
 
+Its `followOutput` option undid the return in the other direction, and only on a live server: a list
+short enough to fit counts as scrolled to the bottom, so when clearing a selection brought the other
+messages back, the list followed them to the last one. While Loading replaced the list, that option
+never came into play.
+
 **Rule:** the key of the message the reader was at is captured while rendering the new messages, range
-reports are not taken as the reader's place until the return is done, and the return runs in a layout
-effect. _Guard: `test/component/chatlog-reload.test.jsx`._
+reports are not taken as the reader's place until the return is done, the return runs in a layout
+effect, and the list does not follow new rows to the bottom. _Guard:
+`test/component/chatlog-reload.test.jsx`._
 
 ## 29. An image or PDF export draws the object without the engine
 
