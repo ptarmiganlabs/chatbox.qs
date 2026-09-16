@@ -19,6 +19,8 @@ export const HIGHLIGHT_LIMIT_MAX = 10_000;
 
 /** Every highlight setting and its default, as it is stored under `chatbox`. */
 export const TEXT_TOOL_DEFAULTS = Object.freeze({
+    // The overview ruler beside the conversation, for highlights and search matches alike.
+    showRuler: true,
     highlight: Object.freeze({
         field: '',
         possibleWhenNoneSelected: true,
@@ -91,7 +93,8 @@ export function normalizeColorExpression(value) {
  * Read the highlight settings, falling back to the defaults for anything missing or invalid.
  *
  * @param {object} [bag] - The `chatbox` property bag of a layout or of the object properties.
- * @returns {{highlight: {field: string, possibleWhenNoneSelected: boolean, limit: number,
+ * @returns {{showRuler: boolean,
+ *     highlight: {field: string, possibleWhenNoneSelected: boolean, limit: number,
  *     clickToSelect: boolean, showSummary: boolean},
  *     match: {caseSensitive: boolean, wholeValues: boolean, flexibleWhitespace: boolean},
  *     category: {field: string, colorExpression: string, showLegend: boolean,
@@ -103,6 +106,7 @@ export function readTextToolSettings(bag) {
     const category = bag?.category ?? {};
     const defaults = TEXT_TOOL_DEFAULTS;
     return {
+        showRuler: booleanOr(bag?.showRuler, defaults.showRuler),
         highlight: {
             field: normalizeFieldName(highlight.field),
             possibleWhenNoneSelected: booleanOr(

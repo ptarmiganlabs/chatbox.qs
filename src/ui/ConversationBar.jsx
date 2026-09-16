@@ -82,10 +82,19 @@ function entryKey(entry) {
  * @param {Array<object>} [props.entries] - The legend's entries; none hides the legend.
  * @param {string} [props.counter] - What the counter says; '' for nothing.
  * @param {?object} [props.picking] - How chips select a category; null while they do not.
+ * @param {?object} [props.stepper] - The step buttons: `kind` ('highlight' or 'find'), `canStep`,
+ *     `tabbable` and `onStep(direction)`; null to leave them out.
  * @returns {?object} The rendered bar, or null when it has nothing to show.
  */
-export function ConversationBar({ info = null, entries = [], counter = '', picking = null }) {
-    const hasTools = Boolean(info) || counter !== '';
+export function ConversationBar({
+    info = null,
+    entries = [],
+    counter = '',
+    picking = null,
+    stepper = null,
+}) {
+    const hasTools = Boolean(info) || counter !== '' || stepper !== null;
+    const noun = stepper?.kind === 'find' ? 'match' : 'highlight';
     if (!hasTools && entries.length === 0) return null;
     return (
         <div className={styles.bar}>
@@ -99,6 +108,34 @@ export function ConversationBar({ info = null, entries = [], counter = '', picki
                     {counter !== '' ? (
                         <span className={styles.counter} role="status">
                             {counter}
+                        </span>
+                    ) : null}
+                    {stepper ? (
+                        <span className={styles.stepper}>
+                            <button
+                                type="button"
+                                className={styles.step}
+                                aria-label={`Previous ${noun}`}
+                                title={`Previous ${noun} (Shift+F3)`}
+                                aria-keyshortcuts="Shift+F3"
+                                disabled={!stepper.canStep}
+                                tabIndex={stepper.tabbable ? 0 : -1}
+                                onClick={() => stepper.onStep(-1)}
+                            >
+                                ▲
+                            </button>
+                            <button
+                                type="button"
+                                className={styles.step}
+                                aria-label={`Next ${noun}`}
+                                title={`Next ${noun} (F3)`}
+                                aria-keyshortcuts="F3"
+                                disabled={!stepper.canStep}
+                                tabIndex={stepper.tabbable ? 0 : -1}
+                                onClick={() => stepper.onStep(1)}
+                            >
+                                ▼
+                            </button>
                         </span>
                     ) : null}
                 </div>

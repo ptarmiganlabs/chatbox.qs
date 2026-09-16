@@ -86,3 +86,21 @@ describe('keyAction', () => {
         expect(keyAction('x')).toBeNull();
     });
 });
+
+describe('stepDirection', () => {
+    it('steps forward with F3 and Ctrl+G or Cmd+G, back with Shift', async () => {
+        const { stepDirection } = await import('../../src/ui/keyboard');
+        expect(stepDirection({ key: 'F3' })).toBe(1);
+        expect(stepDirection({ key: 'F3', shiftKey: true })).toBe(-1);
+        expect(stepDirection({ key: 'g', ctrlKey: true })).toBe(1);
+        expect(stepDirection({ key: 'G', metaKey: true, shiftKey: true })).toBe(-1);
+    });
+
+    it('leaves other keys, a plain G and anything with Alt alone', async () => {
+        const { stepDirection } = await import('../../src/ui/keyboard');
+        expect(stepDirection({ key: 'g' })).toBeNull();
+        expect(stepDirection({ key: 'F3', altKey: true })).toBeNull();
+        expect(stepDirection({ key: 'Enter' })).toBeNull();
+        expect(stepDirection(undefined)).toBeNull();
+    });
+});

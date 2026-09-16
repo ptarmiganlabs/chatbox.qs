@@ -1,7 +1,8 @@
 /**
  * Appearance settings.
  */
-import { ON_OFF } from './items';
+import { TEXT_TOOL_DEFAULTS } from '../highlight/settings';
+import { ON_OFF, switchItem } from './items';
 
 /**
  * Build the Appearance accordion section.
@@ -86,6 +87,13 @@ export function appearanceSection() {
                 step: 30,
                 defaultValue: 120,
             },
+            // Beside the conversation, with a tick where highlights or search matches are. It shows
+            // only while there are some, so it costs nothing without a highlight field or a search.
+            showRuler: switchItem({
+                ref: 'chatbox.showRuler',
+                label: 'Show overview ruler',
+                defaultValue: TEXT_TOOL_DEFAULTS.showRuler,
+            }),
         },
     };
 }

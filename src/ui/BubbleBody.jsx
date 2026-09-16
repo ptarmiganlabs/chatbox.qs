@@ -71,9 +71,10 @@ const COMPONENTS = { a: SafeLink, mark: MarkdownMark };
  * @param {?object} [props.highlights] - The message's highlights, from the conversation highlighter.
  * @param {number} [props.drawn] - How many of them are drawn.
  * @param {function(object): object} [props.describe] - Describes a highlight span.
+ * @param {?{kind: string, ordinal: number}} [props.current] - The current mark in this body.
  * @returns {object} The rendered body.
  */
-export function BubbleBody({ body, format, highlights = null, drawn, describe }) {
+export function BubbleBody({ body, format, highlights = null, drawn, describe, current = null }) {
     if (format !== 'markdown') {
         // React escapes children; the body can never become markup, highlighted or not.
         return (
@@ -83,6 +84,7 @@ export function BubbleBody({ body, format, highlights = null, drawn, describe })
                         text={body}
                         highlights={highlights.spans}
                         drawn={drawn}
+                        current={current}
                         describe={describe}
                     />
                 ) : (
@@ -98,7 +100,13 @@ export function BubbleBody({ body, format, highlights = null, drawn, describe })
         ? [
               [
                   rehypeHighlights,
-                  { expected: highlights.text, highlights: highlights.spans, drawn, describe },
+                  {
+                      expected: highlights.text,
+                      highlights: highlights.spans,
+                      drawn,
+                      current,
+                      describe,
+                  },
               ],
           ]
         : undefined;

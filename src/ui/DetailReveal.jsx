@@ -143,6 +143,7 @@ function DetailBody({ message, messages, index, showParticipant, quote = null })
                     <HighlightedText
                         text={message.body}
                         highlights={quote?.highlights}
+                        current={quote?.current ?? null}
                         describe={quote?.describe}
                     />
                 </div>

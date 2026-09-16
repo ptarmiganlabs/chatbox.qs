@@ -178,7 +178,8 @@ describe('highlights and categories sections', () => {
 
     const highlights = definition.items.highlights;
     const categories = definition.items.categories;
-    const TEXT_TOOL_REF = /^chatbox\.(highlight|match|category)\./;
+    const TEXT_TOOL_REF = /^chatbox\.((highlight|match|category)\.|showRuler$|showSearch$)/;
+    const SECTION_REF = /^chatbox\.(highlight|match|category)\./;
 
     it('sit after the message metadata and before the details', () => {
         const keys = Object.keys(definition.items);
@@ -208,7 +209,7 @@ describe('highlights and categories sections', () => {
     it('binds their settings only under chatbox.highlight, match and category', () => {
         const refs = [...walk(highlights), ...walk(categories)].map(([, item]) => item.ref);
         expect(refs.length).toBeGreaterThan(0);
-        for (const ref of refs) expect(ref).toMatch(TEXT_TOOL_REF);
+        for (const ref of refs) expect(ref).toMatch(SECTION_REF);
     });
 
     it('gives every setting the default from src/highlight/settings.js, and covers them all', () => {
@@ -295,5 +296,17 @@ describe('highlights and categories sections', () => {
             expect(categoryFieldIsSet(noCategory)).toBe(false);
             expect(categoryFieldIsSet(category)).toBe(true);
         }
+    });
+});
+
+describe('appearance: the overview ruler', () => {
+    it('is a switch under Appearance, since it shows search matches as well as highlights', () => {
+        const item = definition.items.appearance.items.showRuler;
+        expect(item).toMatchObject({
+            ref: 'chatbox.showRuler',
+            component: 'switch',
+            defaultValue: true,
+        });
+        expect(item.show).toBeUndefined();
     });
 });

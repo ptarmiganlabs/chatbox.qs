@@ -74,3 +74,20 @@ export function keyAction(key) {
     if (key === 'Escape' || key === 'Esc') return 'dismiss';
     return null;
 }
+
+/**
+ * Resolve a key press to a step through the highlights or the search matches.
+ *
+ * F3 and Shift+F3, and Ctrl+G and Ctrl+Shift+G (Cmd on a Mac), as browsers step through what their
+ * find found. With Alt held the keys belong to something else.
+ *
+ * @param {object} event - The keyboard event: `key`, `shiftKey`, `ctrlKey`, `metaKey`, `altKey`.
+ * @returns {?number} 1 for the next stop, -1 for the previous one, null for any other key.
+ */
+export function stepDirection(event) {
+    if (!event || event.altKey) return null;
+    const back = event.shiftKey ? -1 : 1;
+    if (event.key === 'F3') return back;
+    if ((event.ctrlKey || event.metaKey) && (event.key === 'g' || event.key === 'G')) return back;
+    return null;
+}

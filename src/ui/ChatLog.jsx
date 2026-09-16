@@ -11,17 +11,21 @@
  * every selection change, and a polite live region would announce the entire
  * conversation each time.
  */
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { GroupedVirtuoso, Virtuoso } from 'react-virtuoso';
 import styles from './chat.module.css';
 import { buildDayGroups, startsCluster } from '../chat/grouping';
 import DetailReveal, { resolveRevealMode } from './DetailReveal';
 import { resolveDensity } from './density';
-import { canReceiveTabStop, keyAction, nextFocusIndex } from './keyboard';
+import { canReceiveTabStop, keyAction, nextFocusIndex, stepDirection } from './keyboard';
 import { readSnapshot, shouldRenderAll } from './snapshot';
 import MessageRow from './render-message';
 import ConversationBar from './ConversationBar';
 import Notice from './Notice';
+import HighlightRuler from './HighlightRuler';
+import { isInView, scrollToElement } from './scroll';
+import { counterText as stopCounterText, stepStop } from '../highlight/navigator';
+import { rulerTicks } from '../highlight/ruler';
 import { drawnCount } from '../highlight/conversation-highlights';
 import { legendEntries } from '../highlight/legend';
 import { HIGHLIGHT_KINDS } from '../qix/highlight-source';
@@ -170,6 +174,17 @@ export function ChatLog({
     const firstVisibleRef = useRef(0);
     const listRef = useRef(null);
     const virtuosoRef = useRef(null);
+    // The element that scrolls: Virtuoso's scroller, or the list itself when every row is rendered.
+    const scrollerRef = useRef(null);
+    /**
+     * Keep hold of the virtualizer's scrolling element.
+     *
+     * @param {?HTMLElement} node - The scroller, or null when it goes.
+     * @returns {void}
+     */
+    const handleScrollerRef = useCallback((node) => {
+        scrollerRef.current = node;
+    }, []);
 
     // Where the reader is, by message key. A selection replaces the messages, and the reader's message
     // can move to another index or go; the key is what finds it again. `shownRef` holds the messages
@@ -230,20 +245,29 @@ export function ChatLog({
     // conversation costs the sheet a single tab stop instead of one per message.
     const [focusIndex, setFocusIndex] = useState(-1);
     const tabbable = canReceiveTabStop(keyboard);
+    // Set when a step has already scrolled to the message focus moves to.
+    const revealedRef = useRef(false);
 
     // Move real DOM focus after the index changes. In a virtualized list the
     // target may not be mounted yet, so scroll it into view first and focus on
-    // the next frame once it exists.
+    // the next frame once it exists. Focus never scrolls on its own: that would
+    // undo a step's scroll to its mark, and can scroll the Sense sheet.
     useEffect(() => {
         if (focusIndex < 0 || !tabbable) return undefined;
-        let frame = 0;
-        virtuosoRef.current?.scrollIntoView?.({ index: focusIndex });
-        frame = requestAnimationFrame(() => {
+        const revealed = revealedRef.current;
+        revealedRef.current = false;
+        if (!revealed) virtuosoRef.current?.scrollIntoView?.({ index: focusIndex });
+        const frame = requestAnimationFrame(() => {
             const node = listRef.current?.querySelector(`[data-message-index="${focusIndex}"]`);
-            node?.focus?.();
+            node?.focus?.({ preventScroll: true });
         });
         return () => cancelAnimationFrame(frame);
     }, [focusIndex, tabbable]);
+
+    // The current stop: the highlight the reader stepped to, by the message it is in. It counts
+    // only while the stops it was found among are the ones shown, so new highlights or a new
+    // conversation leave no current stop, without any bookkeeping on each path.
+    const [current, setCurrent] = useState(null);
 
     // Every warning is rendered, not just the first. Truncation and merged
     // bubbles can both be live at once, and showing only one silently hides
@@ -269,16 +293,49 @@ export function ChatLog({
                   highlights.answer.categories?.list ?? []
               )
             : [];
-    // The summary counts the highlights where it is shown; otherwise the counter does.
-    const counterText =
-        highlightValues && !highlights.placement.bar && !highlightBanner
-            ? counted(highlights.result.total, 'highlight', 'highlights')
-            : '';
     const showLabels = Boolean(
         highlights?.styles?.enabled && highlights.settings.category.showLabels
     );
     // Nothing is selected while the rows shown are the ones before a selection.
     const clickMode = reloading ? null : (highlights?.clickMode ?? null);
+
+    // What stepping, the counter and the ruler go through: the highlights.
+    const live = snapshot === null;
+    const stops = highlightValues ? highlights.result : null;
+    const stopKind = 'highlight';
+    const stopTotal = stops?.total ?? 0;
+    const currentMessage =
+        current !== null && current.stops === stops && current.kind === stopKind
+            ? (stops.indexByKey.get(current.key) ?? -1)
+            : -1;
+    const currentStop =
+        currentMessage >= 0 ? { messageIndex: currentMessage, ordinal: current.ordinal } : null;
+    let counterText = '';
+    if (stops && currentStop) {
+        counterText = stopCounterText({
+            kind: stopKind,
+            index: stops.firstStop[currentStop.messageIndex] + currentStop.ordinal,
+            count: stopTotal,
+            truncated: stops.searchTruncated,
+        });
+    } else if (stops && !highlights.placement.bar && !highlightBanner) {
+        // The summary counts the highlights where it is shown; otherwise the counter does.
+        counterText = counted(stopTotal, 'highlight', 'highlights');
+    }
+
+    const showRuler = settings.showRuler !== false;
+    const ticks = useMemo(
+        () =>
+            showRuler && stops && stopTotal > 0
+                ? rulerTicks({
+                      stops,
+                      count: messages.length,
+                      kind: stopKind,
+                      styles: highlights?.styles ?? null,
+                  })
+                : [],
+        [showRuler, stops, stopTotal, messages.length, highlights?.styles]
+    );
 
     /**
      * Find the marks for a message's detail quote.
@@ -296,9 +353,14 @@ export function ChatLog({
             message.bodyFormat === 'markdown'
                 ? highlights.matchPlain(message.body)
                 : highlights.result.byMessage[index]?.spans;
+        const here =
+            message.bodyFormat !== 'markdown' && currentStop?.messageIndex === index
+                ? { kind: stopKind, ordinal: currentStop.ordinal }
+                : null;
         return {
             highlights: spans,
             describe: highlights.describe,
+            current: here,
             clickMode,
             onPick: highlights.onSelectValues,
         };
@@ -367,6 +429,8 @@ export function ChatLog({
         const moved = nextFocusIndex(event.key, focusIndex, messages.length);
         if (moved !== null) {
             event.preventDefault();
+            // Moving on leaves the stop the reader stepped to.
+            setCurrent(null);
             setFocusIndex(moved);
             return;
         }
@@ -374,21 +438,142 @@ export function ChatLog({
         const action = keyAction(event.key);
         if (action === 'activate' && focusIndex >= 0) {
             event.preventDefault();
+            // Enter on a message holding the highlight stepped to selects its value; otherwise, and
+            // with Space, it opens the details as it always has.
+            if (
+                event.key === 'Enter' &&
+                clickMode === 'select' &&
+                currentStop?.messageIndex === focusIndex
+            ) {
+                const span = stops.byMessage[focusIndex].spans[currentStop.ordinal];
+                highlights.onSelectValues?.(span.values, Boolean(event.ctrlKey || event.metaKey));
+                return;
+            }
             toggleDetail(messages[focusIndex]);
             return;
         }
         if (action === 'dismiss') {
             event.preventDefault();
-            // Escape closes the detail if one is open; a second Escape hands
-            // focus back to Sense so the reader can carry on tabbing the sheet
+            // Escape closes the detail if one is open, then lets go of the stop stepped to; the
+            // next Escape hands focus back to Sense so the reader can carry on tabbing the sheet
             // rather than being trapped in the conversation.
             if (openId) {
                 closeDetail();
+            } else if (currentStop) {
+                setCurrent(null);
             } else {
                 setFocusIndex(-1);
                 keyboard?.blur?.(true);
             }
         }
+    };
+
+    /**
+     * Find the message the reader is at: the first one whose bottom is below the top of the view.
+     *
+     * @returns {number} Its index.
+     */
+    const readingIndex = () => {
+        const scroller = renderAll ? listRef.current : scrollerRef.current;
+        const top = scroller?.getBoundingClientRect?.().top;
+        const nodes = listRef.current?.querySelectorAll?.('[data-message-index]') ?? [];
+        if (typeof top === 'number') {
+            for (const node of nodes) {
+                if (node.getBoundingClientRect().bottom > top) {
+                    return Number(node.getAttribute('data-message-index'));
+                }
+            }
+        }
+        return firstVisibleRef.current;
+    };
+
+    /**
+     * Scroll a stop's mark into view once its message is drawn, unless it already is.
+     *
+     * @param {number} messageIndex - The message the stop is in.
+     * @param {number} ordinal - The stop's ordinal in the message.
+     * @returns {void}
+     */
+    const revealMark = (messageIndex, ordinal) => {
+        const list = listRef.current;
+        const scroller = renderAll ? list : scrollerRef.current;
+        if (!list || !scroller) return;
+        const row = `[data-message-index="${messageIndex}"]`;
+        const target =
+            list.querySelector(`${row} mark[data-h="${ordinal}"]`) ?? list.querySelector(row);
+        if (target && !isInView(scroller, target)) scrollToElement(scroller, target);
+    };
+
+    /**
+     * Step to the next or the previous stop.
+     *
+     * @param {number} direction - 1 for the next stop, -1 for the previous one.
+     * @param {boolean} fromList - Whether the step came from a key pressed in the list, which moves
+     *     focus to the stop's message.
+     * @returns {boolean} True when there was a stop to step to.
+     */
+    const step = (direction, fromList) => {
+        if (!stops || stopTotal === 0) return false;
+        const from = focusIndex >= 0 ? focusIndex : readingIndex();
+        const next = stepStop({ stops, current: currentStop, direction, from });
+        if (next === null) return false;
+        setCurrent({
+            kind: stopKind,
+            key: bubbleKey(messages[next.messageIndex]),
+            ordinal: next.ordinal,
+            stops,
+        });
+        const { messageIndex, ordinal } = next;
+        /**
+         * Reveal the mark on the frame after its message is drawn.
+         *
+         * @returns {void}
+         */
+        const afterScroll = () => requestAnimationFrame(() => revealMark(messageIndex, ordinal));
+        if (renderAll) afterScroll();
+        else {
+            virtuosoRef.current?.scrollIntoView?.({
+                index: messageIndex,
+                behavior: 'auto',
+                done: afterScroll,
+            });
+        }
+        if (fromList && tabbable) {
+            revealedRef.current = true;
+            setFocusIndex(messageIndex);
+        }
+        return true;
+    };
+
+    /**
+     * Step with F3 or Ctrl/Cmd+G, from anywhere in the object.
+     *
+     * With nothing to step to, the keys keep their meaning in the browser.
+     *
+     * @param {object} event - The React keyboard event.
+     * @returns {void}
+     */
+    const handleRootKeyDown = (event) => {
+        const direction = stepDirection(event);
+        if (direction === null) return;
+        const fromList = Boolean(listRef.current?.contains(event.target));
+        if (step(direction, fromList)) event.preventDefault();
+    };
+
+    /**
+     * Go to a message the ruler was clicked at.
+     *
+     * @param {number} index - The message's index.
+     * @returns {void}
+     */
+    const jumpTo = (index) => {
+        setCurrent(null);
+        if (!renderAll) {
+            virtuosoRef.current?.scrollToIndex?.({ index, align: 'start', behavior: 'auto' });
+            return;
+        }
+        const node = listRef.current?.querySelector(`[data-message-index="${index}"]`);
+        if (node) scrollToElement(listRef.current, node, { position: 0 });
     };
 
     /**
@@ -449,6 +634,11 @@ export function ChatLog({
                     describe={highlights?.describe}
                     highlightClick={clickMode}
                     onHighlightClick={handleHighlightClick}
+                    current={
+                        currentStop?.messageIndex === index
+                            ? { kind: stopKind, ordinal: currentStop.ordinal }
+                            : null
+                    }
                 />
                 {isOpen && revealMode === 'inline' ? (
                     <DetailReveal
@@ -490,6 +680,7 @@ export function ChatLog({
             data-density={density}
             data-labels={showLabels ? 'true' : undefined}
             data-marks={clickMode ?? undefined}
+            onKeyDown={handleRootKeyDown}
         >
             {reloading ? <ReloadingLine reloading={reloading} /> : null}
             <Notice notice={notice} />
@@ -508,11 +699,32 @@ export function ChatLog({
                     entries={legend}
                     counter={counterText}
                     picking={picking}
+                    stepper={
+                        live && stops
+                            ? {
+                                  kind: stopKind,
+                                  canStep: stopTotal > 0,
+                                  tabbable,
+                                  /**
+                                   * Step from the bar's buttons, leaving focus on the button.
+                                   *
+                                   * @param {number} direction - 1 for next, -1 for previous.
+                                   * @returns {void}
+                                   */
+                                  onStep: (direction) => {
+                                      step(direction, false);
+                                  },
+                              }
+                            : null
+                    }
                 />
             ) : null}
             <div className={styles.main}>
                 <div
-                    className={styles.list}
+                    className={
+                        // Every row rendered in a live object: the list itself must scroll.
+                        renderAll && live ? `${styles.list} ${styles.listScroll}` : styles.list
+                    }
                     role="list"
                     aria-label={`Conversation, ${messages.length} messages`}
                     aria-busy={reloading ? 'true' : undefined}
@@ -539,6 +751,7 @@ export function ChatLog({
                             ref={virtuosoRef}
                             initialTopMostItemIndex={snapshot?.firstVisibleIndex ?? 0}
                             rangeChanged={handleRangeChanged}
+                            scrollerRef={handleScrollerRef}
                             // react-virtuoso makes its scroller tabbable by
                             // default. Left alone that is a second tab stop for
                             // the list, and it exists even when Sense has not
@@ -561,6 +774,7 @@ export function ChatLog({
                             ref={virtuosoRef}
                             initialTopMostItemIndex={snapshot?.firstVisibleIndex ?? 0}
                             rangeChanged={handleRangeChanged}
+                            scrollerRef={handleScrollerRef}
                             // react-virtuoso makes its scroller tabbable by
                             // default. Left alone that is a second tab stop for
                             // the list, and it exists even when Sense has not
@@ -575,6 +789,15 @@ export function ChatLog({
                         />
                     )}
                 </div>
+                {ticks.length ? (
+                    <HighlightRuler
+                        ticks={ticks}
+                        count={messages.length}
+                        kind={stopKind}
+                        interactive={live}
+                        onJump={jumpTo}
+                    />
+                ) : null}
                 {detail}
             </div>
         </div>

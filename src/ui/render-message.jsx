@@ -54,6 +54,7 @@ function initials(label) {
  *   'locked' while its field is locked, null otherwise.
  * @param {Function} [props.onHighlightClick] - Called with (index, ordinal, toggle) for a click that
  *   selects a highlight's value.
+ * @param {?{kind: string, ordinal: number}} [props.current] - The current mark in this message's body.
  * @returns {object} The rendered row.
  */
 export function MessageRow({
@@ -72,6 +73,7 @@ export function MessageRow({
     describe,
     highlightClick = null,
     onHighlightClick,
+    current = null,
 }) {
     const own = message.side === 'right';
     const groupSize = message.recipients?.length ?? 0;
@@ -198,6 +200,7 @@ export function MessageRow({
                             highlights={highlights}
                             drawn={drawn}
                             describe={describe}
+                            current={current}
                         />
                     ) : message.merged ? (
                         <div className={styles.bodyMissing}>
