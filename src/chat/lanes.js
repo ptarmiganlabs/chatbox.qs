@@ -12,8 +12,10 @@
  * - **Free** scrolling: the lanes' messages one lane after another, so each lane is one stretch of the
  *   board, shown in a list of its own.
  * - **Linked** scrolling: the shown messages in display order, packed into rows. A message starts a new
- *   row when its lane already has one in the row, or when a new day starts, so rows are stretches of the
- *   board too, everything in a row is later than everything above it, and a row never crosses a day.
+ *   row when its lane already has one in the row, when a new day starts, or when it was sent more than
+ *   the grouping gap (*Group messages within*) away from the row's first message. So rows are stretches of
+ *   the board too, everything in a row is later than everything above it, a row never crosses a day, and
+ *   messages side by side were sent close together: after a pause, a message goes below, not beside.
  *
  * Pure: no DOM, no engine. The settings have one definition, as `src/highlight/settings.js` does for
  * highlighting, used by the object properties, the panel's defaults and the render code.
@@ -22,6 +24,9 @@ import { buildDayGroups, dayLabel, dayStarts } from './grouping';
 
 /** The most conversations side by side. Also keeps a row's lanes within a bitmask. */
 export const LANE_MAX = 10;
+
+/** The grouping gap when the setting holds no usable number, as the conversation view reads it. */
+export const DEFAULT_GAP_SEC = 120;
 
 /** The narrowest a lane is laid out; a narrower object shows fewer lanes. */
 export const MIN_LANE_WIDTH_PX = 220;
@@ -180,21 +185,33 @@ export function fitLaneCount(width, max) {
  *
  * @param {Int32Array} laneOf - Each message's lane, in display order.
  * @param {Uint8Array} starts - 1 where a day starts, from `dayStarts`.
+ * @param {object} [options] - Options.
+ * @param {?Array<?number>} [options.times] - Each message's time in epoch milliseconds, null where it has
+ *     none; without times, only lanes and days start rows.
+ * @param {number} [options.gapMs] - How far from the row's first dated message a dated message may be and
+ *     still join the row, either way round, so Newest first packs the same.
  * @returns {{count: number, start: Int32Array, of: Int32Array}} How many rows, the first message of each
  *     (with the message count after the last row), and each message's row.
  */
-export function packRows(laneOf, starts) {
+export function packRows(laneOf, starts, { times = null, gapMs = Infinity } = {}) {
     const count = laneOf.length;
     const of = new Int32Array(count);
     const firsts = [];
     let taken = 0;
+    // The time of the row's first dated message; an undated message joins a row without being compared.
+    let rowTime = null;
     for (let index = 0; index < count; index++) {
         const bit = 1 << laneOf[index];
-        if (index === 0 || (taken & bit) !== 0 || starts[index] === 1) {
+        const time = times ? times[index] : null;
+        const dated = typeof time === 'number' && Number.isFinite(time);
+        const tooFar = dated && rowTime !== null && Math.abs(time - rowTime) > gapMs;
+        if (index === 0 || (taken & bit) !== 0 || starts[index] === 1 || tooFar) {
             firsts.push(index);
             taken = 0;
+            rowTime = null;
         }
         taken |= bit;
+        if (dated && rowTime === null) rowTime = time;
         of[index] = firsts.length - 1;
     }
     const start = new Int32Array(firsts.length + 1);
@@ -215,12 +232,14 @@ export function packRows(laneOf, starts) {
  * @param {number} [options.width] - The object's width, to fit the lanes to.
  * @param {?Array<string>} [options.keys] - The lanes to show, in order, as a snapshot recorded them; in
  *     place of ranking and fitting.
+ * @param {*} [options.gapSec] - *Group messages within*, in seconds: how close in time messages side by
+ *     side in a linked row must be; {@link DEFAULT_GAP_SEC} when it is not a number of 0 or more.
  * @returns {object} `scroll`, `total` (conversations), `lanes` (each with `key`, `label`, `elem`, `count`,
  *     `start` — its first board index in free scrolling, -1 in linked —, `indices` and `messages`),
  *     `messages` in board order, `laneOf`, `posInLane`, `prevInLane` (-1 at a lane's first message) and,
  *     for linked scrolling, `rows`.
  */
-export function buildBoard(messages, { max, scroll, width = 0, keys = null }) {
+export function buildBoard(messages, { max, scroll, width = 0, keys = null, gapSec }) {
     const list = Array.isArray(messages) ? messages : [];
     const ranked = rankLanes(list);
     let chosen = [];
@@ -272,8 +291,23 @@ export function buildBoard(messages, { max, scroll, width = 0, keys = null }) {
         laneOf,
         posInLane,
         prevInLane,
-        rows: linked ? packRows(laneOf, dayStarts(boardMessages)) : null,
+        rows: linked
+            ? packRows(laneOf, dayStarts(boardMessages), {
+                  times: boardMessages.map((message) => message.ts),
+                  gapMs: gapSecondsOf(gapSec) * 1000,
+              })
+            : null,
     };
+}
+
+/**
+ * Read the grouping gap the way the conversation view does.
+ *
+ * @param {*} value - The stored *Group messages within* setting.
+ * @returns {number} The gap in seconds: the value when it is a number of 0 or more, else the default.
+ */
+function gapSecondsOf(value) {
+    return Number(value) >= 0 ? Number(value) : DEFAULT_GAP_SEC;
 }
 
 /**
@@ -285,12 +319,19 @@ export function buildBoard(messages, { max, scroll, width = 0, keys = null }) {
  * @param {boolean} request.hasThread - Whether a Conversation / thread dimension resolves.
  * @param {number} [request.width] - The object's width.
  * @param {?Array<string>} [request.keys] - The lanes a snapshot recorded.
+ * @param {*} [request.gapSec] - The *Group messages within* setting, in seconds.
  * @returns {?object} The board from {@link buildBoard}; null with lanes off, no thread dimension or no
  *     messages.
  */
-export function laneBoardFor({ messages, settings, hasThread, width = 0, keys = null }) {
+export function laneBoardFor({ messages, settings, hasThread, width = 0, keys = null, gapSec }) {
     if (!settings?.show || !hasThread || !messages?.length) return null;
-    return buildBoard(messages, { max: settings.max, scroll: settings.scroll, width, keys });
+    return buildBoard(messages, {
+        max: settings.max,
+        scroll: settings.scroll,
+        width,
+        keys,
+        gapSec,
+    });
 }
 
 /**

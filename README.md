@@ -104,7 +104,9 @@ many messages it has.
   choose which.
 - **Linked scrolling** (the default) lines the lanes up in time, with one scrollbar for all of them.
   Messages are laid out in rows: a row holds at most one message per lane, everything in a row is later
-  than everything above it, and a row never crosses a day. A quiet lane shows gaps while another talks.
+  than everything above it, a row never crosses a day, and messages side by side were sent within **Group
+  messages within** (Appearance, default 2 minutes) of each other — after a longer pause, a message
+  starts a row of its own, below. A quiet lane shows gaps while another talks.
 - **Free scrolling** gives each lane its own list and scrollbar, packed without gaps, and each keeps its
   place when a selection changes the others.
 - Messages without a thread share a **(no conversation)** lane.

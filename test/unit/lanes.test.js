@@ -261,6 +261,88 @@ describe('buildBoard, linked scrolling', () => {
     });
 });
 
+describe('linked rows and pauses', () => {
+    const at = (h, m) => new Date(2026, 8, 16, h, m).getTime();
+    // Three lanes: a few messages in A, a pause, one in B, then A again; C spoke an hour before.
+    const scenario = [
+        msg('1', 'C', { ts: at(9, 0) }),
+        msg('2', 'A', { ts: at(10, 0) }),
+        msg('3', 'A', { ts: at(10, 1) }),
+        msg('4', 'A', { ts: at(10, 2) }),
+        msg('5', 'B', { ts: at(14, 0) }),
+        msg('6', 'A', { ts: at(14, 5) }),
+    ];
+    /** Each row's message ids, in board order. */
+    const rowsOf = (board) =>
+        Array.from({ length: board.rows.count }, (_, row) =>
+            board.messages.slice(board.rows.start[row], board.rows.start[row + 1]).map((m) => m.id)
+        );
+
+    it('never puts a message beside one sent long before it', () => {
+        const board = buildBoard(scenario, { max: 3, scroll: 'linked', gapSec: 120 });
+        // Every message here is more than two minutes from the ones around it: one row each, in time order.
+        expect(rowsOf(board)).toEqual([['1'], ['2'], ['3'], ['4'], ['5'], ['6']]);
+    });
+
+    it('still pairs messages sent close together in different lanes', () => {
+        const board = buildBoard(
+            [
+                msg('1', 'A', { ts: at(10, 0) }),
+                msg('2', 'B', { ts: at(10, 1) }),
+                msg('3', 'A', { ts: at(10, 2) }),
+                msg('4', 'B', { ts: at(10, 5) }),
+            ],
+            { max: 2, scroll: 'linked', gapSec: 120 }
+        );
+        // 3 joins no row with 1 (lane A repeats); 4 is three minutes after 3, too far to share its row.
+        expect(rowsOf(board)).toEqual([['1', '2'], ['3'], ['4']]);
+    });
+
+    it('measures from the row’s first message, whichever way the messages are shown', () => {
+        const oldestFirst = [
+            msg('1', 'A', { ts: at(10, 0) }),
+            msg('2', 'B', { ts: at(10, 1) }),
+            msg('3', 'C', { ts: at(10, 3) }),
+        ];
+        const oldest = buildBoard(oldestFirst, { max: 3, scroll: 'linked', gapSec: 120 });
+        expect(rowsOf(oldest)).toEqual([['1', '2'], ['3']]);
+        const newest = buildBoard([...oldestFirst].reverse(), {
+            max: 3,
+            scroll: 'linked',
+            gapSec: 120,
+        });
+        expect(rowsOf(newest)).toEqual([['3', '2'], ['1']]);
+    });
+
+    it('follows the setting: a wider gap pairs more, 0 pairs only messages sent at the same time', () => {
+        const wide = buildBoard(scenario, { max: 3, scroll: 'linked', gapSec: 600 });
+        expect(rowsOf(wide)).toEqual([['1'], ['2'], ['3'], ['4'], ['5', '6']]);
+        const same = buildBoard(
+            [msg('1', 'A', { ts: at(10, 0) }), msg('2', 'B', { ts: at(10, 0) })],
+            { max: 2, scroll: 'linked', gapSec: 0 }
+        );
+        expect(rowsOf(same)).toEqual([['1', '2']]);
+    });
+
+    it('uses two minutes when the setting holds no number, as the conversation view does', () => {
+        const close = [msg('1', 'A', { ts: at(10, 0) }), msg('2', 'B', { ts: at(10, 2) })];
+        for (const gapSec of [undefined, 'lots', -5]) {
+            expect(
+                rowsOf(buildBoard(close, { max: 2, scroll: 'linked', gapSec })),
+                String(gapSec)
+            ).toEqual([['1', '2']]);
+        }
+    });
+
+    it('lets undated messages join a row without being compared', () => {
+        const board = buildBoard(
+            [msg('1', 'A', { ts: at(10, 0) }), msg('2', 'B'), msg('3', 'C', { ts: at(10, 1) })],
+            { max: 3, scroll: 'linked', gapSec: 120 }
+        );
+        expect(rowsOf(board)).toEqual([['1', '2', '3']]);
+    });
+});
+
 describe('packRows', () => {
     it('breaks on a repeated lane and on a day start, and never otherwise', () => {
         const rows = packRows(
@@ -270,6 +352,15 @@ describe('packRows', () => {
         expect([...rows.of]).toEqual([0, 0, 0, 1, 1, 2]);
         const days = packRows(Int32Array.from([0, 1, 2]), Uint8Array.from([1, 0, 1]));
         expect([...days.of]).toEqual([0, 0, 1]);
+    });
+
+    it('starts a row when a dated message is further than the gap from the row’s first dated one', () => {
+        const minute = 60_000;
+        const rows = packRows(Int32Array.from([0, 1, 2]), new Uint8Array(3), {
+            times: [null, 0, 5 * minute],
+            gapMs: 2 * minute,
+        });
+        expect([...rows.of]).toEqual([0, 0, 1]);
     });
 
     it('handles no messages', () => {

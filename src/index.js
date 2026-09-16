@@ -486,6 +486,7 @@ export default function supernova(galaxy) {
                     hasThread,
                     width: rect?.width ?? 0,
                     keys: readLaneSnapshot(staleLayout)?.keys ?? null,
+                    gapSec: settings.groupGapSec,
                 });
                 const shown = board ? { ...conversation, messages: board.messages } : conversation;
 

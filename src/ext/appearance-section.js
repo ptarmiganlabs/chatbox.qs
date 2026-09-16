@@ -82,6 +82,10 @@ export function appearanceSection() {
                 type: 'number',
                 component: 'slider',
                 label: 'Group messages within (seconds)',
+                description:
+                    'Messages from one sender this close together share a header. With conversations ' +
+                    'side by side and linked scrolling, messages this close together can also share a ' +
+                    'row; after a longer pause, a message starts a row of its own.',
                 min: 0,
                 max: 600,
                 step: 30,

@@ -151,10 +151,10 @@ describe('ChatLog with conversations side by side, scrolling linked', () => {
     });
 
     it('groups the rows by day, the counts adding up to the rows', () => {
-        const day = (d, h) => new Date(2026, 8, d, h).getTime();
+        const day = (d, h, m = 0) => new Date(2026, 8, d, h, m).getTime();
         const dated = [
             message('1', 'T1', 'a', { ts: day(7, 9) }),
-            message('2', 'T2', 'b', { ts: day(7, 10) }),
+            message('2', 'T2', 'b', { ts: day(7, 9, 1) }),
             message('3', 'T1', 'c', { ts: day(8, 9) }),
         ];
         renderLanes({ messages: dated, settings: { ...settings, dateSeparators: true } });
@@ -163,10 +163,10 @@ describe('ChatLog with conversations side by side, scrolling linked', () => {
     });
 
     it('puts every day heading before its first row when every message is rendered', () => {
-        const day = (d, h) => new Date(2026, 8, d, h).getTime();
+        const day = (d, h, m = 0) => new Date(2026, 8, d, h, m).getTime();
         const dated = [
             message('1', 'T1', 'a', { ts: day(7, 9) }),
-            message('2', 'T2', 'b', { ts: day(7, 10) }),
+            message('2', 'T2', 'b', { ts: day(7, 9, 1) }),
             message('3', 'T1', 'c', { ts: day(8, 9) }),
         ];
         const { container } = renderLanes({
@@ -179,6 +179,25 @@ describe('ChatLog with conversations side by side, scrolling linked', () => {
             (node) => (node.hasAttribute('data-lane-row') ? `row ${node.dataset.laneRow}` : 'day')
         );
         expect(order).toEqual(['day', 'row 0', 'day', 'row 1']);
+    });
+
+    it('puts a message sent after a pause below the row before it, not beside it', () => {
+        const at = (h, m) => new Date(2026, 8, 16, h, m).getTime();
+        const { container } = renderLanes({
+            messages: [
+                message('1', 'T1', 'a1', { ts: at(10, 0) }),
+                message('2', 'T1', 'a2', { ts: at(10, 1) }),
+                message('3', 'T2', 'b1', { ts: at(14, 0) }),
+                message('4', 'T1', 'a3', { ts: at(14, 1) }),
+            ],
+        });
+        // T1 has the latest message, so it is the left column. b1 comes four hours after a2, so it starts
+        // a row of its own; a3, a minute after b1, shares that row.
+        expect(cells(container)).toEqual([
+            ['a1', ''],
+            ['a2', ''],
+            ['a3', 'b1'],
+        ]);
     });
 
     it('returns the reader to the row of the message they were at, again after the commit', async () => {
