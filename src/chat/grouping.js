@@ -57,6 +57,34 @@ export function dayKey(ts) {
 }
 
 /**
+ * Day label formatters, by whether they name the year.
+ *
+ * Making an Intl.DateTimeFormat costs far more than formatting with one, and a conversation over many days
+ * labels a day header for every one of them, so each formatter is made once.
+ */
+const dayFormatters = new Map();
+
+/**
+ * Get the formatter for day labels.
+ *
+ * @param {boolean} withYear - Whether the label names the year.
+ * @returns {Intl.DateTimeFormat} The formatter, made on first use.
+ */
+function dayFormatter(withYear) {
+    let formatter = dayFormatters.get(withYear);
+    if (!formatter) {
+        formatter = new Intl.DateTimeFormat(undefined, {
+            weekday: 'short',
+            day: 'numeric',
+            month: 'short',
+            year: withYear ? 'numeric' : undefined,
+        });
+        dayFormatters.set(withYear, formatter);
+    }
+    return formatter;
+}
+
+/**
  * Human label for a day separator.
  *
  * `now` is a parameter rather than read from the clock so the relative labels
@@ -73,14 +101,9 @@ export function dayLabel(ts, now = Date.now()) {
 
     const d = new Date(ts);
     try {
-        return new Intl.DateTimeFormat(undefined, {
-            weekday: 'short',
-            day: 'numeric',
-            month: 'short',
-            // Only name the year when it is not the current one — "12 Mar" reads
-            // better than "12 Mar 2026" for a conversation from this year.
-            year: d.getFullYear() === new Date(now).getFullYear() ? undefined : 'numeric',
-        }).format(d);
+        // Only name the year when it is not the current one — "12 Mar" reads
+        // better than "12 Mar 2026" for a conversation from this year.
+        return dayFormatter(d.getFullYear() !== new Date(now).getFullYear()).format(d);
     } catch {
         return key;
     }

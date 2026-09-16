@@ -247,6 +247,36 @@ describe('ChatLog with conversations side by side, scrolling freely', () => {
         ]);
     });
 
+    it('scrolls a lane that went and came back, through its new list', () => {
+        const search = { initialQuery: 'reload one' };
+        const { container, rerender } = renderLanes({ search });
+        const view = (max) => {
+            const board = buildBoard(MESSAGES, { max, scroll: 'free' });
+            rerender(
+                <ChatLog
+                    conversation={conversationOf(board)}
+                    board={board}
+                    settings={settings}
+                    rect={{ width: 900, height: 600 }}
+                    keyboard={active}
+                    search={search}
+                />
+            );
+        };
+        // T1, the least recent, goes with fewer lanes and comes back with more.
+        view(2);
+        expect(screen.queryByRole('list', { name: /^T1,/ })).not.toBeInTheDocument();
+        view(3);
+        virtuoso.calls.length = 0;
+        fireEvent.keyDown(container.firstChild, { key: 'F3' });
+        expect(virtuoso.calls.filter((call) => call.method === 'scrollIntoView')).toEqual([
+            expect.objectContaining({
+                lane: 'v:T1',
+                location: expect.objectContaining({ index: 2 }),
+            }),
+        ]);
+    });
+
     it('heads each lane’s first message with its author, whoever wrote the lane before', () => {
         // T2's last message and T1's first are both Ada's, side by side on the board.
         renderLanes();

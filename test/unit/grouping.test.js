@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
     buildDayGroups,
     dayKey,
@@ -175,6 +175,22 @@ describe('startsCluster across sides', () => {
         const previous = { authorKey: 'Ada', ts: null, recipients: null, side: 'left' };
         const message = { authorKey: 'Ada', ts: null, recipients: null, side: 'right' };
         expect(startsCluster(message, previous, 120)).toBe(true);
+    });
+});
+
+describe('day label formatters', () => {
+    it('labels days with a formatter made once, not once a label', () => {
+        const made = vi.spyOn(Intl, 'DateTimeFormat');
+        const now = at(2026, 9, 16);
+        const labels = [];
+        for (let day = 1; day <= 40; day += 1) labels.push(dayLabel(at(2026, 3, day), now));
+        for (let day = 1; day <= 5; day += 1) labels.push(dayLabel(at(2024, 3, day), now));
+        // One formatter for this year's days and one naming the year, at most, and none if earlier
+        // labels in this file already made them.
+        expect(made.mock.calls.length).toBeLessThanOrEqual(2);
+        made.mockRestore();
+        expect(new Set(labels).size).toBe(45);
+        expect(labels[40]).toContain('2024');
     });
 });
 

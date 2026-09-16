@@ -9,7 +9,7 @@
  *
  * Conversation names are field data, and reach the DOM as React children and attributes only.
  */
-import { useImperativeHandle, useRef } from 'react';
+import { useImperativeHandle, useMemo, useRef } from 'react';
 import { buildDayGroups } from '../chat/grouping';
 import { conversationsShownText, rowDayGroups } from '../chat/lanes';
 import { counted, formatCount } from '../util/format';
@@ -73,6 +73,8 @@ export function LaneBoard({
     // Each lane's list, by lane key: a lane that stays keeps its list, and its place, whatever lanes
     // come or go beside it.
     const lists = useRef(new Map());
+    // A stable ref callback per lane, so React does not detach and attach a lane's list on every render.
+    // A lane's callback goes when its list does, so the map holds only the lanes on screen.
     const refs = useRef(new Map());
     // The lane the reader last scrolled, clicked or focused: where "where the reader is" is read.
     const activeRef = useRef(0);
@@ -103,23 +105,35 @@ export function LaneBoard({
      * @returns {function(?object): void} The callback.
      */
     const refFor = (key) => {
-        if (!refs.current.has(key)) {
-            refs.current.set(
-                key,
-                /**
-                 * Keep hold of a lane's list handle.
-                 *
-                 * @param {?object} handle - The handle, or null when the lane goes.
-                 * @returns {void}
-                 */
-                (handle) => {
-                    if (handle) lists.current.set(key, handle);
-                    else lists.current.delete(key);
+        let callback = refs.current.get(key);
+        if (!callback) {
+            /**
+             * Keep hold of a lane's list handle, and let go of the lane when its list goes.
+             *
+             * @param {?object} handle - The handle, or null when the lane goes.
+             * @returns {void}
+             */
+            callback = (handle) => {
+                if (handle) {
+                    lists.current.set(key, handle);
+                    return;
                 }
-            );
+                lists.current.delete(key);
+                // Only this callback's own entry: a lane that has come back has a new one.
+                if (refs.current.get(key) === callback) refs.current.delete(key);
+            };
+            refs.current.set(key, callback);
         }
-        return refs.current.get(key);
+        return callback;
     };
+
+    // The day headers, worked out once per board rather than on every render: the object renders again
+    // for every step of a resize, and the board stays the same while the lanes do.
+    const dayGroups = useMemo(() => {
+        if (!dateSeparators) return null;
+        if (board.rows) return rowDayGroups(board);
+        return board.lanes.map((lane) => buildDayGroups(lane.messages));
+    }, [board, dateSeparators]);
 
     useImperativeHandle(
         ref,
@@ -266,7 +280,7 @@ export function LaneBoard({
                         ref={rowsRef}
                         messages={board.messages}
                         rows={rows}
-                        dayGroups={dateSeparators ? rowDayGroups(board.messages, rows) : null}
+                        dayGroups={dayGroups}
                         renderItem={renderCells}
                         renderAll={renderAll}
                         live={live}
@@ -312,9 +326,7 @@ export function LaneBoard({
                                     ref={refFor(lane.key)}
                                     messages={lane.messages}
                                     offset={lane.start}
-                                    dayGroups={
-                                        dateSeparators ? buildDayGroups(lane.messages) : null
-                                    }
+                                    dayGroups={dayGroups?.[number] ?? null}
                                     renderItem={renderRow}
                                     renderAll={renderAll}
                                     live={live}

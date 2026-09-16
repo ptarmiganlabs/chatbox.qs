@@ -21,7 +21,7 @@
  * highlighting, used by the object properties, the panel's defaults and the render code.
  */
 import { counted } from '../util/format';
-import { buildDayGroups, dayLabel, dayStarts } from './grouping';
+import { dayLabel, dayStarts } from './grouping';
 
 /** The most conversations side by side. Also keeps a row's lanes within a bitmask. */
 export const LANE_MAX = 10;
@@ -241,7 +241,7 @@ export function packRows(laneOf, starts, { times = null, gapMs = Infinity } = {}
  * @returns {object} `scroll`, `total` (conversations), `lanes` (each with `key`, `label`, `elem`, `count`,
  *     `start` — its first board index in free scrolling, -1 in linked —, `indices` and `messages`),
  *     `messages` in board order, `laneOf`, `posInLane`, `prevInLane` (-1 at a lane's first message) and,
- *     for linked scrolling, `rows`.
+ *     for linked scrolling, `rows` and `dayStarts` (null for free scrolling).
  */
 export function buildBoard(messages, { max, scroll, width = 0, keys = null, gapSec }) {
     const list = Array.isArray(messages) ? messages : [];
@@ -267,6 +267,8 @@ export function buildBoard(messages, { max, scroll, width = 0, keys = null, gapS
     const order = linked ? shownInOrder : members.flat();
     const count = order.length;
     const boardMessages = order.map((index) => list[index]);
+    // Where each day starts, once: the rows break there, and the day headers over the rows count from it.
+    const starts = linked ? dayStarts(boardMessages) : null;
     const boardIndexOf = new Map(order.map((index, board) => [index, board]));
     const laneOf = new Int32Array(count);
     const posInLane = new Int32Array(count);
@@ -295,8 +297,9 @@ export function buildBoard(messages, { max, scroll, width = 0, keys = null, gapS
         laneOf,
         posInLane,
         prevInLane,
+        dayStarts: starts,
         rows: linked
-            ? packRows(laneOf, dayStarts(boardMessages), {
+            ? packRows(laneOf, starts, {
                   times: boardMessages.map((message) => message.ts),
                   gapMs: gapSecondsOf(gapSec) * 1000,
               })
@@ -400,15 +403,15 @@ export function createBoardCache() {
 /**
  * Group a linked board's rows by day, for sticky day headers over rows.
  *
- * @param {Array<object>} messages - The board's messages.
- * @param {{count: number, start: Int32Array}} rows - The board's rows.
+ * @param {?object} board - A linked board, from {@link buildBoard}.
  * @param {number} [now] - Reference time for relative labels.
  * @returns {?{groupCounts: number[], labels: string[]}} Rows per day, which add up to the row count; null
- *     when nothing can be dated.
+ *     for a free board, or when nothing can be dated.
  */
-export function rowDayGroups(messages, rows, now = Date.now()) {
-    if (!rows || !buildDayGroups(messages, now)) return null;
-    const starts = dayStarts(messages);
+export function rowDayGroups(board, now = Date.now()) {
+    const { messages, rows, dayStarts: starts } = board ?? {};
+    // No day starts at all means no message has a date: no day headers, as for a single conversation.
+    if (!rows || !starts?.includes(1)) return null;
     const groupCounts = [];
     const labels = [];
     for (let row = 0; row < rows.count; row++) {

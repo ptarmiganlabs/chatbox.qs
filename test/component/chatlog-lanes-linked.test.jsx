@@ -162,6 +162,41 @@ describe('ChatLog with conversations side by side, scrolling linked', () => {
         expect(virtuoso.props.groupCounts).toEqual([1, 1]);
     });
 
+    it('works out the day headers once for a board, not again on every render', () => {
+        const day = (d, h, m = 0) => new Date(2026, 8, d, h, m).getTime();
+        const board = buildBoard(
+            [
+                message('1', 'T1', 'a', { ts: day(7, 9) }),
+                message('2', 'T2', 'b', { ts: day(7, 9, 1) }),
+                message('3', 'T1', 'c', { ts: day(8, 9) }),
+            ],
+            { max: 4, scroll: 'linked' }
+        );
+        const withSeparators = { ...settings, dateSeparators: true };
+        const { rerender } = render(
+            <ChatLog
+                conversation={conversationOf(board)}
+                board={board}
+                settings={withSeparators}
+                rect={{ width: 900, height: 600 }}
+                keyboard={active}
+            />,
+            { wrapper: Viewport }
+        );
+        const first = virtuoso.props.groupCounts;
+        // A resize renders again with the same board.
+        rerender(
+            <ChatLog
+                conversation={conversationOf(board)}
+                board={board}
+                settings={withSeparators}
+                rect={{ width: 950, height: 640 }}
+                keyboard={active}
+            />
+        );
+        expect(virtuoso.props.groupCounts).toBe(first);
+    });
+
     it('puts every day heading before its first row when every message is rendered', () => {
         const day = (d, h, m = 0) => new Date(2026, 8, d, h, m).getTime();
         const dated = [

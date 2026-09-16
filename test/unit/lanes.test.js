@@ -243,7 +243,7 @@ describe('buildBoard, linked scrolling', () => {
         const board = buildBoard(messages, { max: 2, scroll: 'linked' });
         // Day 1: A and B share a row. Day 2: A, then undated B joins its row. Day 3: B.
         expect([...board.rows.of]).toEqual([0, 0, 1, 1, 2]);
-        const groups = rowDayGroups(board.messages, board.rows, T0 + 10 * DAY);
+        const groups = rowDayGroups(board, T0 + 10 * DAY);
         expect(groups.groupCounts).toEqual([1, 1, 1]);
         expect(groups.groupCounts.reduce((a, b) => a + b, 0)).toBe(board.rows.count);
         expect(buildDayGroups(board.messages, T0 + 10 * DAY).labels).toEqual(groups.labels);
@@ -252,14 +252,24 @@ describe('buildBoard, linked scrolling', () => {
     it('gives a leading undated run its own group, as the day headers do', () => {
         const messages = [msg('1', 'A'), msg('2', 'B'), msg('3', 'A', { ts: T0 })];
         const board = buildBoard(messages, { max: 2, scroll: 'linked' });
-        const groups = rowDayGroups(board.messages, board.rows, T0);
+        const groups = rowDayGroups(board, T0);
         expect(groups.labels[0]).toBe('');
         expect(groups.groupCounts.reduce((a, b) => a + b, 0)).toBe(board.rows.count);
     });
 
     it('has no day groups when nothing can be dated', () => {
         const board = buildBoard([msg('1', 'A'), msg('2', 'B')], { max: 2, scroll: 'linked' });
-        expect(rowDayGroups(board.messages, board.rows)).toBeNull();
+        expect(rowDayGroups(board)).toBeNull();
+    });
+
+    it('keeps where each day starts on a linked board, and has no row day groups for a free one', () => {
+        const dated = [msg('1', 'A', { ts: T0 }), msg('2', 'B', { ts: T0 + DAY })];
+        const linked = buildBoard(dated, { max: 2, scroll: 'linked' });
+        expect([...linked.dayStarts]).toEqual([1, 1]);
+        const free = buildBoard(dated, { max: 2, scroll: 'free' });
+        expect(free.dayStarts).toBeNull();
+        expect(rowDayGroups(free)).toBeNull();
+        expect(rowDayGroups(null)).toBeNull();
     });
 });
 
