@@ -91,3 +91,14 @@ export function stepDirection(event) {
     if ((event.ctrlKey || event.metaKey) && (event.key === 'g' || event.key === 'G')) return back;
     return null;
 }
+
+/**
+ * Tell whether a key press asks for the search box: Ctrl+F, or Cmd+F on a Mac.
+ *
+ * @param {object} event - The keyboard event.
+ * @returns {boolean} True for Ctrl or Cmd with F, without Shift or Alt.
+ */
+export function isFindKey(event) {
+    if (!event || event.altKey || event.shiftKey) return false;
+    return Boolean(event.ctrlKey || event.metaKey) && (event.key === 'f' || event.key === 'F');
+}

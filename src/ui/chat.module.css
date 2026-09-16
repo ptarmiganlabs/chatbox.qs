@@ -790,3 +790,23 @@ button.chip:focus-visible {
 .listScroll {
     overflow-y: auto;
 }
+
+/* The search box, first in the bar. */
+.search {
+    flex: 0 1 180px;
+    min-width: 80px;
+    height: 20px;
+    padding: 0 6px;
+    border: 1px solid var(--cqs-border, #d9d9d9);
+    border-radius: 3px;
+    background: var(--cqs-bg, #ffffff);
+    color: var(--cqs-text, #404040);
+    font: inherit;
+    -webkit-user-select: text;
+    user-select: text;
+}
+
+.search:focus-visible {
+    outline: 2px solid var(--cqs-focus, #3f8ab3);
+    outline-offset: 0;
+}

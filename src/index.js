@@ -37,6 +37,7 @@ import { reloadingView } from './ui/reload-view';
 import { createHighlightLoader } from './qix/highlight-loader';
 import { loadHighlightResult } from './highlight/highlight-result';
 import { createHighlightView } from './highlight/highlight-view';
+import { createConversationFinder } from './highlight/conversation-finder';
 import {
     planCategorySelection,
     planValueSelection,
@@ -145,6 +146,28 @@ export default function supernova(galaxy) {
             if (!highlightViewRef.current) highlightViewRef.current = createHighlightView();
             // Monotonic token for highlight loads, like runIdRef for rows.
             const highlightRunRef = useRef(0);
+
+            // Search: the finder shares the markdown projections with the highlighter, and the query
+            // is kept here, so it survives the conversation component unmounting and mounting again.
+            const finderRef = useRef(null);
+            if (!finderRef.current) {
+                finderRef.current = createConversationFinder({
+                    projections: highlightViewRef.current.projections,
+                });
+            }
+            const queryRef = useRef('');
+            const handleQueryRef = useRef(null);
+            if (!handleQueryRef.current) {
+                /**
+                 * Keep the query the reader searched for.
+                 *
+                 * @param {string} query - The query.
+                 * @returns {void}
+                 */
+                handleQueryRef.current = (query) => {
+                    queryRef.current = query;
+                };
+            }
 
             // A short notice in the corner: why a click selected nothing, or what a copy did. It clears
             // itself after a few seconds.
@@ -485,6 +508,18 @@ export default function supernova(galaxy) {
                     reloading: null,
                     highlights,
                     notice,
+                    // The search box, where a reader can use it: never in an export render, nor where
+                    // Sense allows no interaction with the object.
+                    search:
+                        !isSnapshot(staleLayout) &&
+                        interactions?.active !== false &&
+                        readTextToolSettings(settings).showSearch
+                            ? {
+                                  finder: finderRef.current,
+                                  initialQuery: queryRef.current,
+                                  onQueryChange: handleQueryRef.current,
+                              }
+                            : null,
                 };
                 lastViewRef.current = view;
                 render(element, ChatLog, view);

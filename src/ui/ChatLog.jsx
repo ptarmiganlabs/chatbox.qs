@@ -17,7 +17,7 @@ import styles from './chat.module.css';
 import { buildDayGroups, startsCluster } from '../chat/grouping';
 import DetailReveal, { resolveRevealMode } from './DetailReveal';
 import { resolveDensity } from './density';
-import { canReceiveTabStop, keyAction, nextFocusIndex, stepDirection } from './keyboard';
+import { canReceiveTabStop, isFindKey, keyAction, nextFocusIndex, stepDirection } from './keyboard';
 import { readSnapshot, shouldRenderAll } from './snapshot';
 import MessageRow from './render-message';
 import ConversationBar from './ConversationBar';
@@ -26,11 +26,15 @@ import HighlightRuler from './HighlightRuler';
 import { isInView, scrollToElement } from './scroll';
 import { counterText as stopCounterText, stepStop } from '../highlight/navigator';
 import { rulerTicks } from '../highlight/ruler';
+import { createConversationFinder, partOf } from '../highlight/conversation-finder';
 import { drawnCount } from '../highlight/conversation-highlights';
 import { legendEntries } from '../highlight/legend';
 import { HIGHLIGHT_KINDS } from '../qix/highlight-source';
 import { counted } from '../util/format';
 import { Empty } from './states';
+
+/** How long typing must pause before the query is searched, in milliseconds. */
+const QUERY_DELAY_MS = 150;
 
 /**
  * The key that identifies a bubble within the conversation.
@@ -116,6 +120,8 @@ function ReloadingLine({ reloading }) {
  * @param {?object} [props.highlights] - The highlights to draw, from src/highlight/highlight-view.js,
  *   with `onSelectValues(values, toggle)` and `onSelectCategory(name, toggle)`; null while off.
  * @param {?{id: number, text: string, level: string}} [props.notice] - A notice to show in the corner.
+ * @param {?object} [props.search] - The search box: `finder`, `initialQuery` and `onQueryChange(query)`;
+ *   null to leave it out.
  * @returns {object} The rendered conversation.
  */
 export function ChatLog({
@@ -131,6 +137,7 @@ export function ChatLog({
     reloading = null,
     highlights = null,
     notice = null,
+    search = null,
 }) {
     // State captured when a snapshot was taken. Null for a normal render.
     const snapshot = readSnapshot(layout);
@@ -298,25 +305,69 @@ export function ChatLog({
     );
     // Nothing is selected while the rows shown are the ones before a selection.
     const clickMode = reloading ? null : (highlights?.clickMode ?? null);
-
-    // What stepping, the counter and the ruler go through: the highlights.
     const live = snapshot === null;
-    const stops = highlightValues ? highlights.result : null;
-    const stopKind = 'highlight';
+    const gapSec = Number(settings.groupGapSec) >= 0 ? Number(settings.groupGapSec) : 120;
+    const showAvatars = settings.showAvatars !== false;
+
+    // The search box: what is typed, and the query searched once typing pauses. The query outlives
+    // the conversation: a selection searches the new messages for it.
+    const searchable = live && search !== null;
+    const [query, setQuery] = useState(search?.initialQuery ?? '');
+    const [appliedQuery, setAppliedQuery] = useState(search?.initialQuery ?? '');
+    const searchInputRef = useRef(null);
+    const ownFinderRef = useRef(null);
+    if (!search?.finder && !ownFinderRef.current) ownFinderRef.current = createConversationFinder();
+    const finder = search?.finder ?? ownFinderRef.current;
+    const onQueryChangeRef = useRef(null);
+    onQueryChangeRef.current = search?.onQueryChange ?? null;
+    useEffect(() => {
+        if (query === appliedQuery) return undefined;
+        const timer = setTimeout(() => setAppliedQuery(query), QUERY_DELAY_MS);
+        return () => clearTimeout(timer);
+    }, [query, appliedQuery]);
+    useEffect(() => {
+        onQueryChangeRef.current?.(appliedQuery);
+    }, [appliedQuery]);
+    const finds = searchable ? finder.find({ messages, query: appliedQuery, gapSec }) : null;
+
+    // What stepping, the counter and the ruler go through: the search matches while a query is
+    // typed, the highlights otherwise.
+    const stops = finds ?? (highlightValues ? highlights.result : null);
+    const stopKind = finds ? 'find' : 'highlight';
     const stopTotal = stops?.total ?? 0;
+    const truncated = finds ? finds.truncated : Boolean(stops?.searchTruncated);
     const currentMessage =
         current !== null && current.stops === stops && current.kind === stopKind
             ? (stops.indexByKey.get(current.key) ?? -1)
             : -1;
     const currentStop =
         currentMessage >= 0 ? { messageIndex: currentMessage, ordinal: current.ordinal } : null;
+
+    /**
+     * Describe the current stop within one message, for drawing it.
+     *
+     * @param {number} index - The message's index.
+     * @returns {?{kind: string, ordinal: number, part: string}} The current mark in the message: its
+     *     kind, its ordinal within its part, and the part — author, recipients or body — or null.
+     */
+    const currentMarkIn = (index) => {
+        if (currentStop?.messageIndex !== index) return null;
+        if (stopKind === 'highlight') {
+            return { kind: 'highlight', ordinal: currentStop.ordinal, part: 'body' };
+        }
+        const within = partOf(finds.byMessage[index], currentStop.ordinal);
+        return within ? { kind: 'find', ordinal: within.ordinal, part: within.part } : null;
+    };
+
     let counterText = '';
-    if (stops && currentStop) {
+    if (finds || currentStop) {
         counterText = stopCounterText({
             kind: stopKind,
-            index: stops.firstStop[currentStop.messageIndex] + currentStop.ordinal,
+            index: currentStop
+                ? stops.firstStop[currentStop.messageIndex] + currentStop.ordinal
+                : -1,
             count: stopTotal,
-            truncated: stops.searchTruncated,
+            truncated,
         });
     } else if (stops && !highlights.placement.bar && !highlightBanner) {
         // The summary counts the highlights where it is shown; otherwise the counter does.
@@ -331,38 +382,153 @@ export function ChatLog({
                       stops,
                       count: messages.length,
                       kind: stopKind,
-                      styles: highlights?.styles ?? null,
+                      styles: stopKind === 'highlight' ? (highlights?.styles ?? null) : null,
                   })
                 : [],
-        [showRuler, stops, stopTotal, messages.length, highlights?.styles]
+        [showRuler, stops, stopTotal, messages.length, stopKind, highlights?.styles]
     );
+
+    /**
+     * Find the message the reader is at: the first one whose bottom is below the top of the view.
+     *
+     * @returns {number} Its index.
+     */
+    const readingIndex = () => {
+        const scroller = renderAll ? listRef.current : scrollerRef.current;
+        const top = scroller?.getBoundingClientRect?.().top;
+        const nodes = listRef.current?.querySelectorAll?.('[data-message-index]') ?? [];
+        if (typeof top === 'number') {
+            for (const node of nodes) {
+                if (node.getBoundingClientRect().bottom > top) {
+                    return Number(node.getAttribute('data-message-index'));
+                }
+            }
+        }
+        return firstVisibleRef.current;
+    };
+
+    /**
+     * Scroll the current mark into view once its message is drawn, unless it already is.
+     *
+     * @param {number} messageIndex - The message the mark is in.
+     * @returns {void}
+     */
+    const revealMark = (messageIndex) => {
+        const list = listRef.current;
+        const scroller = renderAll ? list : scrollerRef.current;
+        if (!list || !scroller) return;
+        const row = `[data-row="${messageIndex}"]`;
+        const target = list.querySelector(`${row} mark[data-current]`) ?? list.querySelector(row);
+        if (target && !isInView(scroller, target)) scrollToElement(scroller, target);
+    };
+
+    /**
+     * Make a stop current and bring it into view.
+     *
+     * @param {{messageIndex: number, ordinal: number}} next - The stop.
+     * @param {object} stopsNow - The stops it is one of.
+     * @param {string} kindNow - Their kind, 'highlight' or 'find'.
+     * @param {boolean} moveFocus - Whether focus moves to the stop's message.
+     * @returns {void}
+     */
+    const goTo = (next, stopsNow, kindNow, moveFocus) => {
+        const { messageIndex } = next;
+        setCurrent({
+            kind: kindNow,
+            key: bubbleKey(messages[messageIndex]),
+            ordinal: next.ordinal,
+            stops: stopsNow,
+        });
+        /**
+         * Reveal the mark on the frame after its message is drawn.
+         *
+         * @returns {void}
+         */
+        const afterScroll = () => requestAnimationFrame(() => revealMark(messageIndex));
+        if (renderAll) afterScroll();
+        else {
+            virtuosoRef.current?.scrollIntoView?.({
+                index: messageIndex,
+                behavior: 'auto',
+                done: afterScroll,
+            });
+        }
+        if (moveFocus && tabbable) {
+            revealedRef.current = true;
+            setFocusIndex(messageIndex);
+        }
+    };
+
+    /**
+     * Step to the next or the previous stop.
+     *
+     * @param {number} direction - 1 for the next stop, -1 for the previous one.
+     * @param {boolean} fromList - Whether the step came from a key pressed in the list, which moves
+     *     focus to the stop's message.
+     * @param {?object} [stopsNow] - The stops to step through; the ones shown when not given.
+     * @param {string} [kindNow] - Their kind.
+     * @returns {boolean} True when there was a stop to step to.
+     */
+    const step = (direction, fromList, stopsNow = stops, kindNow = stopKind) => {
+        if (!stopsNow || stopsNow.total === 0) return false;
+        const from = focusIndex >= 0 ? focusIndex : readingIndex();
+        const next = stepStop({
+            stops: stopsNow,
+            current: stopsNow === stops ? currentStop : null,
+            direction,
+            from,
+        });
+        if (next === null) return false;
+        goTo(next, stopsNow, kindNow, fromList);
+        return true;
+    };
+
+    // Once a query settles, the first match from where the reader is becomes current, and comes into
+    // view if it is not. Focus stays in the search box.
+    const settledRef = useRef(appliedQuery);
+    useEffect(() => {
+        if (settledRef.current === appliedQuery) return;
+        settledRef.current = appliedQuery;
+        if (!finds || finds.total === 0) return;
+        const from = focusIndex >= 0 ? focusIndex : readingIndex();
+        const next = stepStop({ stops: finds, current: null, direction: 1, from });
+        if (next !== null) goTo(next, finds, 'find', false);
+    }, [appliedQuery, finds]);
 
     /**
      * Find the marks for a message's detail quote.
      *
      * A markdown message's quote shows its source, whose offsets differ from the text the body renders,
-     * so the values are matched in the source for the quote.
+     * so the values and the query are found in the source for the quote.
      *
      * @param {object} message - The message.
      * @param {number} index - Its index.
-     * @returns {?object} The quote's `highlights` and `describe`, or null without highlights.
+     * @returns {?object} The quote's `highlights`, `finds`, `describe` and `current`, and what a click on
+     *     a highlight does; null with neither highlights nor a search.
      */
     const quoteFor = (message, index) => {
-        if (!highlightValues) return null;
-        const spans =
-            message.bodyFormat === 'markdown'
+        if (!highlightValues && !finds) return null;
+        const markdown = message.bodyFormat === 'markdown';
+        let spans = [];
+        if (highlightValues) {
+            spans = markdown
                 ? highlights.matchPlain(message.body)
-                : highlights.result.byMessage[index]?.spans;
-        const here =
-            message.bodyFormat !== 'markdown' && currentStop?.messageIndex === index
-                ? { kind: stopKind, ordinal: currentStop.ordinal }
-                : null;
+                : (highlights.result.byMessage[index]?.spans ?? []);
+        }
+        let found = [];
+        if (finds) {
+            found = markdown
+                ? finder.findPlain(message.body, appliedQuery)
+                : finds.byMessage[index].body;
+        }
+        const here = markdown ? null : currentMarkIn(index);
         return {
             highlights: spans,
-            describe: highlights.describe,
-            current: here,
+            finds: found,
+            describe: highlights?.describe,
+            current: here?.part === 'body' ? here : null,
             clickMode,
-            onPick: highlights.onSelectValues,
+            onPick: highlights?.onSelectValues,
         };
     };
 
@@ -398,8 +564,6 @@ export function ChatLog({
                   onPick: (entry, toggle) => highlights.onSelectCategory(entry.name, toggle),
               }
             : null;
-    const gapSec = Number(settings.groupGapSec) >= 0 ? Number(settings.groupGapSec) : 120;
-    const showAvatars = settings.showAvatars !== false;
 
     const openIndex = openId ? messages.findIndex((m) => bubbleKey(m) === openId) : -1;
     // A selection can remove the open message from the cube entirely, which
@@ -442,6 +606,7 @@ export function ChatLog({
             // with Space, it opens the details as it always has.
             if (
                 event.key === 'Enter' &&
+                stopKind === 'highlight' &&
                 clickMode === 'select' &&
                 currentStop?.messageIndex === focusIndex
             ) {
@@ -469,95 +634,66 @@ export function ChatLog({
     };
 
     /**
-     * Find the message the reader is at: the first one whose bottom is below the top of the view.
+     * Handle the keys the whole object answers: Ctrl/Cmd+F goes to the search box, and F3 or
+     * Ctrl/Cmd+G steps from anywhere in it.
      *
-     * @returns {number} Its index.
-     */
-    const readingIndex = () => {
-        const scroller = renderAll ? listRef.current : scrollerRef.current;
-        const top = scroller?.getBoundingClientRect?.().top;
-        const nodes = listRef.current?.querySelectorAll?.('[data-message-index]') ?? [];
-        if (typeof top === 'number') {
-            for (const node of nodes) {
-                if (node.getBoundingClientRect().bottom > top) {
-                    return Number(node.getAttribute('data-message-index'));
-                }
-            }
-        }
-        return firstVisibleRef.current;
-    };
-
-    /**
-     * Scroll a stop's mark into view once its message is drawn, unless it already is.
-     *
-     * @param {number} messageIndex - The message the stop is in.
-     * @param {number} ordinal - The stop's ordinal in the message.
-     * @returns {void}
-     */
-    const revealMark = (messageIndex, ordinal) => {
-        const list = listRef.current;
-        const scroller = renderAll ? list : scrollerRef.current;
-        if (!list || !scroller) return;
-        const row = `[data-message-index="${messageIndex}"]`;
-        const target =
-            list.querySelector(`${row} mark[data-h="${ordinal}"]`) ?? list.querySelector(row);
-        if (target && !isInView(scroller, target)) scrollToElement(scroller, target);
-    };
-
-    /**
-     * Step to the next or the previous stop.
-     *
-     * @param {number} direction - 1 for the next stop, -1 for the previous one.
-     * @param {boolean} fromList - Whether the step came from a key pressed in the list, which moves
-     *     focus to the stop's message.
-     * @returns {boolean} True when there was a stop to step to.
-     */
-    const step = (direction, fromList) => {
-        if (!stops || stopTotal === 0) return false;
-        const from = focusIndex >= 0 ? focusIndex : readingIndex();
-        const next = stepStop({ stops, current: currentStop, direction, from });
-        if (next === null) return false;
-        setCurrent({
-            kind: stopKind,
-            key: bubbleKey(messages[next.messageIndex]),
-            ordinal: next.ordinal,
-            stops,
-        });
-        const { messageIndex, ordinal } = next;
-        /**
-         * Reveal the mark on the frame after its message is drawn.
-         *
-         * @returns {void}
-         */
-        const afterScroll = () => requestAnimationFrame(() => revealMark(messageIndex, ordinal));
-        if (renderAll) afterScroll();
-        else {
-            virtuosoRef.current?.scrollIntoView?.({
-                index: messageIndex,
-                behavior: 'auto',
-                done: afterScroll,
-            });
-        }
-        if (fromList && tabbable) {
-            revealedRef.current = true;
-            setFocusIndex(messageIndex);
-        }
-        return true;
-    };
-
-    /**
-     * Step with F3 or Ctrl/Cmd+G, from anywhere in the object.
-     *
-     * With nothing to step to, the keys keep their meaning in the browser.
+     * With no search box, or nothing to step to, the keys keep their meaning in the browser.
      *
      * @param {object} event - The React keyboard event.
      * @returns {void}
      */
     const handleRootKeyDown = (event) => {
+        if (searchable && isFindKey(event)) {
+            event.preventDefault();
+            searchInputRef.current?.focus();
+            searchInputRef.current?.select?.();
+            return;
+        }
         const direction = stepDirection(event);
         if (direction === null) return;
         const fromList = Boolean(listRef.current?.contains(event.target));
         if (step(direction, fromList)) event.preventDefault();
+    };
+
+    /**
+     * Handle Enter, Shift+Enter and Escape in the search box, on what is typed now.
+     *
+     * @param {object} event - The React keyboard event.
+     * @returns {void}
+     */
+    const handleSearchKeyDown = (event) => {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            let stopsNow = stops;
+            let kindNow = stopKind;
+            // Enter acts on what is typed, not on what the pause would search.
+            if (query !== appliedQuery) {
+                settledRef.current = query;
+                setAppliedQuery(query);
+                const typed = query.trim() !== '';
+                stopsNow = typed
+                    ? finder.find({ messages, query, gapSec })
+                    : highlightValues
+                      ? highlights.result
+                      : null;
+                kindNow = typed ? 'find' : 'highlight';
+            }
+            step(event.shiftKey ? -1 : 1, false, stopsNow, kindNow);
+            return;
+        }
+        if (event.key === 'Escape' || event.key === 'Esc') {
+            event.preventDefault();
+            event.stopPropagation();
+            // The first Escape clears the query; the next hands focus back to Sense.
+            if (query !== '' || appliedQuery !== '') {
+                settledRef.current = '';
+                setQuery('');
+                setAppliedQuery('');
+                setCurrent(null);
+            } else {
+                keyboard?.blur?.(true);
+            }
+        }
     };
 
     /**
@@ -634,11 +770,8 @@ export function ChatLog({
                     describe={highlights?.describe}
                     highlightClick={clickMode}
                     onHighlightClick={handleHighlightClick}
-                    current={
-                        currentStop?.messageIndex === index
-                            ? { kind: stopKind, ordinal: currentStop.ordinal }
-                            : null
-                    }
+                    current={currentMarkIn(index)}
+                    finds={finds ? finds.byMessage[index] : null}
                 />
                 {isOpen && revealMode === 'inline' ? (
                     <DetailReveal
@@ -693,16 +826,27 @@ export function ChatLog({
                     {w.message}
                 </div>
             ))}
-            {highlights ? (
+            {highlights || searchable ? (
                 <ConversationBar
-                    info={highlights.placement.bar}
+                    info={highlights?.placement?.bar ?? null}
                     entries={legend}
                     counter={counterText}
                     picking={picking}
-                    stepper={
-                        live && stops
+                    search={
+                        searchable
                             ? {
-                                  kind: stopKind,
+                                  query,
+                                  inputRef: searchInputRef,
+                                  tabbable,
+                                  onChange: setQuery,
+                                  onKeyDown: handleSearchKeyDown,
+                              }
+                            : null
+                    }
+                    stepper={
+                        live && (stops || searchable)
+                            ? {
+                                  kind: finds || !highlightValues ? 'find' : 'highlight',
                                   canStep: stopTotal > 0,
                                   tabbable,
                                   /**

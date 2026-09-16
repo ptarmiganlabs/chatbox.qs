@@ -72,18 +72,30 @@ const COMPONENTS = { a: SafeLink, mark: MarkdownMark };
  * @param {number} [props.drawn] - How many of them are drawn.
  * @param {function(object): object} [props.describe] - Describes a highlight span.
  * @param {?{kind: string, ordinal: number}} [props.current] - The current mark in this body.
+ * @param {?object} [props.finds] - The message's search matches; `body` and `text` are used here.
  * @returns {object} The rendered body.
  */
-export function BubbleBody({ body, format, highlights = null, drawn, describe, current = null }) {
+export function BubbleBody({
+    body,
+    format,
+    highlights = null,
+    drawn,
+    describe,
+    current = null,
+    finds = null,
+}) {
+    const spans = highlights?.spans ?? [];
+    const found = finds?.body ?? [];
     if (format !== 'markdown') {
         // React escapes children; the body can never become markup, highlighted or not.
         return (
             <div className={styles.body}>
-                {highlights?.spans?.length ? (
+                {spans.length || found.length ? (
                     <HighlightedText
                         text={body}
-                        highlights={highlights.spans}
+                        highlights={spans}
                         drawn={drawn}
+                        finds={found}
                         current={current}
                         describe={describe}
                     />
@@ -96,20 +108,23 @@ export function BubbleBody({ body, format, highlights = null, drawn, describe, c
 
     // The marks are drawn into the tree react-markdown renders, in the text it renders; see
     // src/highlight/markdown-projection.js. Without marks, no plugin runs at all.
-    const rehypePlugins = highlights?.spans?.length
-        ? [
-              [
-                  rehypeHighlights,
-                  {
-                      expected: highlights.text,
-                      highlights: highlights.spans,
-                      drawn,
-                      current,
-                      describe,
-                  },
-              ],
-          ]
-        : undefined;
+    const rehypePlugins =
+        spans.length || found.length
+            ? [
+                  [
+                      rehypeHighlights,
+                      {
+                          // Both were found in the body's projection; whichever there is says what it is.
+                          expected: spans.length ? highlights.text : finds.text,
+                          highlights: spans,
+                          drawn,
+                          finds: found,
+                          current,
+                          describe,
+                      },
+                  ],
+              ]
+            : undefined;
     return (
         <div className={`${styles.body} ${styles.bodyMarkdown}`}>
             <Markdown

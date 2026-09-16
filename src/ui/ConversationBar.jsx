@@ -84,6 +84,8 @@ function entryKey(entry) {
  * @param {?object} [props.picking] - How chips select a category; null while they do not.
  * @param {?object} [props.stepper] - The step buttons: `kind` ('highlight' or 'find'), `canStep`,
  *     `tabbable` and `onStep(direction)`; null to leave them out.
+ * @param {?object} [props.search] - The search box: `query`, `inputRef`, `tabbable`,
+ *     `onChange(query)` and `onKeyDown(event)`; null to leave it out.
  * @returns {?object} The rendered bar, or null when it has nothing to show.
  */
 export function ConversationBar({
@@ -92,14 +94,30 @@ export function ConversationBar({
     counter = '',
     picking = null,
     stepper = null,
+    search = null,
 }) {
-    const hasTools = Boolean(info) || counter !== '' || stepper !== null;
+    const hasTools = Boolean(info) || counter !== '' || stepper !== null || search !== null;
     const noun = stepper?.kind === 'find' ? 'match' : 'highlight';
     if (!hasTools && entries.length === 0) return null;
     return (
         <div className={styles.bar}>
             {hasTools ? (
                 <div className={styles.toolbar}>
+                    {search ? (
+                        <input
+                            ref={search.inputRef}
+                            type="search"
+                            className={styles.search}
+                            placeholder="Search messages"
+                            aria-label="Search messages"
+                            autoComplete="off"
+                            spellCheck={false}
+                            value={search.query}
+                            tabIndex={search.tabbable ? 0 : -1}
+                            onChange={(event) => search.onChange(event.target.value)}
+                            onKeyDown={search.onKeyDown}
+                        />
+                    ) : null}
                     {info ? (
                         <span className={styles.summary} title={info.text} data-level={info.level}>
                             {info.text}

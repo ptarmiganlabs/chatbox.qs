@@ -31,6 +31,7 @@ export function HighlightMark({ mark, children }) {
             data-cut-start={mark.cutStart ? '' : undefined}
             data-cut-end={mark.cutEnd ? '' : undefined}
             data-label={mark.label ?? undefined}
+            data-current={mark.current ? '' : undefined}
             data-link={mark.link ? '' : undefined}
             title={mark.title ?? undefined}
             style={mark.style ?? undefined}

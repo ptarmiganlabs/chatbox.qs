@@ -15,6 +15,7 @@
 import { formatRecipients } from '../chat/recipients';
 import BubbleBody from './BubbleBody';
 import { routeClick } from './click-route';
+import HighlightedText from './HighlightedText';
 import styles from './chat.module.css';
 
 /**
@@ -54,7 +55,9 @@ function initials(label) {
  *   'locked' while its field is locked, null otherwise.
  * @param {Function} [props.onHighlightClick] - Called with (index, ordinal, toggle) for a click that
  *   selects a highlight's value.
- * @param {?{kind: string, ordinal: number}} [props.current] - The current mark in this message's body.
+ * @param {?{kind: string, ordinal: number, part?: string}} [props.current] - The current mark in this
+ *   message: a highlight in its body, or a search match in the part it names.
+ * @param {?object} [props.finds] - This message's search matches: `author`, `recipients` and `body`.
  * @returns {object} The rendered row.
  */
 export function MessageRow({
@@ -74,7 +77,18 @@ export function MessageRow({
     highlightClick = null,
     onHighlightClick,
     current = null,
+    finds = null,
 }) {
+    /**
+     * Find the current mark within one part of the message.
+     *
+     * @param {string} part - 'author', 'recipients' or 'body'.
+     * @returns {?{kind: string, ordinal: number}} The current mark there, or null.
+     */
+    const currentIn = (part) =>
+        current !== null && (current.part ?? 'body') === part
+            ? { kind: current.kind, ordinal: current.ordinal }
+            : null;
     const own = message.side === 'right';
     const groupSize = message.recipients?.length ?? 0;
     const accent = message.accent || message.author?.color || 'transparent';
@@ -157,12 +171,23 @@ export function MessageRow({
     }
 
     return (
-        <div className={rowClass} role="listitem" style={{ '--cqs-accent': accent }}>
+        <div
+            className={rowClass}
+            role="listitem"
+            data-row={index}
+            style={{ '--cqs-accent': accent }}
+        >
             {avatar}
             <div className={styles.bubbleWrap}>
                 {showAuthor ? (
                     <div className={styles.author}>
-                        <span>{message.author?.label}</span>
+                        <span>
+                            <HighlightedText
+                                text={message.author?.label}
+                                finds={finds?.author}
+                                current={currentIn('author')}
+                            />
+                        </span>
                         {message.recipients?.length ? (
                             <span
                                 className={styles.recipients}
@@ -171,9 +196,13 @@ export function MessageRow({
                                 {/* The arrow is decoration; a screen reader hears "to". */}
                                 <span aria-hidden="true"> → </span>
                                 <span className={styles.srOnly}> to </span>
-                                {formatRecipients(message.recipients, {
-                                    partial: message.recipientsPartial,
-                                })}
+                                <HighlightedText
+                                    text={formatRecipients(message.recipients, {
+                                        partial: message.recipientsPartial,
+                                    })}
+                                    finds={finds?.recipients}
+                                    current={currentIn('recipients')}
+                                />
                             </span>
                         ) : null}
                     </div>
@@ -200,7 +229,8 @@ export function MessageRow({
                             highlights={highlights}
                             drawn={drawn}
                             describe={describe}
-                            current={current}
+                            current={currentIn('body')}
+                            finds={finds}
                         />
                     ) : message.merged ? (
                         <div className={styles.bodyMissing}>

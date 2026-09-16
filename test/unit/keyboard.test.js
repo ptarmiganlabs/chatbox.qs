@@ -104,3 +104,15 @@ describe('stepDirection', () => {
         expect(stepDirection(undefined)).toBeNull();
     });
 });
+
+describe('isFindKey', () => {
+    it('is Ctrl+F or Cmd+F, and nothing else', async () => {
+        const { isFindKey } = await import('../../src/ui/keyboard');
+        expect(isFindKey({ key: 'f', ctrlKey: true })).toBe(true);
+        expect(isFindKey({ key: 'F', metaKey: true })).toBe(true);
+        expect(isFindKey({ key: 'f' })).toBe(false);
+        expect(isFindKey({ key: 'f', ctrlKey: true, shiftKey: true })).toBe(false);
+        expect(isFindKey({ key: 'f', ctrlKey: true, altKey: true })).toBe(false);
+        expect(isFindKey(undefined)).toBe(false);
+    });
+});

@@ -155,3 +155,30 @@ describe('highlighting at scale: 12,000 markdown messages', () => {
         expect(result.messagesWith).toBeLessThan(10_000);
     });
 });
+
+describe('searching at scale: 12,000 messages', () => {
+    it('searches every message in a time typing can afford, and reuses the prepared texts', async () => {
+        const { createConversationFinder } =
+            await import('../../../src/highlight/conversation-finder');
+        const finder = createConversationFinder();
+        const list = messages(COUNT).map((m) => ({
+            ...m,
+            author: { label: 'Ada' },
+            authorKey: 'Ada',
+        }));
+
+        let started = performance.now();
+        const first = finder.find({ messages: list, query: 'user1', gapSec: 120 });
+        expect(performance.now() - started).toBeLessThan(1000);
+        expect(first.total).toBeGreaterThan(0);
+
+        // A longer query over the same texts prepares nothing again.
+        started = performance.now();
+        const longer = finder.find({ messages: list, query: 'user12', gapSec: 120 });
+        expect(performance.now() - started).toBeLessThan(500);
+        expect(longer.total).toBeLessThan(first.total);
+
+        // The same query again, as a resize asks it, is the same result.
+        expect(finder.find({ messages: list, query: 'user12', gapSec: 120 })).toBe(longer);
+    });
+});

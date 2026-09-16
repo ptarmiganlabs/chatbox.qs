@@ -17,6 +17,7 @@ describe('readTextToolSettings', () => {
 
     it('keeps valid values', () => {
         const bag = {
+            showSearch: false,
             showRuler: false,
             highlight: {
                 field: 'match',

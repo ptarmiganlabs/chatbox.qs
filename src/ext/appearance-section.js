@@ -87,6 +87,13 @@ export function appearanceSection() {
                 step: 30,
                 defaultValue: 120,
             },
+            // A search box above the conversation: it marks what was typed in the messages shown and
+            // steps through the matches, without selecting anything.
+            showSearch: switchItem({
+                ref: 'chatbox.showSearch',
+                label: 'Show search box',
+                defaultValue: TEXT_TOOL_DEFAULTS.showSearch,
+            }),
             // Beside the conversation, with a tick where highlights or search matches are. It shows
             // only while there are some, so it costs nothing without a highlight field or a search.
             showRuler: switchItem({

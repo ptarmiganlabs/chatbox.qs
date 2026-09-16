@@ -310,3 +310,15 @@ describe('appearance: the overview ruler', () => {
         expect(item.show).toBeUndefined();
     });
 });
+
+describe('appearance: the search box', () => {
+    it('is a switch under Appearance, on by default', () => {
+        const item = definition.items.appearance.items.showSearch;
+        expect(item).toMatchObject({
+            ref: 'chatbox.showSearch',
+            component: 'switch',
+            defaultValue: true,
+        });
+        expect(item.show).toBeUndefined();
+    });
+});
