@@ -344,3 +344,17 @@ refused, so a copy from the context menu would silently copy nothing.
 
 **Rule:** fall back to `execCommand('copy')` from a focused, hidden textarea, and say when neither
 worked. _Guard: `test/unit/copy-text.test.js`, `test/unit/copy-conversation.test.js`._
+
+## Selecting
+
+## 31. nebula reports selecting as allowed in edit mode
+
+`useInteractionState().select` is true while the sheet is being edited, and in an image or PDF export,
+whose server allows every interaction. Gated on it alone, a click on a message in edit mode selected
+its author on Qlik Sense May 2026, where a click on a native chart only picks the object for editing.
+
+**Rule:** every click that selects — on a message, a highlight or a legend chip — goes through
+`clicksMaySelect` in `src/qix/selection.js`: not a snapshot, not inactive, selecting allowed, and not
+in edit mode. A message whose click selects nothing shows no pointer and no button role. Opening a
+message's details selects nothing, and stays possible. _Guard: `test/unit/selection.test.js`,
+`test/component/chatlog.test.jsx`, `test/component/render-message.test.jsx`._

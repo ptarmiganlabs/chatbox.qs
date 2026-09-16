@@ -98,7 +98,9 @@ export function MessageRow({
         styles.bubble,
         own ? styles.bubbleOwn : '',
         message.merged ? styles.bubbleMerged : '',
-        selectable || onShowDetails ? styles.selectable : '',
+        // The pointer only where a click on the bubble does something: the Details link, a button
+        // with its own pointer, is not a reason to offer the whole bubble.
+        selectable ? styles.selectable : '',
         expanded ? styles.bubbleOpen : '',
         focused ? styles.bubbleFocused : '',
         // 'X' excluded and 'A' alternative are both "not currently possible".

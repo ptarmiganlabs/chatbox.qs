@@ -359,6 +359,34 @@ describe('ChatLog click gating', () => {
         );
         expect(container.querySelector('[data-message-index="1"]').getAttribute('role')).toBeNull();
     });
+
+    // In edit mode, an export render or an inactive object, src/index.js passes canSelect false
+    // (clicksMaySelect). Found on Qlik Sense May 2026, where a click in edit mode selected an author.
+    it('offers no message a click, by mouse or key, while selecting is not allowed', () => {
+        const onSelect = vi.fn();
+        const { container } = renderList(
+            <ChatLog
+                conversation={conversation(two)}
+                settings={{ onBubbleClick: 'selectAuthor' }}
+                rect={{ width: 900, height: 600 }}
+                keyboard={{ enabled: true, active: true, blur: () => {} }}
+                canSelect={false}
+                onSelect={onSelect}
+                isMessageSelectable={() => true}
+            />
+        );
+        const bubbles = [...container.querySelectorAll('[data-message-index]')];
+        expect(bubbles.map((bubble) => bubble.getAttribute('role'))).toEqual([null, null]);
+        expect(bubbles.some((bubble) => /selectable/.test(bubble.className))).toBe(false);
+
+        fireEvent.click(bubbles[0]);
+        const list = container.querySelector('[role="list"]');
+        fireEvent.keyDown(list, { key: 'ArrowDown' });
+        fireEvent.keyDown(list, { key: ' ' });
+        expect(onSelect).not.toHaveBeenCalled();
+        // Reading the details is not a selection, and stays possible.
+        expect(screen.getByLabelText('Message details')).toBeInTheDocument();
+    });
 });
 
 describe('isSelectable', () => {

@@ -404,3 +404,57 @@ describe('MessageRow — clicking a highlight', () => {
         expect(onHighlightClick).not.toHaveBeenCalled();
     });
 });
+
+// Found on Qlik Sense May 2026: in edit mode a click on a message selected its author. The object no
+// longer lets a click select there, so a bubble must not look or announce itself as clickable either.
+describe('MessageRow — a bubble whose click selects nothing, as in edit mode', () => {
+    /**
+     * Render a message whose click selects nothing but whose details can still be opened.
+     *
+     * @param {object} [props] - Further props.
+     * @returns {object} The render result, the bubble, and the spies.
+     */
+    function renderInert(props = {}) {
+        const onSelect = vi.fn();
+        const onShowDetails = vi.fn();
+        const result = render(
+            <MessageRow
+                message={message()}
+                index={0}
+                showAuthor
+                showAvatar
+                selectable={false}
+                onSelect={onSelect}
+                onShowDetails={onShowDetails}
+                {...props}
+            />
+        );
+        const bubble = result.container.querySelector('[data-message-index="0"]');
+        return { ...result, bubble, onSelect, onShowDetails };
+    }
+
+    it('offers no pointer and no button role, although it has a Details link', () => {
+        const { bubble } = renderInert();
+        expect(bubble.className).not.toMatch(/selectable/);
+        expect(bubble.getAttribute('role')).toBeNull();
+    });
+
+    it('selects nothing on a click, Enter or Space, and still opens its details', () => {
+        const { bubble, onSelect, onShowDetails } = renderInert();
+        fireEvent.click(bubble);
+        fireEvent.keyDown(bubble, { key: 'Enter' });
+        fireEvent.keyDown(bubble, { key: ' ' });
+        expect(onSelect).not.toHaveBeenCalled();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Details' }));
+        expect(onShowDetails).toHaveBeenCalledTimes(1);
+    });
+
+    it('offers the pointer and the button role again where a click selects', () => {
+        const { bubble, onSelect } = renderInert({ selectable: true });
+        expect(bubble.className).toMatch(/selectable/);
+        expect(bubble.getAttribute('role')).toBe('button');
+        fireEvent.click(bubble);
+        expect(onSelect).toHaveBeenCalledTimes(1);
+    });
+});

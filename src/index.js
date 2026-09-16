@@ -30,7 +30,7 @@ import ext from './ext/index';
 import { normalize } from './chat/normalize';
 import { fetchAllRows } from './qix/paging';
 import { conversationModelOf, resolveRoles } from './qix/column-map';
-import { buildSelection } from './qix/selection';
+import { buildSelection, clicksMaySelect } from './qix/selection';
 import { describeAssignments } from './qix/role-labels';
 import { syncAttributeExpressions } from './qix/sync-attrs';
 import { isSnapshot, shouldRenderAll, writeSnapshot } from './ui/snapshot';
@@ -393,10 +393,13 @@ export default function supernova(galaxy) {
                     area: page.area,
                 });
 
-                // The live layout carries current selection state; the stale one
-                // does not, so the highlight reads from the live cube.
-                const canSelect =
-                    Boolean(interactions?.select) && settings.onBubbleClick !== 'none';
+                // Whether a click may select at all: never in edit mode, in an export
+                // render, or while Sense holds the object inactive (GOTCHAS 31).
+                const maySelect = clicksMaySelect({
+                    interactions,
+                    snapshot: isSnapshot(staleLayout),
+                });
+                const canSelect = maySelect && settings.onBubbleClick !== 'none';
 
                 /**
                  * Build the selection steps a click on this message would run.
@@ -465,14 +468,10 @@ export default function supernova(galaxy) {
                     return undefined;
                 }
 
-                // A click on a highlight or a chip selects in the highlight or category field: never in
-                // an export render, whose server reports every interaction as allowed, nor in edit mode.
+                // A click on a highlight or a chip selects in the highlight or category field, under the
+                // same gate as a click on a bubble.
                 const canSelectHighlights =
-                    !isSnapshot(staleLayout) &&
-                    readTextToolSettings(settings).highlight.clickToSelect &&
-                    interactions?.active !== false &&
-                    Boolean(interactions?.select) &&
-                    !interactions?.edit;
+                    maySelect && readTextToolSettings(settings).highlight.clickToSelect;
 
                 const highlightView = highlightViewRef.current.build({
                     tagged: highlightResult,
