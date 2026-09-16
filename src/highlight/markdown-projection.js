@@ -225,8 +225,11 @@ export function rehypeHighlights({ expected, highlights, drawn, finds, current, 
             const replacement = pieces.map((piece) => {
                 const value = node.value.slice(piece.start - start, piece.end - start);
                 if (piece.mark === null) return { type: 'text', value };
-                // A mouse click on a mark inside a link belongs to the link.
-                const mark = inLink ? { ...piece.mark, link: true } : piece.mark;
+                // A mouse click on a mark inside a link belongs to the link, so its tooltip does not
+                // say that a click selects.
+                const mark = inLink
+                    ? { ...piece.mark, link: true, title: piece.mark.linkTitle }
+                    : piece.mark;
                 // `properties` must exist: react-markdown reads it on every element it renders.
                 return {
                     type: 'element',

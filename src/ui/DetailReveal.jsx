@@ -14,6 +14,7 @@
 import { formatRecipients } from '../chat/recipients';
 import styles from './chat.module.css';
 import HighlightedText from './HighlightedText';
+import { routeClick } from './click-route';
 import Sparkline from './Sparkline';
 
 /** Width below which a side pane cannot work. */
@@ -76,7 +77,8 @@ function KpiRow({ kpi, series, activeIndex }) {
  * @param {object[]} props.messages - The whole conversation, for KPI series.
  * @param {number} props.index - Index of the message being shown.
  * @param {boolean} props.showParticipant - Include the participant row.
- * @param {?object} [props.quote] - Marks for the quoted body: `highlights` and `describe`.
+ * @param {?object} [props.quote] - Marks for the quoted body: `highlights`, `describe`, and for
+ *   clicking them `clickMode` and `onPick(values, toggle)`.
  * @returns {object} The rendered body.
  */
 function DetailBody({ message, messages, index, showParticipant, quote = null }) {
@@ -126,7 +128,18 @@ function DetailBody({ message, messages, index, showParticipant, quote = null })
             ) : null}
 
             {message.body ? (
-                <div className={styles.detailQuote}>
+                // A click on a highlight in the quote selects its value, as in the bubble. The quote
+                // has no click action of its own, so anything else does nothing.
+                <div
+                    className={styles.detailQuote}
+                    onClick={(event) => {
+                        const route = routeClick(event, quote?.clickMode ?? null);
+                        const span = quote?.highlights?.[route.ordinal];
+                        if (route.kind === 'highlight' && span) {
+                            quote.onPick?.(span.values, route.toggle);
+                        }
+                    }}
+                >
                     <HighlightedText
                         text={message.body}
                         highlights={quote?.highlights}

@@ -124,12 +124,20 @@ describe('createDescriber', () => {
         const describe = createDescriber({ styles: off });
         const s = span(0, 1, ['reload', 'Reload']);
         expect(describe(s)).toBe(describe(s));
-        expect(describe(s)).toEqual({ title: 'reload, Reload', label: null, style: null });
+        expect(describe(s)).toEqual({
+            title: 'reload, Reload',
+            linkTitle: 'reload, Reload',
+            label: null,
+            style: null,
+        });
     });
 
     it('adds what a click does as a second tooltip line', () => {
         const describe = createDescriber({ styles: off, hint: 'Click to select this value' });
-        expect(describe(span(0, 1, ['x'])).title).toBe('x\nClick to select this value');
+        const described = describe(span(0, 1, ['x']));
+        expect(described.title).toBe('x\nClick to select this value');
+        // Inside a link a click opens the link, so its tooltip leaves the hint out.
+        expect(described.linkTitle).toBe('x');
     });
 
     it('describes by values alone without styles', () => {

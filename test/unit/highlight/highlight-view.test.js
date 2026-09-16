@@ -104,3 +104,38 @@ describe('createHighlightView', () => {
         });
     });
 });
+
+describe('createHighlightView selecting by clicking', () => {
+    it('says what a click does in the tooltip only while clicking selects', () => {
+        const view = createHighlightView();
+        const quiet = view.build({ tagged: tagged(), layout, version: 0, messages });
+        const span = quiet.result.byMessage[0].spans[0];
+        expect(quiet.clickMode).toBeNull();
+        expect(quiet.describe(span).title).toBe('reload · ops');
+
+        const clicking = view.build({
+            tagged: tagged(),
+            layout,
+            version: 0,
+            messages,
+            canSelect: true,
+        });
+        expect(clicking.clickMode).toBe('select');
+        expect(clicking.describe(span).title).toMatch(/\nClick to select this value/);
+        // The styles are kept; only the describer changed with the hint.
+        expect(clicking.styles).toBe(quiet.styles);
+        expect(clicking.describe).not.toBe(quiet.describe);
+    });
+
+    it('marks clicks on a locked highlight field as locked', () => {
+        const locked = { ...answer, locked: { highlight: true, category: false } };
+        const built = createHighlightView().build({
+            tagged: tagged(locked),
+            layout,
+            version: 0,
+            messages,
+            canSelect: true,
+        });
+        expect(built.clickMode).toBe('locked');
+    });
+});

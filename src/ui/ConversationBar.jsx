@@ -6,26 +6,23 @@
  *
  * Category names and values are field data, and reach the DOM as React children and attributes only.
  */
+import { categoryClickHint } from '../highlight/click-selection';
 import { entrySummary } from '../highlight/legend';
 import { formatCount } from '../util/format';
 import styles from './chat.module.css';
 
 /**
- * Render one legend entry.
+ * Render one legend entry: a toggle button while clicking selects its category, a list item otherwise.
  *
  * @param {object} props - Component props.
  * @param {object} props.entry - From `legendEntries`.
+ * @param {?object} [props.picking] - How chips select: `locked`, `field`, `selectedCount`, `tabbable`
+ *     and `onPick(entry, toggle)`; null while they do not.
  * @returns {object} The rendered chip.
  */
-function LegendChip({ entry }) {
-    return (
-        <span
-            className={styles.chip}
-            role="listitem"
-            title={entrySummary(entry)}
-            data-empty={entry.empty ? 'true' : undefined}
-            data-none={entry.name === null ? 'true' : undefined}
-        >
+function LegendChip({ entry, picking = null }) {
+    const content = (
+        <>
             <span
                 className={styles.swatch}
                 style={{ '--cqs-chip-color': entry.color }}
@@ -33,7 +30,37 @@ function LegendChip({ entry }) {
             />
             <span>{entry.label}</span>
             <span className={styles.chipCount}>{formatCount(entry.count)}</span>
-        </span>
+        </>
+    );
+    const shared = {
+        className: styles.chip,
+        'data-empty': entry.empty ? 'true' : undefined,
+        'data-none': entry.name === null ? 'true' : undefined,
+    };
+    // "No category" has no value behind it to select.
+    if (picking === null || entry.elemNumber < 0) {
+        return (
+            <span
+                {...shared}
+                role={picking === null ? 'listitem' : undefined}
+                title={entrySummary(entry)}
+            >
+                {content}
+            </span>
+        );
+    }
+    return (
+        <button
+            {...shared}
+            type="button"
+            aria-pressed={entry.selected}
+            disabled={picking.locked}
+            tabIndex={picking.tabbable ? 0 : -1}
+            title={`${entrySummary(entry)}\n${categoryClickHint(entry, picking)}`}
+            onClick={(event) => picking.onPick(entry, Boolean(event.ctrlKey || event.metaKey))}
+        >
+            {content}
+        </button>
     );
 }
 
@@ -54,9 +81,10 @@ function entryKey(entry) {
  * @param {?{text: string, level: string}} [props.info] - The highlight summary, when it is shown here.
  * @param {Array<object>} [props.entries] - The legend's entries; none hides the legend.
  * @param {string} [props.counter] - What the counter says; '' for nothing.
+ * @param {?object} [props.picking] - How chips select a category; null while they do not.
  * @returns {?object} The rendered bar, or null when it has nothing to show.
  */
-export function ConversationBar({ info = null, entries = [], counter = '' }) {
+export function ConversationBar({ info = null, entries = [], counter = '', picking = null }) {
     const hasTools = Boolean(info) || counter !== '';
     if (!hasTools && entries.length === 0) return null;
     return (
@@ -76,9 +104,14 @@ export function ConversationBar({ info = null, entries = [], counter = '' }) {
                 </div>
             ) : null}
             {entries.length ? (
-                <div className={styles.legend} role="list" aria-label="Categories">
+                // Buttons cannot be list items, so a legend of toggle buttons is a group.
+                <div
+                    className={styles.legend}
+                    role={picking ? 'group' : 'list'}
+                    aria-label="Categories"
+                >
                     {entries.map((entry) => (
-                        <LegendChip key={entryKey(entry)} entry={entry} />
+                        <LegendChip key={entryKey(entry)} entry={entry} picking={picking} />
                     ))}
                 </div>
             ) : null}

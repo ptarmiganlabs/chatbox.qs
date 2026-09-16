@@ -86,3 +86,127 @@ describe('selectInField', () => {
         expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('nope'), failure);
     });
 });
+
+describe('selectInFieldBesideObjectSelections', () => {
+    /** The object's selections, from useSelections(). */
+    const selectionsActive = (active) => ({
+        isActive: vi.fn(() => active),
+        confirm: vi.fn(async () => true),
+    });
+
+    it('confirms a selection pending in the object before selecting in the field', async () => {
+        const { selectInFieldBesideObjectSelections } =
+            await import('../../src/qix/field-selection');
+        const app = appSelecting(true);
+        const selections = selectionsActive(true);
+        const order = [];
+        selections.confirm.mockImplementation(async () => order.push('confirm'));
+        app.field.lowLevelSelect.mockImplementation(async () => order.push('select') && true);
+        await expect(
+            selectInFieldBesideObjectSelections({
+                selections,
+                app,
+                field: 'match',
+                elemNumbers: [3],
+                toggle: false,
+            })
+        ).resolves.toEqual({ outcome: SELECTION_OUTCOMES.SELECTED });
+        expect(order).toEqual(['confirm', 'select']);
+    });
+
+    it('confirms nothing when no selection is pending', async () => {
+        const { selectInFieldBesideObjectSelections } =
+            await import('../../src/qix/field-selection');
+        const app = appSelecting(true);
+        const selections = selectionsActive(false);
+        await selectInFieldBesideObjectSelections({
+            selections,
+            app,
+            field: 'match',
+            elemNumbers: [3],
+            toggle: true,
+        });
+        expect(selections.confirm).not.toHaveBeenCalled();
+        expect(app.field.lowLevelSelect).toHaveBeenCalledWith([3], true, false);
+    });
+
+    it('leaves a pending selection alone when there is nothing to select', async () => {
+        const { selectInFieldBesideObjectSelections } =
+            await import('../../src/qix/field-selection');
+        const app = appSelecting(true);
+        const selections = selectionsActive(true);
+        await expect(
+            selectInFieldBesideObjectSelections({
+                selections,
+                app,
+                field: 'match',
+                elemNumbers: [-2],
+                toggle: false,
+            })
+        ).resolves.toEqual({ outcome: SELECTION_OUTCOMES.NOTHING });
+        expect(selections.confirm).not.toHaveBeenCalled();
+        expect(app.getField).not.toHaveBeenCalled();
+    });
+
+    it('selects nothing, and says so, when the pending selection cannot be confirmed', async () => {
+        const { selectInFieldBesideObjectSelections } =
+            await import('../../src/qix/field-selection');
+        const app = appSelecting(true);
+        const selections = selectionsActive(true);
+        const failure = new Error('Selection mode ended');
+        selections.confirm.mockRejectedValue(failure);
+        await expect(
+            selectInFieldBesideObjectSelections({
+                selections,
+                app,
+                field: 'match',
+                elemNumbers: [3],
+                toggle: false,
+            })
+        ).resolves.toEqual({ outcome: SELECTION_OUTCOMES.ERROR, error: failure, stage: 'confirm' });
+        expect(app.getField).not.toHaveBeenCalled();
+    });
+
+    it('ends a modal state another object holds, once, and selects again', async () => {
+        const { selectInFieldBesideObjectSelections } =
+            await import('../../src/qix/field-selection');
+        const modal = Object.assign(new Error('Modal object'), { code: 6003 });
+        const field = {
+            lowLevelSelect: vi.fn().mockRejectedValueOnce(modal).mockResolvedValue(true),
+        };
+        const app = {
+            getField: vi.fn(async () => field),
+            abortModal: vi.fn(async () => undefined),
+        };
+        await expect(
+            selectInFieldBesideObjectSelections({
+                selections: null,
+                app,
+                field: 'match',
+                elemNumbers: [3],
+                toggle: false,
+            })
+        ).resolves.toEqual({ outcome: SELECTION_OUTCOMES.SELECTED });
+        expect(app.abortModal).toHaveBeenCalledWith(true);
+        expect(field.lowLevelSelect).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not retry other engine errors', async () => {
+        const { selectInFieldBesideObjectSelections } =
+            await import('../../src/qix/field-selection');
+        const other = Object.assign(new Error('Field not found'), { code: 7000 });
+        const field = { lowLevelSelect: vi.fn().mockRejectedValue(other) };
+        const app = { getField: vi.fn(async () => field), abortModal: vi.fn() };
+        await expect(
+            selectInFieldBesideObjectSelections({
+                selections: null,
+                app,
+                field: 'match',
+                elemNumbers: [3],
+                toggle: false,
+            })
+        ).resolves.toEqual({ outcome: SELECTION_OUTCOMES.ERROR, error: other });
+        expect(app.abortModal).not.toHaveBeenCalled();
+        expect(field.lowLevelSelect).toHaveBeenCalledTimes(1);
+    });
+});

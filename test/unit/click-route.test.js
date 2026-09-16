@@ -64,3 +64,51 @@ describe('routeClick', () => {
         expect(routeClick(undefined).kind).toBe('container');
     });
 });
+
+describe('routeClick on highlights', () => {
+    /** A bubble with a highlight, and one inside a link. */
+    function marked() {
+        const container = document.createElement('div');
+        container.innerHTML =
+            '<div class="body">Run <mark data-h="2">reload</mark> or ' +
+            '<a href="https://x.se"><mark data-h="3">task</mark></a></div>';
+        document.body.append(container);
+        return container;
+    }
+
+    it('is for the highlight while clicking selects, toggling with Ctrl or Cmd', () => {
+        const container = marked();
+        const mark = container.querySelector('mark[data-h="2"]');
+        expect(routeClick({ currentTarget: container, target: mark }, 'select')).toEqual({
+            kind: 'highlight',
+            ordinal: 2,
+            toggle: false,
+        });
+        expect(
+            routeClick({ currentTarget: container, target: mark, ctrlKey: true }, 'select').toggle
+        ).toBe(true);
+        expect(
+            routeClick({ currentTarget: container, target: mark, metaKey: true }, 'select').toggle
+        ).toBe(true);
+    });
+
+    it('is still the highlight’s click on a locked field, so the reader can be told why', () => {
+        const container = marked();
+        const mark = container.querySelector('mark[data-h="2"]');
+        expect(routeClick({ currentTarget: container, target: mark }, 'locked').kind).toBe(
+            'highlight'
+        );
+    });
+
+    it('is for the bubble while clicking a highlight does not select', () => {
+        const container = marked();
+        const mark = container.querySelector('mark[data-h="2"]');
+        expect(routeClick({ currentTarget: container, target: mark }, null).kind).toBe('container');
+    });
+
+    it('leaves a highlight inside a link to the link', () => {
+        const container = marked();
+        const mark = container.querySelector('mark[data-h="3"]');
+        expect(routeClick({ currentTarget: container, target: mark }, 'select').kind).toBe('none');
+    });
+});

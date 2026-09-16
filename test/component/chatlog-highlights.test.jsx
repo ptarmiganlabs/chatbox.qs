@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { VirtuosoMockContext } from 'react-virtuoso';
 import ChatLog from '../../src/ui/ChatLog';
@@ -74,17 +74,19 @@ const values = {
 };
 
 /** Build the highlights prop the way src/index.js does. */
-function highlightsFor(answer, chatbox = {}, messages = MESSAGES) {
+function highlightsFor(answer, chatbox = {}, messages = MESSAGES, { canSelect = false } = {}) {
     const layout = {
         qHyperCube: {},
         chatbox: { highlight: { field: 'match' }, category: { field: 'pattern' }, ...chatbox },
     };
-    return createHighlightView().build({
+    const view = createHighlightView().build({
         tagged: { answer, derivedFrom: layout, version: 0 },
         layout,
         version: 0,
         messages,
+        canSelect,
     });
+    return view && { ...view, onSelectValues: vi.fn(), onSelectCategory: vi.fn() };
 }
 
 const settings = { dateSeparators: false };
@@ -134,7 +136,7 @@ describe('ChatLog with highlights', () => {
         );
         expect(screen.queryByText(/possible values/)).not.toBeInTheDocument();
         expect(screen.queryByRole('list', { name: 'Categories' })).not.toBeInTheDocument();
-        expect(screen.getByRole('status')).toHaveTextContent('3 highlights');
+        expect(screen.getByText('3 highlights')).toBeInTheDocument();
     });
 
     it('keeps a problem in sight as a banner, even with the summary switched off', () => {
@@ -217,6 +219,132 @@ describe('ChatLog with highlights', () => {
             <ChatLog conversation={conversation(MESSAGES)} settings={settings} highlights={null} />
         );
         expect(container.querySelector('mark')).toBeNull();
-        expect(screen.queryByRole('status')).not.toBeInTheDocument();
+        expect(screen.queryByText(/highlight/)).not.toBeInTheDocument();
+        expect(screen.queryByRole('list', { name: 'Categories' })).not.toBeInTheDocument();
+    });
+});
+
+describe('ChatLog selecting by clicking highlights and chips', () => {
+    const selectable = () => highlightsFor(values, {}, MESSAGES, { canSelect: true });
+
+    it('selects every spelling of a highlight’s value, and says so in its tooltip', () => {
+        const highlights = selectable();
+        const { container } = renderList(
+            <ChatLog
+                conversation={conversation(MESSAGES)}
+                settings={settings}
+                highlights={highlights}
+            />
+        );
+        const mark = container.querySelector('mark');
+        expect(mark.getAttribute('title')).toBe(
+            'reload · ops\nClick to select this value. Ctrl+click or Cmd+click adds or removes it'
+        );
+        expect(container.querySelector('[data-marks="select"]')).toBeTruthy();
+        fireEvent.click(mark, { metaKey: true });
+        expect(highlights.onSelectValues).toHaveBeenCalledWith(['reload'], true);
+    });
+
+    it('makes each category a toggle button that selects it', () => {
+        const highlights = selectable();
+        renderList(
+            <ChatLog
+                conversation={conversation(MESSAGES)}
+                settings={settings}
+                highlights={highlights}
+            />
+        );
+        const group = screen.getByRole('group', { name: 'Categories' });
+        const script = within(group).getByRole('button', { name: /script/ });
+        expect(script).toHaveAttribute('aria-pressed', 'false');
+        expect(script.getAttribute('title')).toBe(
+            'script: 2 highlights in 2 messages\nClick to select only script. Ctrl+click or Cmd+click adds or removes it'
+        );
+        fireEvent.click(script);
+        expect(highlights.onSelectCategory).toHaveBeenCalledWith('script', false);
+    });
+
+    it('disables the chips while the category field is locked', () => {
+        const locked = highlightsFor(
+            { ...values, locked: { highlight: false, category: true } },
+            {},
+            MESSAGES,
+            { canSelect: true }
+        );
+        renderList(
+            <ChatLog
+                conversation={conversation(MESSAGES)}
+                settings={settings}
+                highlights={locked}
+            />
+        );
+        for (const chip of within(screen.getByRole('group', { name: 'Categories' })).getAllByRole(
+            'button'
+        )) {
+            expect(chip).toBeDisabled();
+        }
+    });
+
+    it('still routes a click on a locked highlight, so the reader is told why nothing happened', () => {
+        const locked = highlightsFor(
+            { ...values, locked: { highlight: true, category: false } },
+            {},
+            MESSAGES,
+            { canSelect: true }
+        );
+        const { container } = renderList(
+            <ChatLog
+                conversation={conversation(MESSAGES)}
+                settings={settings}
+                highlights={locked}
+            />
+        );
+        const mark = container.querySelector('mark');
+        expect(mark.getAttribute('title')).toBe('reload · ops\nmatch is locked');
+        fireEvent.click(mark);
+        expect(locked.onSelectValues).toHaveBeenCalledWith(['reload'], false);
+    });
+
+    it('selects a value clicked in the detail quote', () => {
+        const highlights = selectable();
+        renderList(
+            <ChatLog
+                conversation={conversation(MESSAGES)}
+                settings={{ ...settings, onBubbleClick: 'showDetails' }}
+                rect={{ width: 900, height: 600 }}
+                highlights={highlights}
+            />
+        );
+        fireEvent.click(screen.getByText('Another'));
+        const quoteMark = screen.getByLabelText('Message details').querySelector('mark');
+        fireEvent.click(quoteMark);
+        expect(highlights.onSelectValues).toHaveBeenCalledWith(['task'], false);
+    });
+
+    it('selects nothing while the rows shown are the ones before a selection', () => {
+        const highlights = selectable();
+        const { container } = renderList(
+            <ChatLog
+                conversation={conversation(MESSAGES)}
+                settings={settings}
+                highlights={highlights}
+                reloading={{ loaded: null, total: null }}
+            />
+        );
+        fireEvent.click(container.querySelector('mark'));
+        expect(highlights.onSelectValues).not.toHaveBeenCalled();
+        expect(screen.getByRole('list', { name: 'Categories' })).toBeInTheDocument();
+    });
+
+    it('shows a notice in the corner', () => {
+        renderList(
+            <ChatLog
+                conversation={conversation(MESSAGES)}
+                settings={settings}
+                highlights={selectable()}
+                notice={{ id: 1, level: 'warning', text: 'match is locked' }}
+            />
+        );
+        expect(screen.getByText('match is locked')).toHaveAttribute('data-level', 'warning');
     });
 });

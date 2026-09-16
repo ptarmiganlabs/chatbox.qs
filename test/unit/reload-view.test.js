@@ -39,3 +39,10 @@ describe('reloadingView', () => {
         expect(reloadingView({ settings: {} }, {})).toBeNull();
     });
 });
+
+describe('reloadingView and notices', () => {
+    it('shows the notice of now, not the one of the render it keeps', () => {
+        const notice = { id: 2, level: 'error', text: 'Could not select in match' };
+        expect(reloadingView({ ...previous, notice: null }, { notice }).notice).toBe(notice);
+    });
+});

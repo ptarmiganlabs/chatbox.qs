@@ -44,7 +44,9 @@ export function describeByValues(span) {
  * @param {object} options - The describer.
  * @param {object} options.styles - From `categoryStyles`.
  * @param {string} [options.hint] - A second tooltip line saying what a click does; '' for none.
- * @returns {function(object): {title: string, label: ?string, style: ?object}} The describer.
+ * @returns {function(object): {title: string, linkTitle: string, label: ?string, style: ?object}}
+ *     The describer. `linkTitle` is the tooltip without the hint, for a highlight inside a link, where
+ *     a click opens the link instead.
  */
 export function createDescriber({ styles, hint = '' }) {
     const described = new WeakMap();
@@ -52,10 +54,8 @@ export function createDescriber({ styles, hint = '' }) {
         let description = described.get(span);
         if (description === undefined) {
             const base = describeSpan(span, styles);
-            description =
-                hint === ''
-                    ? base
-                    : { ...base, title: base.title ? `${base.title}\n${hint}` : hint };
+            const title = hint === '' ? base.title : base.title ? `${base.title}\n${hint}` : hint;
+            description = { ...base, title, linkTitle: base.title };
             described.set(span, description);
         }
         return description;
@@ -96,14 +96,16 @@ function markOf(piece, { highlights, current, currentSpan, describe }) {
         cutStart: false,
         cutEnd: false,
         title: null,
+        linkTitle: null,
         label: null,
         style: null,
     };
     if (span !== null) {
         mark.cutStart = piece.start > span.start;
         mark.cutEnd = piece.end < span.end;
-        const { title, label, style } = describe(span);
+        const { title, linkTitle, label, style } = describe(span);
         mark.title = title || null;
+        mark.linkTitle = (linkTitle ?? title) || null;
         mark.label = label && piece.end === span.end ? label : null;
         mark.style = style ?? null;
     }

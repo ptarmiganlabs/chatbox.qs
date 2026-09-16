@@ -21,6 +21,7 @@ import { canReceiveTabStop, keyAction, nextFocusIndex } from './keyboard';
 import { readSnapshot, shouldRenderAll } from './snapshot';
 import MessageRow from './render-message';
 import ConversationBar from './ConversationBar';
+import Notice from './Notice';
 import { drawnCount } from '../highlight/conversation-highlights';
 import { legendEntries } from '../highlight/legend';
 import { HIGHLIGHT_KINDS } from '../qix/highlight-source';
@@ -108,8 +109,9 @@ function ReloadingLine({ reloading }) {
  * @param {Function} [props.onViewState] - Reports { firstVisibleIndex, openId } as it changes.
  * @param {?{loaded: ?number, total: ?number}} [props.reloading] - Set while newer rows load and
  *   this is the conversation that was on screen; see src/ui/reload-view.js.
- * @param {?object} [props.highlights] - The highlights to draw, from src/highlight/highlight-view.js;
- *   null while highlighting is off.
+ * @param {?object} [props.highlights] - The highlights to draw, from src/highlight/highlight-view.js,
+ *   with `onSelectValues(values, toggle)` and `onSelectCategory(name, toggle)`; null while off.
+ * @param {?{id: number, text: string, level: string}} [props.notice] - A notice to show in the corner.
  * @returns {object} The rendered conversation.
  */
 export function ChatLog({
@@ -124,6 +126,7 @@ export function ChatLog({
     onViewState,
     reloading = null,
     highlights = null,
+    notice = null,
 }) {
     // State captured when a snapshot was taken. Null for a normal render.
     const snapshot = readSnapshot(layout);
@@ -274,6 +277,8 @@ export function ChatLog({
     const showLabels = Boolean(
         highlights?.styles?.enabled && highlights.settings.category.showLabels
     );
+    // Nothing is selected while the rows shown are the ones before a selection.
+    const clickMode = reloading ? null : (highlights?.clickMode ?? null);
 
     /**
      * Find the marks for a message's detail quote.
@@ -291,8 +296,46 @@ export function ChatLog({
             message.bodyFormat === 'markdown'
                 ? highlights.matchPlain(message.body)
                 : highlights.result.byMessage[index]?.spans;
-        return { highlights: spans, describe: highlights.describe };
+        return {
+            highlights: spans,
+            describe: highlights.describe,
+            clickMode,
+            onPick: highlights.onSelectValues,
+        };
     };
+
+    /**
+     * Select the value of a highlight a message's click landed on.
+     *
+     * @param {number} index - The message's index.
+     * @param {number} ordinal - The highlight's ordinal in the message.
+     * @param {boolean} toggle - Whether Ctrl or Cmd was held.
+     * @returns {void}
+     */
+    const handleHighlightClick = (index, ordinal, toggle) => {
+        const span = highlights?.result?.byMessage?.[index]?.spans?.[ordinal];
+        if (span) highlights.onSelectValues?.(span.values, toggle);
+    };
+
+    // Chips select their category while a click on a highlight selects; "No category" never does.
+    const categoryList = highlights?.answer?.categories?.list ?? [];
+    const picking =
+        clickMode && legend.length && highlights.onSelectCategory
+            ? {
+                  locked: highlights.answer.locked?.category === true,
+                  field: highlights.answer.categories.field,
+                  selectedCount: categoryList.filter((category) => category.selected).length,
+                  tabbable: canReceiveTabStop(keyboard),
+                  /**
+                   * Select a chip's category.
+                   *
+                   * @param {{name: string}} entry - The chip's entry.
+                   * @param {boolean} toggle - Whether Ctrl or Cmd was held.
+                   * @returns {void}
+                   */
+                  onPick: (entry, toggle) => highlights.onSelectCategory(entry.name, toggle),
+              }
+            : null;
     const gapSec = Number(settings.groupGapSec) >= 0 ? Number(settings.groupGapSec) : 120;
     const showAvatars = settings.showAvatars !== false;
 
@@ -404,6 +447,8 @@ export function ChatLog({
                             : undefined
                     }
                     describe={highlights?.describe}
+                    highlightClick={clickMode}
+                    onHighlightClick={handleHighlightClick}
                 />
                 {isOpen && revealMode === 'inline' ? (
                     <DetailReveal
@@ -444,8 +489,10 @@ export function ChatLog({
             className={rootClass}
             data-density={density}
             data-labels={showLabels ? 'true' : undefined}
+            data-marks={clickMode ?? undefined}
         >
             {reloading ? <ReloadingLine reloading={reloading} /> : null}
+            <Notice notice={notice} />
             {warnings.map((w) => (
                 <div
                     key={w.code}
@@ -460,6 +507,7 @@ export function ChatLog({
                     info={highlights.placement.bar}
                     entries={legend}
                     counter={counterText}
+                    picking={picking}
                 />
             ) : null}
             <div className={styles.main}>

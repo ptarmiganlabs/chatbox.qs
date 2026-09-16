@@ -37,12 +37,22 @@ import { reloadingView } from './ui/reload-view';
 import { createHighlightLoader } from './qix/highlight-loader';
 import { loadHighlightResult } from './highlight/highlight-result';
 import { createHighlightView } from './highlight/highlight-view';
+import {
+    planCategorySelection,
+    planValueSelection,
+    selectionNotice,
+} from './highlight/click-selection';
+import { readTextToolSettings } from './highlight/settings';
+import { selectInFieldBesideObjectSelections, stateNameOf } from './qix/field-selection';
 import { render, destroy } from './ui/chat-renderer';
 import ChatLog from './ui/ChatLog';
 import { Empty, Failed, Loading, NotConfigured, emptyStateMessage } from './ui/states';
 import { themeVars } from './ui/theme-vars';
 import { extensionState } from './util/extension-state';
 import logger from './util/logger';
+
+/** How long a notice stays in the corner, in milliseconds. */
+const NOTICE_MS = 5000;
 
 /**
  * The supernova.
@@ -135,6 +145,21 @@ export default function supernova(galaxy) {
             if (!highlightViewRef.current) highlightViewRef.current = createHighlightView();
             // Monotonic token for highlight loads, like runIdRef for rows.
             const highlightRunRef = useRef(0);
+
+            // A short notice in the corner: why a click selected nothing, or what a copy did. It clears
+            // itself after a few seconds.
+            const [notice, setNotice] = useState(null);
+            const noticeIdRef = useRef(0);
+            useEffect(() => {
+                if (!notice) return undefined;
+                const timer = setTimeout(() => setNotice(null), NOTICE_MS);
+                /**
+                 * Stop the timer when the notice is replaced or the object leaves the sheet.
+                 *
+                 * @returns {void}
+                 */
+                return () => clearTimeout(timer);
+            }, [notice]);
 
             // Bumped when the companion changes: a selection in a highlight field that is not
             // associated with the messages leaves this object's own layout untouched.
@@ -290,6 +315,7 @@ export default function supernova(galaxy) {
                         rect,
                         keyboard,
                         progress,
+                        notice,
                     });
                     if (reloading) {
                         render(element, ChatLog, reloading);
@@ -382,14 +408,69 @@ export default function supernova(galaxy) {
                     return undefined;
                 }
 
-                const highlights = highlightViewRef.current.build({
+                // A click on a highlight or a chip selects in the highlight or category field: never in
+                // an export render, whose server reports every interaction as allowed, nor in edit mode.
+                const canSelectHighlights =
+                    !isSnapshot(staleLayout) &&
+                    readTextToolSettings(settings).highlight.clickToSelect &&
+                    interactions?.active !== false &&
+                    Boolean(interactions?.select) &&
+                    !interactions?.edit;
+
+                const highlightView = highlightViewRef.current.build({
                     tagged: highlightResult,
                     layout: staleLayout,
                     version: companionVersion,
                     messages: conversation.messages,
                     theme,
                     renderAll: shouldRenderAll(staleLayout, settings),
+                    canSelect: canSelectHighlights,
                 });
+
+                /**
+                 * Carry out a selection a click on a highlight or a chip planned, and say when it
+                 * did not happen.
+                 *
+                 * @param {object} plan - From planValueSelection or planCategorySelection.
+                 * @returns {Promise<void>} Resolves once the selection is sent.
+                 */
+                const pick = async (plan) => {
+                    const result = plan.locked
+                        ? { outcome: 'locked' }
+                        : await selectInFieldBesideObjectSelections({
+                              selections,
+                              app,
+                              field: plan.field,
+                              stateName: stateNameOf(staleLayout),
+                              elemNumbers: plan.elemNumbers,
+                              toggle: plan.toggle,
+                              logger,
+                          });
+                    const message = selectionNotice(plan.field, result);
+                    if (message) setNotice({ ...message, id: ++noticeIdRef.current });
+                };
+
+                const highlights = highlightView && {
+                    ...highlightView,
+                    /**
+                     * Select every spelling of a highlight's value in the highlight field.
+                     *
+                     * @param {string[]} values - The spellings the highlight stands for.
+                     * @param {boolean} toggle - Whether Ctrl or Cmd was held.
+                     * @returns {Promise<void>} Resolves once the selection is sent.
+                     */
+                    onSelectValues: (values, toggle) =>
+                        pick(planValueSelection(highlightView.answer, values, toggle)),
+                    /**
+                     * Select a category in the category field.
+                     *
+                     * @param {string} name - The category.
+                     * @param {boolean} toggle - Whether Ctrl or Cmd was held.
+                     * @returns {Promise<void>} Resolves once the selection is sent.
+                     */
+                    onSelectCategory: (name, toggle) =>
+                        pick(planCategorySelection(highlightView.answer, name, toggle)),
+                };
 
                 const view = {
                     conversation,
@@ -403,6 +484,7 @@ export default function supernova(galaxy) {
                     onViewState: handleViewStateRef.current,
                     reloading: null,
                     highlights,
+                    notice,
                 };
                 lastViewRef.current = view;
                 render(element, ChatLog, view);
@@ -425,6 +507,7 @@ export default function supernova(galaxy) {
                 selections,
                 highlightResult,
                 companionVersion,
+                notice,
             ]);
 
             // Tear the root down when the object is removed from the sheet.

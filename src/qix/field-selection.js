@@ -79,3 +79,68 @@ export async function selectInField({ app, field, stateName = '$', elemNumbers, 
         return { outcome: SELECTION_OUTCOMES.ERROR, error };
     }
 }
+
+/** The engine's answer when another object holds the selection mode (LOCERR_HC_MODAL_OBJECT_ERROR). */
+const MODAL_OBJECT_ERROR = 6003;
+
+/**
+ * Select values in a field while this object may be in its own selection mode.
+ *
+ * A click on a message selects through nebula's selection mode: a toolbar opens and the selection is
+ * pending until confirmed. A click on a highlight or a chip then selects in another field at once. In
+ * Sense, a click elsewhere confirms a pending selection, so that is done first: cancelling would drop
+ * the reader's pick without a word, and refusing would make the click do nothing. Should the engine
+ * still answer that an object holds the selection mode, the modal state is ended the way stardust
+ * itself ends it, and the selection is tried once more.
+ *
+ * @param {object} request - The selection.
+ * @param {?object} request.selections - The object's selections, from useSelections().
+ * @param {object} request.app - The enigma Doc.
+ * @param {string} request.field - The field's name.
+ * @param {string} [request.stateName] - The state to select in.
+ * @param {Array<number>} request.elemNumbers - The values' element numbers in the field.
+ * @param {boolean} request.toggle - Add or remove the values rather than replace the selection.
+ * @param {{warn: Function}} [request.logger] - Where failures are reported.
+ * @returns {Promise<{outcome: string, error?: object, stage?: string}>} What came of it; `stage` is
+ *     'confirm' when the pending selection could not be confirmed.
+ */
+export async function selectInFieldBesideObjectSelections({
+    selections,
+    app,
+    field,
+    stateName = '$',
+    elemNumbers,
+    toggle,
+    logger,
+}) {
+    const values = selectableElements(elemNumbers);
+    // Nothing to select leaves a pending selection alone.
+    if (values.length === 0 || !field) return { outcome: SELECTION_OUTCOMES.NOTHING };
+
+    if (selections?.isActive?.()) {
+        try {
+            await selections.confirm();
+        } catch (error) {
+            logger?.warn?.('The selection in progress could not be confirmed:', error);
+            return { outcome: SELECTION_OUTCOMES.ERROR, error, stage: 'confirm' };
+        }
+    }
+
+    const request = { app, field, stateName, elemNumbers: values, toggle, logger };
+    const result = await selectInField(request);
+    const code = result.error?.qErrorCode ?? result.error?.code;
+    if (
+        result.outcome === SELECTION_OUTCOMES.ERROR &&
+        code === MODAL_OBJECT_ERROR &&
+        typeof app?.abortModal === 'function'
+    ) {
+        try {
+            await app.abortModal(true);
+        } catch (error) {
+            logger?.warn?.('The modal selection state could not be ended:', error);
+            return result;
+        }
+        return selectInField(request);
+    }
+    return result;
+}

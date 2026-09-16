@@ -351,3 +351,56 @@ describe('MessageRow — selectable text', () => {
         expect(onSelect).toHaveBeenCalledTimes(1);
     });
 });
+
+describe('MessageRow — clicking a highlight', () => {
+    const highlighted = {
+        text: 'Please reload now',
+        spans: [{ start: 7, end: 13, values: ['reload'], categories: [] }],
+    };
+
+    /** Render a selectable row with one highlight. */
+    function renderRow(props = {}) {
+        const onSelect = vi.fn();
+        const onHighlightClick = vi.fn();
+        const utils = render(
+            <MessageRow
+                message={message({ body: 'Please reload now' })}
+                index={4}
+                showAuthor
+                showAvatar
+                selectable
+                onSelect={onSelect}
+                highlights={highlighted}
+                drawn={1}
+                highlightClick="select"
+                onHighlightClick={onHighlightClick}
+                {...props}
+            />
+        );
+        return { ...utils, onSelect, onHighlightClick };
+    }
+
+    it('selects the highlight’s value instead of acting on the message', () => {
+        const { container, onSelect, onHighlightClick } = renderRow();
+        fireEvent.click(container.querySelector('mark'));
+        expect(onHighlightClick).toHaveBeenCalledWith(4, 0, false);
+        expect(onSelect).not.toHaveBeenCalled();
+
+        fireEvent.click(container.querySelector('mark'), { ctrlKey: true });
+        expect(onHighlightClick).toHaveBeenLastCalledWith(4, 0, true);
+    });
+
+    it('acts on the message for a click beside the highlight', () => {
+        const { onSelect, onHighlightClick } = renderRow();
+        fireEvent.click(screen.getByText(/now/));
+        expect(onSelect).toHaveBeenCalledTimes(1);
+        expect(onHighlightClick).not.toHaveBeenCalled();
+    });
+
+    it('acts on the message for a click on a highlight while clicking highlights does not select', () => {
+        const { container, onSelect, onHighlightClick } = renderRow({ highlightClick: null });
+        fireEvent.click(container.querySelector('mark'));
+        expect(onSelect).toHaveBeenCalledTimes(1);
+        expect(onHighlightClick).not.toHaveBeenCalled();
+    });
+});

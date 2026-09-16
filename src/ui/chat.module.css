@@ -671,3 +671,61 @@
     color: var(--cqs-muted, #6c6c6c);
     font-variant-numeric: tabular-nums;
 }
+
+/* A click on a highlight selects its value; inside a link, the click is the link's. */
+.root[data-marks='select'] .mark:not([data-link]) {
+    cursor: pointer;
+}
+
+button.chip {
+    cursor: pointer;
+}
+
+button.chip[aria-pressed='true'] {
+    border-color: var(--cqs-selected, #009845);
+    background: var(--cqs-selected, #009845);
+    color: #ffffff;
+}
+
+button.chip[aria-pressed='true'] .chipCount {
+    color: inherit;
+}
+
+button.chip:disabled {
+    cursor: default;
+    opacity: 0.6;
+}
+
+button.chip:focus-visible {
+    outline: 2px solid var(--cqs-focus, #3f8ab3);
+    outline-offset: 1px;
+}
+
+/* The notice in the corner: why a click selected nothing, or what a copy did. */
+.notice {
+    position: absolute;
+    right: 8px;
+    bottom: 8px;
+    z-index: 4;
+    max-width: calc(100% - 16px);
+    pointer-events: none;
+}
+
+.noticeText {
+    display: block;
+    padding: 4px 8px;
+    border: 1px solid var(--cqs-border, #d9d9d9);
+    border-radius: 4px;
+    background: var(--cqs-bg, #ffffff);
+    color: var(--cqs-text, #404040);
+    font-size: 11px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+
+.noticeText[data-level='warning'] {
+    border-color: #d98324;
+}
+
+.noticeText[data-level='error'] {
+    border-color: #b3261e;
+}

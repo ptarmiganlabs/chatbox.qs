@@ -16,6 +16,7 @@ import { categoryStyles } from './category-styles';
 import { createConversationHighlighter } from './conversation-highlights';
 import { createProjections } from './markdown-projection';
 import { isCurrentHighlightResult } from './highlight-result';
+import { valueClickHint } from './click-selection';
 import { createDescriber } from './marks';
 import { readTextToolSettings } from './settings';
 import { highlightSummary, summaryPlacement } from './summary';
@@ -36,17 +37,21 @@ export function createHighlightView({
 } = {}) {
     let styles = null;
     let describe = null;
+    let describedHint = '';
 
     /**
-     * Keep the category styles, and the describer made from them, while their key is unchanged.
+     * Keep the category styles, and the describer made from them, while their key and the click hint
+     * are unchanged.
      *
      * @param {object} next - Freshly worked-out styles.
+     * @param {string} hint - What hovering over a highlight says a click does; '' for nothing.
      * @returns {void}
      */
-    function keepStyles(next) {
-        if (styles !== null && styles.key === next.key) return;
-        styles = next;
-        describe = createDescriber({ styles });
+    function keepStyles(next, hint) {
+        if (styles !== null && styles.key === next.key && describedHint === hint) return;
+        if (styles === null || styles.key !== next.key) styles = next;
+        describedHint = hint;
+        describe = createDescriber({ styles, hint });
     }
 
     /**
@@ -60,23 +65,34 @@ export function createHighlightView({
      * @param {Array<object>} request.messages - The conversation's messages, in display order.
      * @param {object} [request.theme] - The stardust theme.
      * @param {boolean} [request.renderAll] - Whether every message is rendered at once.
+     * @param {boolean} [request.canSelect] - Whether a click on a highlight selects its value.
      * @returns {?object} `answer`, `pending` (a newer answer is loading), `settings`, `result`,
-     *     `styles`, `describe`, `summary`, `placement`, `renderAll` and `matchPlain`; null while
-     *     highlighting is off.
+     *     `styles`, `describe`, `summary`, `placement`, `renderAll`, `matchPlain` and `clickMode`;
+     *     null while highlighting is off.
      */
-    function build({ tagged, layout, version, messages, theme, renderAll = false }) {
+    function build({
+        tagged,
+        layout,
+        version,
+        messages,
+        theme,
+        renderAll = false,
+        canSelect = false,
+    }) {
         const answer = tagged?.answer ?? null;
         if (answer === null || answer.kind === HIGHLIGHT_KINDS.OFF) return null;
 
         const settings = readTextToolSettings(layout?.chatbox);
         const rows = answer.kind === HIGHLIGHT_KINDS.VALUES ? answer.rows : [];
         const result = highlighter.highlight({ messages, rows, options: settings.match });
+        const values = answer.kind === HIGHLIGHT_KINDS.VALUES;
         keepStyles(
             categoryStyles({
                 categories: answer.categories ?? null,
                 palette: paletteFromTheme(theme),
                 dark: isDarkTheme(theme),
-            })
+            }),
+            values && canSelect ? valueClickHint(answer) : ''
         );
         const summary = highlightSummary(answer, result, {
             invalidColor: styles.invalidColor,
@@ -93,6 +109,9 @@ export function createHighlightView({
             placement: summaryPlacement(summary, { showSummary: settings.highlight.showSummary }),
             renderAll,
             matchPlain: highlighter.matchPlain,
+            // What a click on a highlight does: 'select', 'locked' while the field is, or nothing.
+            clickMode:
+                values && canSelect ? (answer.locked?.highlight ? 'locked' : 'select') : null,
         };
     }
 

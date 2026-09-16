@@ -23,14 +23,16 @@
  * @param {object} [now.rect] - The object's current rect.
  * @param {object} [now.keyboard] - The current useKeyboard() state.
  * @param {?{loaded: number, total: number}} [now.progress] - Paging progress, when known.
+ * @param {?object} [now.notice] - The notice to show now.
  * @returns {?object} The props to render the previous conversation with, or null to render Loading.
  */
-export function reloadingView(previous, { rect, keyboard, progress } = {}) {
+export function reloadingView(previous, { rect, keyboard, progress, notice = null } = {}) {
     if (!previous?.conversation) return null;
     return {
         ...previous,
         rect,
         keyboard,
+        notice,
         canSelect: false,
         reloading: {
             loaded: Number.isFinite(progress?.loaded) ? progress.loaded : null,

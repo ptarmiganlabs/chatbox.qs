@@ -50,6 +50,10 @@ function initials(label) {
  * @param {?object} [props.highlights] - This message's highlights, from the conversation highlighter.
  * @param {number} [props.drawn] - How many of them are drawn.
  * @param {function(object): object} [props.describe] - Describes a highlight span.
+ * @param {?string} [props.highlightClick] - 'select' while a click on a highlight selects its value,
+ *   'locked' while its field is locked, null otherwise.
+ * @param {Function} [props.onHighlightClick] - Called with (index, ordinal, toggle) for a click that
+ *   selects a highlight's value.
  * @returns {object} The rendered row.
  */
 export function MessageRow({
@@ -66,6 +70,8 @@ export function MessageRow({
     highlights = null,
     drawn,
     describe,
+    highlightClick = null,
+    onHighlightClick,
 }) {
     const own = message.side === 'right';
     const groupSize = message.recipients?.length ?? 0;
@@ -94,7 +100,12 @@ export function MessageRow({
      * @returns {void}
      */
     const handleClick = (event) => {
-        if (routeClick(event).kind === 'none') return;
+        const route = routeClick(event, highlightClick);
+        if (route.kind === 'none') return;
+        if (route.kind === 'highlight') {
+            onHighlightClick?.(index, route.ordinal, route.toggle);
+            return;
+        }
         if (selectable) onSelect?.(message);
     };
 
