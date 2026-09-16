@@ -67,6 +67,9 @@ export class StaleError extends Error {
  * @param {Function} [options.onProgress] - Called with (loaded, total) per page.
  * @param {number} [options.maxRows] - Hard cap on rows fetched.
  * @param {boolean} [options.fromEnd] - Read the last rows rather than the first.
+ * @param {number} [options.skipLast] - Rows at the end of the cube never to read,
+ *   such as the phantom rows found by {@link countTrailingRows}; with `fromEnd`
+ *   the rows read end just before them.
  * @param {Function} [options.isEnough] - Given the rows so far, returns true when
  *   no more are needed; asked before every call to the engine. The highlight
  *   values stop at a whole value past their limit this way, rather than at a row
@@ -83,6 +86,7 @@ export async function fetchAllRows({
     onProgress,
     maxRows = 5000,
     fromEnd = false,
+    skipLast = 0,
     isEnough = () => false,
 }) {
     const hc = layout?.qHyperCube;
@@ -90,11 +94,13 @@ export async function fetchAllRows({
 
     const colCount = hc.qSize?.qcx || 1;
     const total = hc.qSize?.qcy || 0;
+    // The rows that may be read: all but the ones to skip at the end.
+    const readable = Math.max(0, total - Math.max(0, Math.floor(skipLast) || 0));
     // A whole number of rows: a limit such as 2500.5 would otherwise ask the
     // engine for a fractional row.
-    const wanted = Math.max(0, Math.min(total, Math.floor(maxRows)));
+    const wanted = Math.max(0, Math.min(readable, Math.floor(maxRows)));
     // The cube row the rows read start at.
-    const first = fromEnd ? total - wanted : 0;
+    const first = fromEnd ? readable - wanted : 0;
 
     // 1. Reuse the pages that came with the layout — free, already evaluated —
     // for the rows wanted they hold, from the first row wanted on. The initial
@@ -155,6 +161,94 @@ export async function fetchAllRows({
         total,
         truncated: total > rows.length,
     };
+}
+
+/** How many rows the first call of a backwards scan reads; each later call reads twice as many. */
+export const FIRST_SCAN_ROWS = 100;
+
+/**
+ * Count the rows at the end of the hypercube that match, reading backwards.
+ *
+ * Reads only the columns asked for, one single-column page each in the same
+ * call, so a call holds as many rows as the cell budget allows for those
+ * columns. The first call reads the last {@link FIRST_SCAN_ROWS} rows, and each
+ * later call twice as many, up to the budget: a cube whose last row does not
+ * match costs one small call, and a long run of matching rows few calls. Rows
+ * that came with the layout are tested without a call.
+ *
+ * @param {object} options - Inputs.
+ * @param {object} options.model - The enigma GenericObject model.
+ * @param {object} options.layout - The layout to scan against (use useStaleLayout).
+ * @param {number[]} options.columns - The columns a row is tested on.
+ * @param {function(object[]): boolean} options.matches - Given a row's cells in the
+ *   order of `columns`, returns true when the row counts.
+ * @param {Function} [options.isStale] - Returns true when this run is superseded.
+ * @returns {Promise<number>} How many rows, from the last one back, match, up to
+ *   the first that does not. A page shorter than asked for, which means the cube
+ *   changed after the layout, ends the count there.
+ */
+export async function countTrailingRows({
+    model,
+    layout,
+    columns,
+    matches,
+    isStale = () => false,
+}) {
+    const hc = layout?.qHyperCube;
+    const total = hc?.qSize?.qcy || 0;
+    if (!total || !columns?.length) return 0;
+
+    const lowest = Math.min(...columns);
+    const highest = Math.max(...columns);
+    // The layout's pages that hold every column asked for.
+    const held = (hc.qDataPages || []).filter((page) => {
+        const left = page.qArea?.qLeft ?? 0;
+        return left <= lowest && left + (page.qArea?.qWidth ?? 0) > highest;
+    });
+
+    const perCall = Math.max(1, Math.floor(MAX_CELLS / columns.length));
+    let height = FIRST_SCAN_ROWS;
+    let count = 0;
+    // The row tested next.
+    let next = total - 1;
+
+    while (next >= 0) {
+        const page = held.find((candidate) => {
+            const top = candidate.qArea?.qTop ?? 0;
+            return next >= top && next < top + (candidate.qMatrix?.length ?? 0);
+        });
+        if (page) {
+            const top = page.qArea?.qTop ?? 0;
+            const left = page.qArea?.qLeft ?? 0;
+            for (; next >= top; next--) {
+                const row = page.qMatrix[next - top];
+                if (!matches(columns.map((column) => row?.[column - left]))) return count;
+                count += 1;
+            }
+            continue;
+        }
+
+        if (isStale()) throw new StaleError();
+        const qHeight = Math.min(height, perCall, next + 1);
+        const qTop = next + 1 - qHeight;
+        const pages = await model.getHyperCubeData(
+            '/qHyperCubeDef',
+            columns.map((column) => ({ qTop, qLeft: column, qWidth: 1, qHeight }))
+        );
+        // As in fetchAllRows: a run superseded while the call was out must not
+        // count what it brought back.
+        if (isStale()) throw new StaleError();
+
+        const matrices = columns.map((_, k) => pages?.[k]?.qMatrix ?? []);
+        if (matrices.some((matrix) => matrix.length < qHeight)) return count;
+        for (let i = qHeight - 1; i >= 0; i--) {
+            if (!matches(matrices.map((matrix) => matrix[i]?.[0]))) return count;
+            count += 1;
+            next -= 1;
+        }
+        height *= 2;
+    }
+    return count;
 }
 
 export default fetchAllRows;

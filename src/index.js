@@ -28,8 +28,7 @@ import definition from './object-properties';
 import dataTargets from './data';
 import ext from './ext/index';
 import { normalize } from './chat/normalize';
-import { readsFromEnd } from './chat/message-limit';
-import { fetchAllRows } from './qix/paging';
+import { readConversationRows } from './qix/conversation-rows';
 import { ROLES, conversationModelOf, resolveRoles } from './qix/column-map';
 import { buildSelection } from './qix/selection';
 import { describeAssignments } from './qix/role-labels';
@@ -304,12 +303,12 @@ export default function supernova(galaxy) {
                 if (!model || !staleLayout?.qHyperCube) return null;
                 const runId = ++runIdRef.current;
                 setProgress(null);
-                const result = await fetchAllRows({
+                // Up to Maximum messages: the newest rows for Newest first and lanes, past
+                // any phantom rows at the end of the cube.
+                const result = await readConversationRows({
                     model,
                     layout: staleLayout,
-                    maxRows: Number(settings.maxMessages) || 5000,
-                    // Newest first and lanes keep the newest rows when the limit cuts them short.
-                    fromEnd: readsFromEnd(settings),
+                    settings,
                     /**
                      * Report whether this run has been superseded.
                      *
@@ -424,6 +423,7 @@ export default function supernova(galaxy) {
                             props: settings,
                             theme,
                             area: page.area,
+                            phantomTail: page.phantomTail,
                         }),
                     };
                 }

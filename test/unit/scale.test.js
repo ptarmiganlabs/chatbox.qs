@@ -4,7 +4,7 @@ import { buildDayGroups } from '../../src/chat/grouping';
 import { fetchAllRows, rowsPerPage } from '../../src/qix/paging';
 import { assignBubbleKeys, collapseRecords } from '../../src/chat/collapse';
 import { buildBoard } from '../../src/chat/lanes';
-import { readsFromEnd } from '../../src/chat/message-limit';
+import { readConversationRows } from '../../src/qix/conversation-rows';
 import { laneCaption } from '../../src/ui/LaneBoard';
 import { fastestTime } from '../helpers/timing';
 
@@ -279,29 +279,44 @@ describe('scale: paging 12,000 rows', () => {
 });
 
 describe('scale: 12,000 messages over a limit of 5,000', () => {
-    /** A model serving the generated rows, each page from the row it starts at. */
-    const cubeModel = () => ({
-        getHyperCubeData: vi.fn(async (path, pages) => {
-            const { qTop, qHeight } = pages[0];
-            const available = Math.max(0, Math.min(qHeight, COUNT - qTop));
-            return [
-                {
-                    qArea: { qTop, qLeft: 0, qWidth: COLS, qHeight: available },
-                    qMatrix: bigRows(qTop + available).slice(qTop),
-                },
-            ];
-        }),
-    });
+    /** A phantom row: a linked value with no message, which null suppression off turns into a row. */
+    const phantomRow = () => [
+        { qText: '-', qElemNumber: -2, qAttrExps: { qValues: [{ qNum: 'NaN' }] } },
+        { qText: 'Dora', qElemNumber: 3, qState: 'O' },
+        { qText: '-', qElemNumber: -2 },
+        { qText: '-', qNum: 'NaN', qIsNull: true },
+        { qText: '0', qNum: 0 },
+    ];
+    const MESSAGE_ROWS = bigRows();
+
+    /** A model serving any rectangles of the messages, then `phantoms` phantom rows, as null ids sort. */
+    const cubeModel = (phantoms) => {
+        const rows = [...MESSAGE_ROWS, ...Array.from({ length: phantoms }, phantomRow)];
+        return {
+            getHyperCubeData: vi.fn(async (path, pages) =>
+                pages.map(({ qTop, qLeft, qWidth, qHeight }) => {
+                    const matrix = rows
+                        .slice(qTop, qTop + qHeight)
+                        .map((row) => row.slice(qLeft, qLeft + qWidth));
+                    return {
+                        qArea: { qTop, qLeft, qWidth, qHeight: matrix.length },
+                        qMatrix: matrix,
+                    };
+                })
+            ),
+        };
+    };
 
     /** Read the rows as the object does for these settings, and normalize them. */
-    async function conversationFor(settings) {
-        const { rows, area } = await fetchAllRows({
-            model: cubeModel(),
-            layout: bigLayout(),
-            maxRows: 5000,
-            fromEnd: readsFromEnd(settings),
+    async function conversationFor(settings, { phantoms = 0 } = {}) {
+        const layout = bigLayout(COUNT + phantoms);
+        const props = { maxMessages: 5000, ...settings };
+        const { rows, area, phantomTail } = await readConversationRows({
+            model: cubeModel(phantoms),
+            layout,
+            settings: props,
         });
-        return normalize({ layout: bigLayout(), rows, area, props: settings });
+        return normalize({ layout, rows, area, props, phantomTail });
     }
 
     const truncation = (c) => c.diagnostics.find((d) => d.code === 'truncated').message;
@@ -341,5 +356,48 @@ describe('scale: 12,000 messages over a limit of 5,000', () => {
         expect(laneCaption(board, c.meta)).toBe(
             '4 of 10 conversations among the newest 5,000 of 12,000 rows'
         );
+    });
+
+    describe('when the cube ends in 7,000 phantom rows, more than the limit', () => {
+        it('still shows the newest 5,000 messages newest first — #44', async () => {
+            const c = await conversationFor({ order: 'newest' }, { phantoms: 7000 });
+            expect(c.messages).toHaveLength(5000);
+            expect(c.messages[0].body).toBe('Generated message 12000');
+            expect(c.messages.at(-1).body).toBe('Generated message 7001');
+            expect(c.meta).toMatchObject({
+                total: 12000,
+                phantomRows: 0,
+                phantomRowsSkipped: 7000,
+                truncatedTo: 'newest',
+            });
+            expect(truncation(c)).toBe(
+                'Showing the newest 5000 of 12000 messages. Filter to see the rest.'
+            );
+            expect(c.diagnostics.find((d) => d.code === 'phantom-rows')).toBeUndefined();
+        });
+
+        it('gives lanes to the conversations with the latest activity', async () => {
+            const c = await conversationFor(
+                { order: 'oldest', lanes: { show: true } },
+                { phantoms: 7000 }
+            );
+            const board = buildBoard(c.messages, { max: 4, scroll: 'linked' });
+            expect(board.lanes.map((lane) => lane.label)).toEqual([
+                'Thread 24',
+                'Thread 23',
+                'Thread 22',
+                'Thread 21',
+            ]);
+            expect(laneCaption(board, c.meta)).toBe(
+                '4 of 10 conversations among the newest 5,000 of 12,000 rows'
+            );
+        });
+
+        it('leaves Oldest first reading from row 0', async () => {
+            const c = await conversationFor({ order: 'oldest' }, { phantoms: 7000 });
+            expect(c.messages[0].body).toBe('Generated message 1');
+            expect(c.messages.at(-1).body).toBe('Generated message 5000');
+            expect(c.meta.phantomRowsSkipped).toBe(0);
+        });
     });
 });

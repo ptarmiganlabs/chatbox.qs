@@ -60,6 +60,8 @@ function emptyConversation(diagnostics = [], meta = {}) {
             loaded: 0,
             rowsLoaded: 0,
             phantomRows: 0,
+            // Phantom rows at the end of the cube that were not read at all.
+            phantomRowsSkipped: 0,
             truncated: false,
             // Which rows the limit kept when it cut them short: 'oldest' or
             // 'newest'; null when nothing was left out, or rows at both ends were.
@@ -97,6 +99,22 @@ function readRecipient(recipientCell) {
 }
 
 /**
+ * Read a message body cell.
+ *
+ * Only() returns NULL when the value is not unique within the group, and the
+ * engine renders that as its '-' sentinel. On a merged bubble that is exactly
+ * what happens, so the raw sentinel must not reach the bubble as if it were the
+ * message. The renderer explains the merge instead.
+ *
+ * @param {object} [textCell] - The message text NxCell.
+ * @returns {string} The body, or '' for none.
+ */
+function readBody(textCell) {
+    const rawBody = cell.text(textCell);
+    return rawBody === NULL_SENTINEL ? '' : rawBody;
+}
+
+/**
  * Read one qMatrix row into a flat record.
  *
  * @param {Array} row - The qMatrix row.
@@ -111,12 +129,6 @@ function readRecord(row, i, ctx) {
 
     const dupCount = ctx.dupCol ? cell.num(row[ctx.dupCol.col]) : null;
 
-    // Only() returns NULL when the value is not unique within the group, and
-    // the engine renders that as its '-' sentinel. On a merged bubble that is
-    // exactly what happens, so the raw sentinel must not reach the bubble as
-    // if it were the message. The renderer explains the merge instead.
-    const rawBody = cell.text(row[ctx.textCol.col]);
-
     // Qlik returns a DAY SERIAL here, not epoch milliseconds — see
     // qlikTimeToEpochMs. Storing the raw value silently disables every
     // time-based behaviour downstream.
@@ -130,7 +142,7 @@ function readRecord(row, i, ctx) {
     return {
         id: cell.text(idCell) || `row-${i}`,
         elem: cell.elem(idCell),
-        body: rawBody === NULL_SENTINEL ? '' : rawBody,
+        body: readBody(row[ctx.textCol.col]),
         // The raw probe value, kept so a phantom row (probe 0) can be told apart.
         probe: dupCount,
         rowCount: typeof dupCount === 'number' ? dupCount : 1,
@@ -220,6 +232,45 @@ function collectRecipientElems(records) {
 }
 
 /**
+ * Build the test that tells a phantom row from a message on the engine's cells.
+ *
+ * For reading past the phantom rows before any row is read: it needs only the
+ * message id, text and probe columns, and decides with {@link isPhantomRecord},
+ * so a row counts as a phantom exactly when normalize would drop it.
+ *
+ * @param {object} layout - The object layout.
+ * @param {object} [props] - The `chatbox` property bag.
+ * @returns {?{columns: number[], matches: function(object[]): boolean}} The
+ *   columns to read — message id, text, and the probe when there is one — and
+ *   the test on their cells in that order; null while the roles are not set up.
+ */
+export function phantomRowTest(layout, props = {}) {
+    if (!layout?.qHyperCube) return null;
+    const { byRole, missing } = resolveRoles(layout, props.roles, {
+        conversationModel: conversationModelOf(props),
+    });
+    if (missing.length) return null;
+    const dupCol = byRole[ROLES.DUP_CHECK];
+    const columns = [byRole[ROLES.MESSAGE_ID].col, byRole[ROLES.TEXT].col];
+    if (dupCol) columns.push(dupCol.col);
+    return {
+        columns,
+        /**
+         * Report whether a row's cells are a phantom's.
+         *
+         * @param {object[]} cells - The message id, text and probe cells.
+         * @returns {boolean} True for a phantom row.
+         */
+        matches: ([idCell, textCell, probeCell]) =>
+            isPhantomRecord({
+                elem: cell.elem(idCell),
+                body: readBody(textCell),
+                probe: dupCol ? cell.num(probeCell) : null,
+            }),
+    };
+}
+
+/**
  * Turn hypercube rows into a Conversation.
  *
  * @param {object} options - Inputs.
@@ -229,9 +280,11 @@ function collectRecipientElems(records) {
  * @param {object} [options.theme] - The stardust theme, for the colour palette.
  * @param {object} [options.area] - The area of the rows read, from fetchAllRows: where
  *   they start in the cube, for absolute row indices and for where the limit cut them.
+ * @param {number} [options.phantomTail] - Phantom rows at the end of the cube that were
+ *   skipped rather than read. They are not messages, so they are not counted as left out.
  * @returns {object} The normalized Conversation.
  */
-export function normalize({ layout, rows, props = {}, theme, area }) {
+export function normalize({ layout, rows, props = {}, theme, area, phantomTail = 0 }) {
     const diagnostics = [];
     const hc = layout?.qHyperCube;
 
@@ -368,9 +421,12 @@ export function normalize({ layout, rows, props = {}, theme, area }) {
     // Truncation is a question about ROWS: the engine counts rows, and once rows
     // are collapsed a fully loaded cube holds fewer bubbles than qcy. Comparing
     // bubbles with qcy would report messages missing that are all on screen.
-    // Phantom rows are loaded rows too — the engine counts them in qcy.
+    // Phantom rows are loaded rows too — the engine counts them in qcy. Phantom
+    // rows skipped at the end of the cube were never loaded, and are not
+    // messages either, so they are not rows left out: the total leaves them out.
     const rowsLoaded = records.length;
-    const total = hc.qSize?.qcy ?? rowsLoaded;
+    const phantomRowsSkipped = Math.max(0, Math.floor(phantomTail) || 0);
+    const total = (hc.qSize?.qcy ?? rowsLoaded) - phantomRowsSkipped;
     const truncated = total > rowsLoaded;
 
     // The rows read are one unbroken run of the cube, so the limit left rows out
@@ -396,7 +452,7 @@ export function normalize({ layout, rows, props = {}, theme, area }) {
 
     // Phantoms only cost something when the cap cut the load short: then they
     // used up budget that real messages needed. Null message ids sort last, so
-    // a cap that keeps the newest rows keeps the phantoms among them.
+    // reading the newest rows skips them instead, when they can be found.
     if (truncated && phantomRows > 0) {
         diagnostics.push({
             severity: SEVERITY.WARNING,
@@ -434,6 +490,7 @@ export function normalize({ layout, rows, props = {}, theme, area }) {
             loaded: messages.length,
             rowsLoaded,
             phantomRows,
+            phantomRowsSkipped,
             truncated,
             truncatedTo,
             mergedCount,
