@@ -56,3 +56,24 @@ describe('isDarkTheme', () => {
         expect(themeVars(light)['--cqs-bubble-bg']).toBe('#f2f2f2');
     });
 });
+
+describe('highlight colours', () => {
+    it('defines the highlight, search and current colours for light and dark themes', () => {
+        const light = themeVars(theme({ backgroundColor: '#ffffff' }));
+        const dark = themeVars(theme({ backgroundColor: '#1e1e1e' }));
+        for (const name of [
+            '--cqs-highlight',
+            '--cqs-highlight-line',
+            '--cqs-find',
+            '--cqs-current',
+            '--cqs-ruler',
+            '--cqs-selected',
+            '--cqs-focus',
+        ]) {
+            expect(light[name], name).toBeTruthy();
+            expect(dark[name], name).toBeTruthy();
+        }
+        expect(light['--cqs-current']).toBe('#262626');
+        expect(dark['--cqs-current']).toBe('#f0f0f0');
+    });
+});

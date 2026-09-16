@@ -31,3 +31,27 @@ describe('selectable message text', () => {
         expect(body).toMatch(/-webkit-user-select:\s*text/);
     });
 });
+
+describe('highlights in the stylesheet', () => {
+    it('never lets a category label be selected or copied with the text', () => {
+        const label = declarationsOf(".root[data-labels='true'] .mark[data-label]::after");
+        expect(label).not.toBeNull();
+        expect(label).toMatch(/content:\s*attr\(data-label\)/);
+        expect(label).toMatch(/(^|;|\s)user-select:\s*none/);
+    });
+
+    it('repeats a highlight’s tint on every line of a value that wraps', () => {
+        const mark = declarationsOf('.mark');
+        expect(mark).toMatch(/(^|;|\s)box-decoration-break:\s*clone/);
+        expect(mark).toMatch(/-webkit-box-decoration-break:\s*clone/);
+    });
+
+    it('keeps the bar from being squeezed to nothing by a long conversation', () => {
+        expect(declarationsOf('.bar')).toMatch(/flex:\s*none/);
+    });
+
+    it('uses no color-mix(), which the browser that renders exports may not know', () => {
+        // Comments may name it; rules may not.
+        expect(css.replace(/\/\*[\s\S]*?\*\//g, '')).not.toMatch(/color-mix\(/);
+    });
+});

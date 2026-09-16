@@ -47,6 +47,9 @@ function initials(label) {
  * @param {boolean} [props.expanded] - Whether this message's detail is open.
  * @param {Function} [props.onSelect] - Click handler receiving the message.
  * @param {Function} [props.onShowDetails] - Opens the detail view, when clicking selects instead.
+ * @param {?object} [props.highlights] - This message's highlights, from the conversation highlighter.
+ * @param {number} [props.drawn] - How many of them are drawn.
+ * @param {function(object): object} [props.describe] - Describes a highlight span.
  * @returns {object} The rendered row.
  */
 export function MessageRow({
@@ -60,6 +63,9 @@ export function MessageRow({
     expanded,
     onSelect,
     onShowDetails,
+    highlights = null,
+    drawn,
+    describe,
 }) {
     const own = message.side === 'right';
     const groupSize = message.recipients?.length ?? 0;
@@ -175,7 +181,13 @@ export function MessageRow({
                     }
                 >
                     {message.body ? (
-                        <BubbleBody body={message.body} format={message.bodyFormat} />
+                        <BubbleBody
+                            body={message.body}
+                            format={message.bodyFormat}
+                            highlights={highlights}
+                            drawn={drawn}
+                            describe={describe}
+                        />
                     ) : message.merged ? (
                         <div className={styles.bodyMissing}>
                             {message.rowCount} messages share this Message ID, so{' '}

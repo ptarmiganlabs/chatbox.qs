@@ -24,7 +24,9 @@ describe('matching at scale', () => {
 
         expect(run(large).matches).toHaveLength(30000);
         const ratio = fastestTime(() => run(large)) / fastestTime(() => run(small));
-        expect(ratio).toBeLessThan(8);
+        // textview.qs bounds this at 8. Beside chatbox.qs's many test files it came out above that
+        // once in six full runs, so it takes chatbox's own bound, which still fails quadratic growth.
+        expect(ratio).toBeLessThan(12);
     });
 
     it('barely slows down with four times as many selected values', () => {

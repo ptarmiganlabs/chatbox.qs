@@ -452,6 +452,12 @@
     color: #7a4b00;
 }
 
+/* A highlight field that is not there, or an engine error: not a hint, a fault. */
+.bannerWarning[data-level='error'] {
+    background: #fbeae9;
+    color: #8c1d18;
+}
+
 /* Newer rows are loading after a selection, and the conversation on screen is the one before it.
    The line overlays the top edge instead of taking a row, so nothing shifts as it comes and goes. */
 .reloading {
@@ -508,4 +514,160 @@
 .root .author * {
     -webkit-user-select: text;
     user-select: text;
+}
+
+/* ---- Highlights ----------------------------------------------------------------------------------
+   Ported from textview.qs (src/render/viewer.module.css at df84a5e). A highlight is tinted and
+   underlined in its category's colour, both from custom properties set on the mark; the underline is a
+   background image, so several categories can stand side by side in it, and a search match changes
+   only the background colour, keeping the underline. box-decoration-break repeats the tint on each
+   line of a value that wraps. Nothing here uses color-mix(). */
+.mark {
+    padding: 0 0 2px;
+    border-radius: 2px;
+    background-color: var(--cqs-mark-fill, var(--cqs-highlight, rgba(255, 196, 0, 0.35)));
+    background-image: var(
+        --cqs-mark-line,
+        linear-gradient(var(--cqs-highlight-line, #b58900), var(--cqs-highlight-line, #b58900))
+    );
+    background-position: left bottom;
+    background-size: 100% 2px;
+    background-repeat: no-repeat;
+    color: inherit;
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
+}
+
+/* A highlight cut into pieces goes on where a piece is cut: no rounded corner there. */
+.mark[data-cut-start] {
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+}
+
+.mark[data-cut-end] {
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+}
+
+/* Category labels: a box in the category's colour, with the names after the value. The label is
+   generated content, so it is never selected or copied with the text. */
+.root[data-labels='true'] .mark {
+    padding: 0 3px;
+    border: 1px solid var(--cqs-mark-border, var(--cqs-highlight-line, #b58900));
+    border-radius: 4px;
+    background-image: none;
+}
+
+.root[data-labels='true'] .mark[data-cut-start] {
+    padding-left: 0;
+    border-left-width: 0;
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+}
+
+.root[data-labels='true'] .mark[data-cut-end] {
+    padding-right: 0;
+    border-right-width: 0;
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+}
+
+.root[data-labels='true'] .mark[data-label]::after {
+    content: attr(data-label);
+    margin-left: 5px;
+    color: var(--cqs-mark-ink, inherit);
+    font-size: 0.75em;
+    font-weight: 600;
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+.find,
+.mark.find {
+    border-radius: 2px;
+    background-color: var(--cqs-find, rgba(255, 140, 0, 0.45));
+    color: inherit;
+}
+
+.markCurrent {
+    outline: 2px solid var(--cqs-current, #262626);
+    outline-offset: 1px;
+}
+
+/* ---- The bar above the conversation --------------------------------------------------------------
+   flex: none, or a long conversation squeezes it to nothing (textview.qs GOTCHAS 23). The legend
+   scrolls rather than growing past a few lines. */
+.bar {
+    flex: none;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 4px 8px;
+    border-bottom: 1px solid var(--cqs-border, #d9d9d9);
+    font-size: 11px;
+    color: var(--cqs-muted, #6c6c6c);
+}
+
+.toolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.summary {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.counter {
+    flex: none;
+    margin-left: auto;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.legend {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 6px;
+    max-height: 4.8em;
+    overflow-y: auto;
+}
+
+.chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 1px 8px;
+    border: 1px solid var(--cqs-border, #d9d9d9);
+    border-radius: 10px;
+    background: transparent;
+    color: var(--cqs-text, #404040);
+    font: inherit;
+    white-space: nowrap;
+}
+
+.chip[data-empty='true'] {
+    opacity: 0.5;
+}
+
+.chip[data-none='true'] {
+    font-style: italic;
+}
+
+.swatch {
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+    background: var(--cqs-chip-color, var(--cqs-highlight-line, #b58900));
+}
+
+.chipCount {
+    color: var(--cqs-muted, #6c6c6c);
+    font-variant-numeric: tabular-nums;
 }

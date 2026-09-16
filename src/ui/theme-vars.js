@@ -97,6 +97,14 @@ export function themeVars(theme) {
         '--cqs-bubble-own-bg': isDark ? '#26414f' : '#e3f1fb',
         '--cqs-font': fontFamily,
         '--cqs-radius': '10px',
+        // Highlights, search matches and the bar above the conversation (from textview.qs).
+        '--cqs-highlight': isDark ? 'rgba(255, 196, 0, 0.28)' : 'rgba(255, 196, 0, 0.35)',
+        '--cqs-highlight-line': isDark ? '#e0b000' : '#b58900',
+        '--cqs-find': isDark ? 'rgba(255, 160, 60, 0.45)' : 'rgba(255, 140, 0, 0.45)',
+        '--cqs-current': isDark ? '#f0f0f0' : '#262626',
+        '--cqs-ruler': isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)',
+        '--cqs-selected': '#009845',
+        '--cqs-focus': isDark ? '#8cc4e6' : '#3f8ab3',
     };
 }
 

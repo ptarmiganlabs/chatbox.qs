@@ -32,8 +32,11 @@ import { conversationModelOf, resolveRoles } from './qix/column-map';
 import { buildSelection } from './qix/selection';
 import { describeAssignments } from './qix/role-labels';
 import { syncAttributeExpressions } from './qix/sync-attrs';
-import { isSnapshot, writeSnapshot } from './ui/snapshot';
+import { isSnapshot, shouldRenderAll, writeSnapshot } from './ui/snapshot';
 import { reloadingView } from './ui/reload-view';
+import { createHighlightLoader } from './qix/highlight-loader';
+import { loadHighlightResult } from './highlight/highlight-result';
+import { createHighlightView } from './highlight/highlight-view';
 import { render, destroy } from './ui/chat-renderer';
 import ChatLog from './ui/ChatLog';
 import { Empty, Failed, Loading, NotConfigured, emptyStateMessage } from './ui/states';
@@ -123,6 +126,38 @@ export default function supernova(galaxy) {
             // on screen instead of swapping in Loading — see src/ui/reload-view.js.
             const lastViewRef = useRef(null);
 
+            // Highlighting keywords. The loader owns the companion object that reads the highlight
+            // field; the view keeps the matched conversation between renders. Both live in refs,
+            // because the conversation component can unmount and remount between renders.
+            const loaderRef = useRef(null);
+            if (!loaderRef.current) loaderRef.current = createHighlightLoader({ logger });
+            const highlightViewRef = useRef(null);
+            if (!highlightViewRef.current) highlightViewRef.current = createHighlightView();
+            // Monotonic token for highlight loads, like runIdRef for rows.
+            const highlightRunRef = useRef(0);
+
+            // Bumped when the companion changes: a selection in a highlight field that is not
+            // associated with the messages leaves this object's own layout untouched.
+            const [companionVersion, setCompanionVersion] = useState(0);
+            useEffect(
+                () =>
+                    loaderRef.current.subscribe(() => {
+                        setCompanionVersion((version) => version + 1);
+                    }),
+                []
+            );
+            useEffect(() => {
+                /**
+                 * Release the companion object when the object leaves the sheet.
+                 *
+                 * @returns {void}
+                 */
+                return () => {
+                    highlightRunRef.current += 1;
+                    loaderRef.current.destroy();
+                };
+            }, []);
+
             // Stash the enigma handles for property-panel callbacks, which run
             // outside hook scope and cannot call useModel()/useApp() themselves.
             extensionState.model = model;
@@ -193,6 +228,25 @@ export default function supernova(galaxy) {
                 // the new layout's column map — silently mismatched columns.
                 return { ...result, derivedFrom: staleLayout };
             }, [staleLayout, model, settings.maxMessages]);
+
+            // The highlight values load beside the rows, in usePromise for the same reason: nebula
+            // waits for it before it declares the render complete. The conversation does not wait for
+            // them, and the answer never rejects — see src/highlight/highlight-result.js.
+            const [highlightResult] = usePromise(async () => {
+                const run = ++highlightRunRef.current;
+                return loadHighlightResult({
+                    layout: staleLayout,
+                    app,
+                    loader: loaderRef.current,
+                    version: companionVersion,
+                    /**
+                     * Report whether a newer highlight load has started.
+                     *
+                     * @returns {boolean} True when this load has been superseded.
+                     */
+                    isStale: () => highlightRunRef.current !== run,
+                });
+            }, [staleLayout, app, companionVersion]);
 
             useEffect(() => {
                 if (!element) return undefined;
@@ -328,6 +382,15 @@ export default function supernova(galaxy) {
                     return undefined;
                 }
 
+                const highlights = highlightViewRef.current.build({
+                    tagged: highlightResult,
+                    layout: staleLayout,
+                    version: companionVersion,
+                    messages: conversation.messages,
+                    theme,
+                    renderAll: shouldRenderAll(staleLayout, settings),
+                });
+
                 const view = {
                     conversation,
                     settings,
@@ -339,6 +402,7 @@ export default function supernova(galaxy) {
                     layout: staleLayout,
                     onViewState: handleViewStateRef.current,
                     reloading: null,
+                    highlights,
                 };
                 lastViewRef.current = view;
                 render(element, ChatLog, view);
@@ -359,6 +423,8 @@ export default function supernova(galaxy) {
                 keyboard?.enabled,
                 interactions,
                 selections,
+                highlightResult,
+                companionVersion,
             ]);
 
             // Tear the root down when the object is removed from the sheet.

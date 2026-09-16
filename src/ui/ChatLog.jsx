@@ -20,6 +20,11 @@ import { resolveDensity } from './density';
 import { canReceiveTabStop, keyAction, nextFocusIndex } from './keyboard';
 import { readSnapshot, shouldRenderAll } from './snapshot';
 import MessageRow from './render-message';
+import ConversationBar from './ConversationBar';
+import { drawnCount } from '../highlight/conversation-highlights';
+import { legendEntries } from '../highlight/legend';
+import { HIGHLIGHT_KINDS } from '../qix/highlight-source';
+import { counted } from '../util/format';
 import { Empty } from './states';
 
 /**
@@ -103,6 +108,8 @@ function ReloadingLine({ reloading }) {
  * @param {Function} [props.onViewState] - Reports { firstVisibleIndex, openId } as it changes.
  * @param {?{loaded: ?number, total: ?number}} [props.reloading] - Set while newer rows load and
  *   this is the conversation that was on screen; see src/ui/reload-view.js.
+ * @param {?object} [props.highlights] - The highlights to draw, from src/highlight/highlight-view.js;
+ *   null while highlighting is off.
  * @returns {object} The rendered conversation.
  */
 export function ChatLog({
@@ -116,6 +123,7 @@ export function ChatLog({
     layout,
     onViewState,
     reloading = null,
+    highlights = null,
 }) {
     // State captured when a snapshot was taken. Null for a normal render.
     const snapshot = readSnapshot(layout);
@@ -238,6 +246,53 @@ export function ChatLog({
     // bubbles can both be live at once, and showing only one silently hides
     // the fact that messages were dropped.
     const warnings = (diagnostics ?? []).filter((d) => d.severity === 'warning');
+    // A highlight problem stays in sight whatever the switches say: without it, "no highlights" looks
+    // like "nothing to highlight".
+    const highlightBanner = highlights?.placement?.banner ?? null;
+    if (highlightBanner) {
+        warnings.push({
+            code: 'highlights',
+            message: highlightBanner.text,
+            level: highlightBanner.level,
+        });
+    }
+
+    const highlightValues = highlights?.answer?.kind === HIGHLIGHT_KINDS.VALUES;
+    const legend =
+        highlights && highlights.settings.category.showLegend
+            ? legendEntries(
+                  highlights.styles,
+                  highlights.result,
+                  highlights.answer.categories?.list ?? []
+              )
+            : [];
+    // The summary counts the highlights where it is shown; otherwise the counter does.
+    const counterText =
+        highlightValues && !highlights.placement.bar && !highlightBanner
+            ? counted(highlights.result.total, 'highlight', 'highlights')
+            : '';
+    const showLabels = Boolean(
+        highlights?.styles?.enabled && highlights.settings.category.showLabels
+    );
+
+    /**
+     * Find the marks for a message's detail quote.
+     *
+     * A markdown message's quote shows its source, whose offsets differ from the text the body renders,
+     * so the values are matched in the source for the quote.
+     *
+     * @param {object} message - The message.
+     * @param {number} index - Its index.
+     * @returns {?object} The quote's `highlights` and `describe`, or null without highlights.
+     */
+    const quoteFor = (message, index) => {
+        if (!highlightValues) return null;
+        const spans =
+            message.bodyFormat === 'markdown'
+                ? highlights.matchPlain(message.body)
+                : highlights.result.byMessage[index]?.spans;
+        return { highlights: spans, describe: highlights.describe };
+    };
     const gapSec = Number(settings.groupGapSec) >= 0 ? Number(settings.groupGapSec) : 120;
     const showAvatars = settings.showAvatars !== false;
 
@@ -342,6 +397,13 @@ export function ChatLog({
                     expanded={isOpen}
                     onSelect={detailsOnClick ? toggleDetail : onSelect}
                     onShowDetails={detailsOnClick ? undefined : toggleDetail}
+                    highlights={highlightValues ? highlights.result.byMessage[index] : null}
+                    drawn={
+                        highlightValues
+                            ? drawnCount(highlights.result, index, renderAll)
+                            : undefined
+                    }
+                    describe={highlights?.describe}
                 />
                 {isOpen && revealMode === 'inline' ? (
                     <DetailReveal
@@ -350,6 +412,7 @@ export function ChatLog({
                         index={index}
                         mode="inline"
                         onClose={closeDetail}
+                        quote={quoteFor(message, index)}
                     />
                 ) : null}
             </>
@@ -364,6 +427,7 @@ export function ChatLog({
                 index={openIndex}
                 mode={revealMode}
                 onClose={closeDetail}
+                quote={quoteFor(openMessage, openIndex)}
             />
         ) : null;
 
@@ -376,13 +440,28 @@ export function ChatLog({
         .join(' ');
 
     return (
-        <div className={rootClass} data-density={density}>
+        <div
+            className={rootClass}
+            data-density={density}
+            data-labels={showLabels ? 'true' : undefined}
+        >
             {reloading ? <ReloadingLine reloading={reloading} /> : null}
             {warnings.map((w) => (
-                <div key={w.code} className={`${styles.banner} ${styles.bannerWarning}`}>
+                <div
+                    key={w.code}
+                    className={`${styles.banner} ${styles.bannerWarning}`}
+                    data-level={w.level}
+                >
                     {w.message}
                 </div>
             ))}
+            {highlights ? (
+                <ConversationBar
+                    info={highlights.placement.bar}
+                    entries={legend}
+                    counter={counterText}
+                />
+            ) : null}
             <div className={styles.main}>
                 <div
                     className={styles.list}
