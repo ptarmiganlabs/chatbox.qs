@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { buildDayGroups, dayKey, dayLabel, startsCluster } from '../../src/chat/grouping';
+import {
+    buildDayGroups,
+    dayKey,
+    dayLabel,
+    dayStarts,
+    startsCluster,
+} from '../../src/chat/grouping';
 import { resolveDensity, DENSITIES } from '../../src/ui/density';
 
 /** Local-time epoch ms for a given calendar moment. */
@@ -169,5 +175,33 @@ describe('startsCluster across sides', () => {
         const previous = { authorKey: 'Ada', ts: null, recipients: null, side: 'left' };
         const message = { authorKey: 'Ada', ts: null, recipients: null, side: 'right' };
         expect(startsCluster(message, previous, 120)).toBe(true);
+    });
+});
+
+describe('dayStarts', () => {
+    const at = (d, h = 12) => new Date(2026, 8, d, h).getTime();
+    const m = (ts) => ({ ts });
+
+    it('marks exactly where buildDayGroups starts a group', () => {
+        const cases = [
+            [m(at(7)), m(at(7, 13)), m(at(8)), m(null), m(at(8, 14)), m(at(9))],
+            [m(null), m(null), m(at(7)), m(null), m(at(8))],
+            [m(at(7))],
+        ];
+        for (const messages of cases) {
+            const starts = dayStarts(messages);
+            const groups = buildDayGroups(messages);
+            const sizes = [];
+            messages.forEach((_, i) => {
+                if (starts[i] === 1) sizes.push(0);
+                sizes[sizes.length - 1] += 1;
+            });
+            expect(sizes).toEqual(groups.groupCounts);
+        }
+    });
+
+    it('marks nothing when nothing can be dated', () => {
+        expect([...dayStarts([m(null), m(null)])]).toEqual([0, 0]);
+        expect(dayStarts(undefined)).toHaveLength(0);
     });
 });

@@ -102,3 +102,83 @@ export function isFindKey(event) {
     if (!event || event.altKey || event.shiftKey) return false;
     return Boolean(event.ctrlKey || event.metaKey) && (event.key === 'f' || event.key === 'F');
 }
+
+/** The keys that move up and down a list. */
+const VERTICAL_KEYS = new Set(['ArrowDown', 'ArrowUp', 'Home', 'End', 'PageDown', 'PageUp']);
+
+/**
+ * Find the message in a lane nearest a linked board's row: in the row itself, else the closest row,
+ * the one above on a tie.
+ *
+ * @param {object} board - A linked board.
+ * @param {number} row - The row.
+ * @param {number} lane - The lane.
+ * @returns {number} The message's board index, or -1 when the lane has none.
+ */
+function nearestInLane(board, row, lane) {
+    const { rows, laneOf } = board;
+    /**
+     * Find the lane's message in one row.
+     *
+     * @param {number} r - The row.
+     * @returns {number} Its board index, or -1.
+     */
+    const inRow = (r) => {
+        if (r < 0 || r >= rows.count) return -1;
+        for (let index = rows.start[r]; index < rows.start[r + 1]; index++) {
+            if (laneOf[index] === lane) return index;
+        }
+        return -1;
+    };
+    for (let distance = 0; distance < rows.count; distance++) {
+        const above = inRow(row - distance);
+        if (above >= 0) return above;
+        const below = distance > 0 ? inRow(row + distance) : -1;
+        if (below >= 0) return below;
+    }
+    return -1;
+}
+
+/**
+ * Resolve a key press to the message that should receive focus, with conversations side by side.
+ *
+ * Up, Down, Home, End and the page keys move within the lane, clamped as `nextFocusIndex` moves. Left
+ * and Right go to the neighbouring lane: with linked scrolling to its message in the same row, else in
+ * the nearest row; with free scrolling to where the reader is in that lane, as `anchor` tells, else its
+ * first message. From nowhere, focus enters the first lane, the most recent.
+ *
+ * @param {string} key - The KeyboardEvent key.
+ * @param {number} current - The focused message's board index, or -1 for none.
+ * @param {object} board - The board, from `buildBoard`.
+ * @param {object} [options] - Options.
+ * @param {function(number): number} [options.anchor] - The board index where the reader is in a lane.
+ * @returns {?number} The board index to focus, or null when the key is not a movement.
+ */
+export function laneFocusIndex(key, current, board, { anchor } = {}) {
+    const lanes = board?.lanes ?? [];
+    const vertical = VERTICAL_KEYS.has(key);
+    const horizontal = key === 'ArrowLeft' || key === 'ArrowRight';
+    if (lanes.length === 0 || (!vertical && !horizontal)) return null;
+
+    if (current < 0 || current >= board.laneOf.length) {
+        const first = lanes[0];
+        if (!vertical) return first.indices[0];
+        return first.indices[nextFocusIndex(key, -1, first.count)];
+    }
+
+    const lane = board.laneOf[current];
+    if (vertical) {
+        const own = lanes[lane];
+        return own.indices[nextFocusIndex(key, board.posInLane[current], own.count)];
+    }
+
+    const target = Math.min(lanes.length - 1, Math.max(0, lane + (key === 'ArrowRight' ? 1 : -1)));
+    if (target === lane) return current;
+    if (board.rows) {
+        const found = nearestInLane(board, board.rows.of[current], target);
+        return found >= 0 ? found : lanes[target].indices[0];
+    }
+    const place = anchor?.(target);
+    if (Number.isInteger(place) && place >= 0 && board.laneOf[place] === target) return place;
+    return lanes[target].indices[0];
+}

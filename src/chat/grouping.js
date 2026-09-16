@@ -87,6 +87,44 @@ export function dayLabel(ts, now = Date.now()) {
 }
 
 /**
+ * Mark where each day group starts.
+ *
+ * The one definition of where a day starts, shared by the day groups and by the rows that line
+ * conversations up side by side: rows never cross a day, so the day groups can count rows. Messages
+ * with no timestamp cannot be dated, so they join the group that precedes them; a conversation that
+ * starts with undated messages opens with an unlabelled group of its own.
+ *
+ * @param {object[]} messages - The conversation, in display order.
+ * @returns {Uint8Array} 1 at each message that starts a group, 0 elsewhere; all 0 when nothing can be
+ *     dated, since then there are no day groups at all.
+ */
+export function dayStarts(messages) {
+    const list = Array.isArray(messages) ? messages : [];
+    const starts = new Uint8Array(list.length);
+    if (!list.some((m) => typeof m.ts === 'number')) return starts;
+
+    let currentKey = null;
+    let open = false;
+    list.forEach((message, index) => {
+        if (typeof message.ts !== 'number') {
+            // Undated: fold into whatever group is open, or start one if this is the very first message.
+            if (!open) {
+                starts[index] = 1;
+                open = true;
+            }
+            return;
+        }
+        const key = dayKey(message.ts);
+        if (key !== currentKey) {
+            currentKey = key;
+            starts[index] = 1;
+            open = true;
+        }
+    });
+    return starts;
+}
+
+/**
  * Split a conversation into consecutive day groups.
  *
  * Returns the shape react-virtuoso's GroupedVirtuoso wants: a count per group,
@@ -102,30 +140,16 @@ export function buildDayGroups(messages, now = Date.now()) {
     if (!Array.isArray(messages) || messages.length === 0) return null;
     if (!messages.some((m) => typeof m.ts === 'number')) return null;
 
+    const starts = dayStarts(messages);
     const groupCounts = [];
     const labels = [];
-    let currentKey = null;
-
-    for (const message of messages) {
-        if (typeof message.ts !== 'number') {
-            // Undated: fold into whatever group is open, or start one if this is
-            // the very first message.
-            if (groupCounts.length === 0) {
-                groupCounts.push(0);
-                labels.push('');
-            }
-            groupCounts[groupCounts.length - 1] += 1;
-            continue;
-        }
-
-        const key = dayKey(message.ts);
-        if (key !== currentKey) {
-            currentKey = key;
+    messages.forEach((message, index) => {
+        if (starts[index] === 1) {
             groupCounts.push(0);
-            labels.push(dayLabel(message.ts, now));
+            labels.push(typeof message.ts === 'number' ? dayLabel(message.ts, now) : '');
         }
         groupCounts[groupCounts.length - 1] += 1;
-    }
+    });
 
     return { groupCounts, labels };
 }
