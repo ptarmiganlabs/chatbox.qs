@@ -621,3 +621,67 @@ describe('MessageRow — the avatar', () => {
         expect(onSelect).not.toHaveBeenCalled();
     });
 });
+
+// Found on Qlik Sense May 2026: in edit mode a click on a message selected its author. The object no
+// longer lets a click select there, so a bubble must not look or announce itself as clickable either.
+describe('MessageRow — a bubble whose click selects nothing, as in edit mode', () => {
+    /**
+     * Render a message whose click selects nothing but whose details can still be opened.
+     *
+     * @param {object} [props] - Further props.
+     * @returns {object} The render result, the bubble, and the spies.
+     */
+    function renderInert(props = {}) {
+        const onSelect = vi.fn();
+        const onShowDetails = vi.fn();
+        const result = render(
+            <MessageRow
+                message={message({ author: participant({ avatarUrl: null }) })}
+                index={0}
+                showAuthor
+                showAvatar
+                selectable={false}
+                onSelect={onSelect}
+                onShowDetails={onShowDetails}
+                {...props}
+            />
+        );
+        const bubble = result.container.querySelector('[data-message-index="0"]');
+        const avatar = result.container.querySelector('[class*="avatarFallback"]');
+        return { ...result, bubble, avatar, onSelect, onShowDetails };
+    }
+
+    it('offers no pointer and no button role, although it has a Details link', () => {
+        const { bubble } = renderInert();
+        expect(bubble.className).not.toMatch(/selectable/);
+        expect(bubble.getAttribute('role')).toBeNull();
+    });
+
+    it('selects nothing on a click, Enter or Space, and still opens its details', () => {
+        const { bubble, onSelect, onShowDetails } = renderInert();
+        fireEvent.click(bubble);
+        fireEvent.keyDown(bubble, { key: 'Enter' });
+        fireEvent.keyDown(bubble, { key: ' ' });
+        expect(onSelect).not.toHaveBeenCalled();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Details' }));
+        expect(onShowDetails).toHaveBeenCalledTimes(1);
+    });
+
+    it('gives the avatar no pointer and no click either: it does what the bubble does', () => {
+        // The Details link is no more a reason to offer the face than the bubble.
+        const { avatar, onSelect } = renderInert();
+        expect(avatar.className).not.toMatch(/selectable/);
+        fireEvent.click(avatar);
+        expect(onSelect).not.toHaveBeenCalled();
+    });
+
+    it('offers the pointer and the button role again where a click selects', () => {
+        const { bubble, avatar, onSelect } = renderInert({ selectable: true });
+        expect(bubble.className).toMatch(/selectable/);
+        expect(bubble.getAttribute('role')).toBe('button');
+        expect(avatar.className).toMatch(/selectable/);
+        fireEvent.click(bubble);
+        expect(onSelect).toHaveBeenCalledTimes(1);
+    });
+});

@@ -106,7 +106,9 @@ export function MessageRow({
         styles.bubble,
         own ? styles.bubbleOwn : '',
         message.merged ? styles.bubbleMerged : '',
-        selectable || onShowDetails ? styles.selectable : '',
+        // The pointer only where a click on the bubble does something: the Details link, a button
+        // with its own pointer, is not a reason to offer the whole bubble (GOTCHAS 56).
+        selectable ? styles.selectable : '',
         // A gutter for the copy button, so it never covers the first line of a short message.
         onCopy ? styles.bubbleCopyRoom : '',
         expanded ? styles.bubbleOpen : '',
@@ -158,9 +160,10 @@ export function MessageRow({
     let avatar = null;
     if (showAvatar) {
         // A reader who clicks the face is pointing at the message beside it, so the picture does
-        // what the bubble does. It stays out of the accessibility tree and takes no tab stop: the
-        // bubble offers the same action to a keyboard, and two ways in would be two stops per row.
-        const onAvatar = selectable || onShowDetails ? handleClick : undefined;
+        // what the bubble does — and, like the bubble, offers a click only where one does something.
+        // It stays out of the accessibility tree and takes no tab stop: the bubble offers the same
+        // action to a keyboard, and two ways in would be two stops per row.
+        const onAvatar = selectable ? handleClick : undefined;
         const avatarClass = `${styles.avatar}${onAvatar ? ` ${styles.selectable}` : ''}`;
         if (!showAuthor) {
             avatar = <div className={styles.avatarSpacer} aria-hidden="true" />;
