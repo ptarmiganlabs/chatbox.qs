@@ -16,7 +16,9 @@
  * to render. So: bind here, and let `qix/sync-attrs.js` copy the values into the
  * real attribute expressions once a dimension exists.
  */
+import { KIND_CHIP_DEFAULTS, KIND_CHIPS_MAX, clampKindChipsMax } from '../chat/kind-chips';
 import { ATTR_IDS } from '../qix/attr-map';
+import { switchItem } from './items';
 
 /**
  * Slot order for the attribute expressions.
@@ -55,6 +57,27 @@ function attrItem(id, label, description) {
 }
 
 /**
+ * Show an item only while kinds show as chips.
+ *
+ * @param {object} data - The object properties.
+ * @returns {boolean} True when kind chips are switched on.
+ */
+export function kindChipsShown(data) {
+    return data?.chatbox?.kindChips?.show === true;
+}
+
+/**
+ * Tidy the stored chip count after an edit.
+ *
+ * @param {object} data - The object properties.
+ * @returns {void}
+ */
+export function tidyKindChipSettings(data) {
+    const chips = data?.chatbox?.kindChips;
+    if (chips) chips.max = clampKindChipsMax(chips.max);
+}
+
+/**
  * Build the Message metadata accordion section.
  *
  * @returns {object} The section definition.
@@ -89,7 +112,52 @@ export function metadataSection() {
                 'Media reference',
                 'Reserved for a future release. Store a stable reference, not a signed URL.'
             ),
-            kind: attrItem(ATTR_IDS.KIND, 'Message kind', 'e.g. Only([MsgKind]) — text, system.'),
+            kind: attrItem(
+                ATTR_IDS.KIND,
+                'Message kind',
+                'e.g. Only([MsgKind]) — text, system. Shown as chips, a message can have several: ' +
+                    "Concat(DISTINCT [MsgKind], ',')."
+            ),
+            // Not attribute expressions: bound under chatbox.kindChips, and left out of ATTR_ORDER.
+            kindChipsShow: switchItem({
+                ref: 'chatbox.kindChips.show',
+                label: 'Show kinds as chips',
+                defaultValue: KIND_CHIP_DEFAULTS.show,
+            }),
+            kindChipsHelp: {
+                component: 'text',
+                label:
+                    'Each kind becomes a chip above the message text. Only() returns nothing for a ' +
+                    "message with several kinds, so use Concat(DISTINCT [MsgKind], ',') with the " +
+                    'separator chosen below. A comma also splits a value such as 1,000.',
+                show: kindChipsShown,
+            },
+            kindChipsSeparator: {
+                ref: 'chatbox.kindChips.separator',
+                type: 'string',
+                component: 'dropdown',
+                label: 'Kinds are separated by',
+                defaultValue: KIND_CHIP_DEFAULTS.separator,
+                options: [
+                    { value: ',', label: 'Comma (,)' },
+                    { value: ';', label: 'Semicolon (;)' },
+                    { value: '|', label: 'Vertical bar (|)' },
+                    { value: 'none', label: 'Do not split' },
+                ],
+                show: kindChipsShown,
+            },
+            kindChipsMax: {
+                ref: 'chatbox.kindChips.max',
+                type: 'number',
+                component: 'slider',
+                label: 'Most chips per message',
+                min: 1,
+                max: KIND_CHIPS_MAX,
+                step: 1,
+                defaultValue: KIND_CHIP_DEFAULTS.max,
+                change: tidyKindChipSettings,
+                show: kindChipsShown,
+            },
             side: attrItem(
                 ATTR_IDS.SIDE,
                 'Own message (1/0)',
