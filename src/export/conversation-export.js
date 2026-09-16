@@ -25,6 +25,9 @@ import { BLOCK_SEPARATOR } from '../highlight/markdown-projection';
 /** The version of the JSON's shape; raised when a field changes meaning or goes away. */
 export const EXPORT_SCHEMA_VERSION = 1;
 
+/** The rows the message limit can keep, as `normalize` records them in `meta.truncatedTo`. */
+const KEPT_ROWS = new Set(['oldest', 'newest']);
+
 /** Category names sort the same way on every host, as the legend sorts them. */
 const NAME_ORDER = new Intl.Collator('en', { sensitivity: 'base', numeric: true });
 
@@ -177,8 +180,11 @@ function messageJson(message, entry, projectionOf) {
  * @param {string} options.version - The extension's version.
  * @param {string} [options.order] - 'oldest' or 'newest' first, as shown.
  * @param {?object} [options.board] - The board the messages are shown in, with conversations side by side.
- * @returns {object} The data; `JSON.stringify` it. Side by side, the messages come conversation by
- *     conversation, and `conversation.conversations` says how many are shown of how many.
+ * @returns {object} The data; `JSON.stringify` it. `conversation` sums up what was copied: `messages`,
+ *     `rows` (the cube's rows, less any phantom rows skipped at its end), `rowsRead`, `truncated`,
+ *     `truncatedTo` (whether the message limit kept the `'oldest'` or the `'newest'` rows; null when it
+ *     cut nothing, or cut rows at both ends) and `order`. Side by side, the messages come conversation by conversation, and
+ *     `conversation.conversations` says how many are shown of how many.
  */
 export function conversationJson(
     conversation,
@@ -195,7 +201,9 @@ export function conversationJson(
         conversation: {
             messages: messages.length,
             rows: Number.isFinite(meta.total) ? meta.total : messages.length,
+            rowsRead: Number.isFinite(meta.rowsLoaded) ? meta.rowsLoaded : messages.length,
             truncated: Boolean(meta.truncated),
+            truncatedTo: KEPT_ROWS.has(meta.truncatedTo) ? meta.truncatedTo : null,
             order: order === 'newest' ? 'newest' : 'oldest',
             ...(board ? { conversations: { shown: board.lanes.length, total: board.total } } : {}),
         },

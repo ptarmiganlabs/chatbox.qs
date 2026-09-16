@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { dayKey } from '../../src/chat/grouping';
+import { normalize } from '../../src/chat/normalize';
 import { HIGHLIGHT_KINDS } from '../../src/qix/highlight-source';
 import { createHighlightView } from '../../src/highlight/highlight-view';
 import { projectMarkdown } from '../../src/highlight/markdown-projection';
@@ -153,7 +154,14 @@ describe('conversationJson', () => {
             schemaVersion: EXPORT_SCHEMA_VERSION,
             exportedAt: '2026-09-16T12:00:00.000Z',
             extensionVersion: '0.4.0',
-            conversation: { messages: 3, rows: 3, truncated: false, order: 'oldest' },
+            conversation: {
+                messages: 3,
+                rows: 3,
+                rowsRead: 3,
+                truncated: false,
+                truncatedTo: null,
+                order: 'oldest',
+            },
             highlights: null,
         });
         expect(json.messages[0]).toEqual({
@@ -176,6 +184,81 @@ describe('conversationJson', () => {
             recipients: null,
         });
         expect(JSON.parse(JSON.stringify(json))).toEqual(json);
+    });
+
+    describe('which rows the message limit kept', () => {
+        /** A participant cube of `qcy` rows, with the given rows read from `qTop`, normalized. */
+        const normalized = ({ qcy, qTop, count, order = 'oldest' }) =>
+            normalize({
+                layout: {
+                    qHyperCube: {
+                        qSize: { qcx: 5, qcy },
+                        qDimensionInfo: [
+                            { cId: 'd_msgid' },
+                            { cId: 'd_author' },
+                            { cId: 'd_thread' },
+                        ],
+                        qMeasureInfo: [{ cId: 'm_text' }, { cId: 'm_dupcheck' }],
+                    },
+                },
+                rows: Array.from({ length: count }, (_, i) => [
+                    {
+                        qText: String(qTop + i + 1),
+                        qElemNumber: qTop + i,
+                        qAttrExps: { qValues: [] },
+                    },
+                    { qText: 'Ada', qElemNumber: 0, qState: 'O' },
+                    { qText: 'T1', qElemNumber: 0 },
+                    { qText: `message ${qTop + i + 1}`, qNum: 'NaN' },
+                    { qText: '1', qNum: 1 },
+                ]),
+                props: { order },
+                area: { qTop, qLeft: 0 },
+            });
+
+        it('says the newest rows were kept when rows before them were left out', () => {
+            const cut = normalized({ qcy: 12000, qTop: 11997, count: 3, order: 'newest' });
+            expect(conversationJson(cut, { ...options, order: 'newest' }).conversation).toEqual({
+                messages: 3,
+                rows: 12000,
+                rowsRead: 3,
+                truncated: true,
+                truncatedTo: 'newest',
+                order: 'newest',
+            });
+        });
+
+        it('says the oldest rows were kept when rows after them were left out', () => {
+            const cut = normalized({ qcy: 12000, qTop: 0, count: 3 });
+            expect(conversationJson(cut, options).conversation).toMatchObject({
+                rows: 12000,
+                rowsRead: 3,
+                truncated: true,
+                truncatedTo: 'oldest',
+            });
+        });
+
+        it('says no rows were cut when every row was read', () => {
+            const whole = normalized({ qcy: 3, qTop: 0, count: 3 });
+            const { conversation: summary } = conversationJson(whole, options);
+            expect(summary).toMatchObject({ truncated: false, truncatedTo: null });
+            expect(summary.rowsRead).toBe(summary.rows);
+        });
+
+        it('counts the rows read, not the messages, when a message spans several rows', () => {
+            const meta = { total: 9, rowsLoaded: 6, truncated: true, truncatedTo: 'oldest' };
+            const { conversation: summary } = conversationJson({ ...conversation, meta }, options);
+            expect(summary).toMatchObject({ messages: 3, rows: 9, rowsRead: 6 });
+        });
+
+        it('writes null for anything but the oldest or the newest', () => {
+            for (const truncatedTo of [undefined, null, 'middle']) {
+                const meta = { total: 9, rowsLoaded: 3, truncated: true, truncatedTo };
+                expect(
+                    conversationJson({ ...conversation, meta }, options).conversation.truncatedTo
+                ).toBeNull();
+            }
+        });
     });
 
     it('carries the highlights, with offsets that slice the body or the rendered markdown', () => {
