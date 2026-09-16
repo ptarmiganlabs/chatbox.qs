@@ -116,8 +116,8 @@ function DetailBody({ message, messages, index, showParticipant, quote = null })
 
             {message.recipientsPartial ? (
                 <div className={styles.detailWarning}>
-                    Some recipients may be missing: the conversation stopped at the message limit
-                    part-way through this message.
+                    Some recipients may be missing: the message limit cut the conversation part-way
+                    through this message.
                 </div>
             ) : null}
 

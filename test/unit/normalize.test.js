@@ -262,6 +262,63 @@ describe('normalize', () => {
             expect(c.diagnostics.find((d) => d.code === 'truncated').message).toContain('5000');
         });
 
+        it('says the oldest messages are shown when the rows after them were left out', () => {
+            const c = normalize({
+                layout: makeLayout({ qcy: 5000 }),
+                rows: [row({ id: '1', author: 'Ada', text: 'a' })],
+                area: { qTop: 0, qLeft: 0 },
+            });
+            expect(c.meta.truncatedTo).toBe('oldest');
+            expect(c.diagnostics.find((d) => d.code === 'truncated').message).toBe(
+                'Showing the oldest 1 of 5000 messages. Filter to see the rest.'
+            );
+        });
+
+        it('says the newest messages are shown when the rows before them were left out', () => {
+            const c = normalize({
+                layout: makeLayout({ qcy: 9000 }),
+                rows: [
+                    row({ id: '8999', elemId: 8999, author: 'Ada', text: 'a' }),
+                    row({ id: '9000', elemId: 9000, author: 'Bob', authorElem: 11, text: 'b' }),
+                ],
+                area: { qTop: 8998, qLeft: 0 },
+                props: { order: 'newest' },
+            });
+            expect(c.meta.truncatedTo).toBe('newest');
+            expect(c.diagnostics.find((d) => d.code === 'truncated').message).toBe(
+                'Showing the newest 2 of 9000 messages. Filter to see the rest.'
+            );
+            // Newest first, each message at its own cube row.
+            expect(c.messages.map((m) => [m.body, m.rowIdx])).toEqual([
+                ['b', 8999],
+                ['a', 8998],
+            ]);
+        });
+
+        it('says neither when rows at both ends were left out', () => {
+            // Only when the cube changed while its rows were read.
+            const c = normalize({
+                layout: makeLayout({ qcy: 9000 }),
+                rows: [row({ id: '1', author: 'Ada', text: 'a' })],
+                area: { qTop: 4000, qLeft: 0 },
+            });
+            expect(c.meta.truncatedTo).toBeNull();
+            expect(c.diagnostics.find((d) => d.code === 'truncated').message).toBe(
+                'Showing 1 of 9000 messages. Filter to see the rest.'
+            );
+        });
+
+        it('reports no cut when every row was read', () => {
+            const c = normalize({
+                layout: makeLayout({ qcy: 1 }),
+                rows: [row({ id: '1', author: 'Ada', text: 'a' })],
+                area: { qTop: 0, qLeft: 0 },
+            });
+            expect(c.meta.truncated).toBe(false);
+            expect(c.meta.truncatedTo).toBeNull();
+            expect(normalize({ layout: undefined, rows: [] }).meta.truncatedTo).toBeNull();
+        });
+
         it('reverses for newest-first without losing any message', () => {
             const rows = [
                 row({ id: '1', author: 'Ada', text: 'first' }),
@@ -662,7 +719,12 @@ describe('rows that belong to one message', () => {
 
         expect(c.meta.truncated).toBe(true);
         const warning = c.diagnostics.find((d) => d.code === 'truncated');
-        expect(warning.message).toContain('2 messages from 6 of 9 rows');
+        expect(warning.message).toContain('2 messages from the oldest 6 of 9 rows');
+
+        const newest = normalize({ layout: wideLayout({ qcy: 9 }), rows, area: { qTop: 3 } });
+        expect(newest.diagnostics.find((d) => d.code === 'truncated').message).toBe(
+            'Showing 2 messages from the newest 6 of 9 rows. Filter to see the rest.'
+        );
     });
 
     it('gives every bubble a unique key, and the first bubble keeps its id', () => {
@@ -767,7 +829,19 @@ describe('the From → To model', () => {
         expect(c.messages[0].recipients[0]).toMatchObject({ label: 'Others', unknown: true });
     });
 
-    it('flags only the last bubble’s recipients as possibly incomplete when truncated', () => {
+    /** A phantom row: a person from a People table who is in no message. */
+    const phantomRow = () => [
+        { qText: '-', qElemNumber: -2, qAttrExps: { qValues: [] } },
+        { qText: 'Dora', qElemNumber: 3, qState: 'O' },
+        { qText: '-', qElemNumber: -2 },
+        { qText: '-', qNum: 'NaN' },
+        { qText: '0', qNum: 0 },
+    ];
+
+    /** Each message's id, and whether its recipients are flagged as possibly incomplete. */
+    const partials = (c) => c.messages.map((m) => [m.id, Boolean(m.recipientsPartial)]);
+
+    it('flags only the last bubble’s recipients when the rows after it were left out', () => {
         const rows = [
             ftRow({ id: '1', elemId: 1, from: 'Ada', fromElem: 0, to: 'Bob', toElem: 5 }),
             ftRow({ id: '2', elemId: 2, from: 'Ada', fromElem: 0, to: 'Bob', toElem: 5 }),
@@ -783,21 +857,111 @@ describe('the From → To model', () => {
     it('does not flag a complete message when the limit falls among phantom rows — regression', () => {
         // Null message ids sort last, so a People table's phantom rows come after
         // every message row. A cut inside them leaves no message incomplete.
-        const phantomRow = [
-            { qText: '-', qElemNumber: -2, qAttrExps: { qValues: [] } },
-            { qText: 'Dora', qElemNumber: 3, qState: 'O' },
-            { qText: '-', qElemNumber: -2 },
-            { qText: '-', qNum: 'NaN' },
-            { qText: '0', qNum: 0 },
-        ];
         const rows = [
             ftRow({ id: '1', elemId: 1, from: 'Ada', fromElem: 0, to: 'Bob', toElem: 5 }),
-            phantomRow,
+            phantomRow(),
         ];
         const c = normalize({ layout: fromToLayout({ qcy: 10 }), rows, props });
         expect(c.meta.truncated).toBe(true);
         expect(c.messages).toHaveLength(1);
         expect(c.messages[0].recipientsPartial).toBeFalsy();
+    });
+
+    describe('when the newest rows were read', () => {
+        // Message 1 went to Bob and Cy. Its row to Bob is the last one left out, so the rows read
+        // start part-way through it.
+        const newestRows = () => [
+            ftRow({ id: '1', elemId: 1, from: 'Ada', fromElem: 0, to: 'Cy', toElem: 6 }),
+            ftRow({ id: '2', elemId: 2, from: 'Ada', fromElem: 0, to: 'Bob', toElem: 5 }),
+            ftRow({ id: '2', elemId: 2, from: 'Ada', fromElem: 0, to: 'Cy', toElem: 6 }),
+        ];
+
+        it('flags only the first bubble’s recipients', () => {
+            const c = normalize({
+                layout: fromToLayout({ qcy: 4 }),
+                rows: newestRows(),
+                props,
+                area: { qTop: 1, qLeft: 0 },
+            });
+            expect(c.meta.truncatedTo).toBe('newest');
+            expect(partials(c)).toEqual([
+                ['1', true],
+                ['2', false],
+            ]);
+        });
+
+        it('keeps the flag on the same message when it is shown last, newest first', () => {
+            const c = normalize({
+                layout: fromToLayout({ qcy: 4 }),
+                rows: newestRows(),
+                props: { ...props, order: 'newest' },
+                area: { qTop: 1, qLeft: 0 },
+            });
+            expect(partials(c)).toEqual([
+                ['2', false],
+                ['1', true],
+            ]);
+        });
+
+        it('flags nothing when no rows were left out', () => {
+            const c = normalize({
+                layout: fromToLayout({ qcy: 3 }),
+                rows: newestRows(),
+                props,
+                area: { qTop: 0, qLeft: 0 },
+            });
+            expect(partials(c)).toEqual([
+                ['1', false],
+                ['2', false],
+            ]);
+        });
+
+        it('flags the first message, not the last, when the rows read end with phantom rows', () => {
+            // Null message ids sort last, so the newest rows include the phantoms, and the last
+            // message before them is whole.
+            const c = normalize({
+                layout: fromToLayout({ qcy: 5 }),
+                rows: [...newestRows(), phantomRow()],
+                props,
+                area: { qTop: 1, qLeft: 0 },
+            });
+            expect(partials(c)).toEqual([
+                ['1', true],
+                ['2', false],
+            ]);
+            expect(c.diagnostics.find((d) => d.code === 'phantom-rows')).toBeTruthy();
+        });
+
+        it('does not flag the first message when the rows read start among phantom rows', () => {
+            // A sort that puts the phantoms before every message row: a cut inside them leaves the
+            // first message whole.
+            const c = normalize({
+                layout: fromToLayout({ qcy: 6 }),
+                rows: [phantomRow(), ...newestRows().slice(1)],
+                props,
+                area: { qTop: 3, qLeft: 0 },
+            });
+            expect(c.meta.truncatedTo).toBe('newest');
+            expect(partials(c)).toEqual([['2', false]]);
+            expect(c.diagnostics.find((d) => d.code === 'phantom-rows')).toBeTruthy();
+        });
+    });
+
+    it('flags the bubbles at both ends when rows at both ends were left out', () => {
+        const rows = [
+            ftRow({ id: '1', elemId: 1, from: 'Ada', fromElem: 0, to: 'Cy', toElem: 6 }),
+            ftRow({ id: '2', elemId: 2, from: 'Ada', fromElem: 0, to: 'Bob', toElem: 5 }),
+        ];
+        const c = normalize({
+            layout: fromToLayout({ qcy: 10 }),
+            rows,
+            props,
+            area: { qTop: 3, qLeft: 0 },
+        });
+        expect(partials(c)).toEqual([
+            ['1', true],
+            ['2', true],
+        ]);
     });
 
     it('is not configured without a To dimension', () => {
