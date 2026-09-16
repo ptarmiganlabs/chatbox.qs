@@ -20,10 +20,12 @@
  * {@link MAX_DRAWN_HIGHLIGHTS} highlights are drawn where every message is rendered at once; the counts,
  * the ruler and stepping always cover all of them.
  *
- * Highlights are searched in plain-text bodies here; a markdown body is matched in the text it renders,
- * which the caller supplies through `textOf`. It builds no DOM.
+ * A plain-text body is matched as it is; a markdown body in the text it renders, its projection, which
+ * is worked out once per body and shared with search (`src/highlight/markdown-projection.js`). It
+ * builds no DOM.
  */
 import { createValueMatcher, prepareText } from '../match/index';
+import { createProjections } from './markdown-projection';
 
 /** The most highlights drawn when every message is rendered at once, as for `virtualize: false`. */
 export const MAX_DRAWN_HIGHLIGHTS = 20_000;
@@ -63,14 +65,16 @@ function emptyResult(count) {
 }
 
 /**
- * The text a plain-text message is matched in.
+ * Find the text a message is matched in.
  *
  * @param {object} message - A normalized message.
- * @returns {?string} The body, or null for a message whose text is found elsewhere.
+ * @param {{get: function(string): string}} projections - The markdown projections.
+ * @returns {string} The body of a plain-text message, the projection of a markdown one.
  */
-export function plainTextOf(message) {
-    if (message?.bodyFormat === 'markdown') return null;
-    return typeof message?.body === 'string' ? message.body : '';
+export function textOf(message, projections) {
+    const body = typeof message?.body === 'string' ? message.body : '';
+    if (body === '' || message.bodyFormat !== 'markdown') return body;
+    return projections.get(body);
 }
 
 /**
@@ -145,14 +149,14 @@ export function drawnCount(result, index, renderAll) {
  *
  * @param {object} [options] - Options.
  * @param {number} [options.occurrenceBudget] - Occurrences collected across a conversation.
- * @param {function(object): ?string} [options.textOf] - The text a message is matched in, or null
- *     for none; plain-text bodies when not given.
+ * @param {{get: function(string): string}} [options.projections] - The markdown projections, shared
+ *     with search; a cache of its own when not given.
  * @returns {{highlight: function(object): object, matchPlain: function(string): Array<object>}} The
  *     highlighter. `matchPlain` matches a text on its own, outside the conversation's counts.
  */
 export function createConversationHighlighter({
     occurrenceBudget = OCCURRENCE_BUDGET,
-    textOf = plainTextOf,
+    projections = createProjections(),
 } = {}) {
     let matcher = null;
     let matchedRows = null;
@@ -205,12 +209,12 @@ export function createConversationHighlighter({
             result.firstStop[index] = result.total;
             result.indexByKey.set(message.key ?? message.id, index);
 
-            const text = textOf(message);
+            const body = typeof message.body === 'string' ? message.body : '';
             let entry = NO_MESSAGE_HIGHLIGHTS;
-            if (text && used >= occurrenceBudget) {
+            if (body && used >= occurrenceBudget) {
                 result.searchTruncated = true;
-            } else if (text) {
-                const cacheKey = `${message.bodyFormat}${SEPARATOR}${message.body}`;
+            } else if (body) {
+                const cacheKey = `${message.bodyFormat}${SEPARATOR}${body}`;
                 const cached = kept.get(cacheKey) ?? results.get(cacheKey);
                 // The budget counts every occurrence in display order, cached or not, so where the
                 // search stops never depends on what happened to be matched before.
@@ -218,6 +222,8 @@ export function createConversationHighlighter({
                     entry = cached;
                     kept.set(cacheKey, cached);
                 } else {
+                    // A markdown body is projected only here, when its result is not already known.
+                    const text = textOf(message, projections);
                     const found = matcher.match(prepareText(text, matcher.options), {
                         occurrenceLimit: occurrenceBudget - used,
                     });

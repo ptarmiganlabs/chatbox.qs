@@ -25,7 +25,7 @@ const {
     NO_MESSAGE_HIGHLIGHTS,
     createConversationHighlighter,
     drawnCount,
-    plainTextOf,
+    textOf,
 } = await import('../../../src/highlight/conversation-highlights');
 
 const OPTIONS = { caseSensitive: false, wholeValues: true, flexibleWhitespace: true };
@@ -146,16 +146,41 @@ describe('createConversationHighlighter', () => {
         expect(other.total).toBe(1);
     });
 
-    it('leaves messages it has no text for, such as markdown before it is projected', () => {
-        const markdown = [message('1', 'The **reload**', { bodyFormat: 'markdown' })];
+    it('matches a markdown body in the text it renders, across its formatting', () => {
+        const markdown = [
+            message('1', 'Run the **re**load now', { bodyFormat: 'markdown' }),
+            message('2', '- reload\n- task', { bodyFormat: 'markdown' }),
+        ];
         const result = createConversationHighlighter().highlight({
             messages: markdown,
             rows: ROWS,
             options: OPTIONS,
         });
-        expect(result.total).toBe(0);
-        expect(plainTextOf(markdown[0])).toBeNull();
-        expect(plainTextOf(message('2', 'x'))).toBe('x');
+        expect(result.byMessage[0].text).toBe('Run the reload now');
+        expect(result.byMessage[0].spans.map((s) => [s.start, s.end])).toEqual([[8, 14]]);
+        // Two list items are two blocks, separated by NUL in the projection.
+        expect(result.byMessage[1].text).toBe(`reload${String.fromCharCode(0)}task`);
+        expect(result.total).toBe(3);
+        expect(textOf(message('3', '**bold**', { bodyFormat: 'text' }), null)).toBe('**bold**');
+    });
+
+    it('projects a markdown body once, whatever the values or the options', () => {
+        const project = vi.fn((body) => body.replaceAll('*', ''));
+        const projections = { get: vi.fn((body) => project(body)) };
+        const cached = new Map();
+        projections.get.mockImplementation((body) => {
+            if (!cached.has(body)) cached.set(body, project(body));
+            return cached.get(body);
+        });
+        const highlighter = createConversationHighlighter({ projections });
+        const markdown = [message('1', 'a **reload**', { bodyFormat: 'markdown' })];
+        highlighter.highlight({ messages: markdown, rows: ROWS, options: OPTIONS });
+        highlighter.highlight({
+            messages: markdown,
+            rows: [{ value: 'a', category: null }],
+            options: { ...OPTIONS, wholeValues: false },
+        });
+        expect(project).toHaveBeenCalledTimes(1);
     });
 
     it('stops at the occurrence budget, says so, and does not keep a cut-short answer', () => {

@@ -14,6 +14,7 @@ import { paletteFromTheme } from '../theme/palette';
 import { isDarkTheme } from '../ui/theme-vars';
 import { categoryStyles } from './category-styles';
 import { createConversationHighlighter } from './conversation-highlights';
+import { createProjections } from './markdown-projection';
 import { isCurrentHighlightResult } from './highlight-result';
 import { createDescriber } from './marks';
 import { readTextToolSettings } from './settings';
@@ -23,11 +24,16 @@ import { highlightSummary, summaryPlacement } from './summary';
  * Create the highlight view for one chatbox object.
  *
  * @param {object} [options] - Options.
+ * @param {{get: function(string): string}} [options.projections] - The markdown projections, shared by
+ *     highlighting and search; a cache of its own when not given.
  * @param {object} [options.highlighter] - The conversation highlighter; a new one when not given.
- * @returns {{build: function(object): ?object, highlighter: object}} The view. `build` answers null
- *     while highlighting is off or nothing is loaded yet.
+ * @returns {{build: function(object): ?object, highlighter: object, projections: object}} The view.
+ *     `build` answers null while highlighting is off or nothing is loaded yet.
  */
-export function createHighlightView({ highlighter = createConversationHighlighter() } = {}) {
+export function createHighlightView({
+    projections = createProjections(),
+    highlighter = createConversationHighlighter({ projections }),
+} = {}) {
     let styles = null;
     let describe = null;
 
@@ -90,5 +96,5 @@ export function createHighlightView({ highlighter = createConversationHighlighte
         };
     }
 
-    return { build, highlighter };
+    return { build, highlighter, projections };
 }

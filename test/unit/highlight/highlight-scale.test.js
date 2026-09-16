@@ -115,3 +115,43 @@ describe('highlighting at scale: 12,000 messages', () => {
         expect(largeTime / smallTime).toBeLessThan(12);
     });
 });
+
+describe('highlighting at scale: 12,000 markdown messages', () => {
+    /** Generated markdown messages, each a different body. */
+    function markdownMessages(count) {
+        return Array.from({ length: count }, (_, i) => ({
+            id: String(i + 1),
+            key: String(i + 1),
+            bodyFormat: 'markdown',
+            body: `**Message ${i + 1}**: mail \`user${i % 1200}@example.se\` about the _reload_`,
+        }));
+    }
+
+    it(
+        'projects and matches every body once, in a time a first render can afford',
+        { timeout: 30_000 },
+        () => {
+            // Parsing is about 0.07 ms a body on Node 24; slower clients take two or three times that.
+            const highlighter = createConversationHighlighter();
+            const list = markdownMessages(COUNT);
+            const started = performance.now();
+            const result = highlighter.highlight({ messages: list, rows: ROWS, options: OPTIONS });
+            expect(performance.now() - started).toBeLessThan(8000);
+            expect(result.messagesWith).toBe(10_000);
+        }
+    );
+
+    it('never parses a body again when only the values change', { timeout: 30_000 }, () => {
+        const highlighter = createConversationHighlighter();
+        const list = markdownMessages(COUNT);
+        highlighter.highlight({ messages: list, rows: ROWS, options: OPTIONS });
+        const started = performance.now();
+        const result = highlighter.highlight({
+            messages: list,
+            rows: ROWS.slice(0, 500),
+            options: OPTIONS,
+        });
+        expect(performance.now() - started).toBeLessThan(2000);
+        expect(result.messagesWith).toBeLessThan(10_000);
+    });
+});

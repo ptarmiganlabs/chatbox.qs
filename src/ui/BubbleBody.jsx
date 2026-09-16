@@ -23,12 +23,11 @@
  */
 import { memo } from 'react';
 import Markdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import { REMARK_PLUGINS, rehypeHighlights } from '../highlight/markdown-projection';
 import styles from './chat.module.css';
 import HighlightedText from './HighlightedText';
-
-/** Rendered once, rather than a fresh array on every message. */
-const PLUGINS = [remarkGfm];
+import HighlightMark from './HighlightMark';
+import { isSafeHref } from './links';
 
 /**
  * Render a link that cannot navigate the Sense client away.
@@ -39,13 +38,29 @@ const PLUGINS = [remarkGfm];
  * @returns {object} The rendered anchor.
  */
 function SafeLink({ href, children }) {
-    const safe = typeof href === 'string' && /^https?:\/\//i.test(href) ? href : undefined;
+    const safe = isSafeHref(href) ? href : undefined;
     return (
         <a href={safe} target="_blank" rel="noopener noreferrer nofollow">
             {children}
         </a>
     );
 }
+
+/**
+ * Render a mark the highlight plugin drew into a markdown body.
+ *
+ * @param {object} props - Component props from react-markdown.
+ * @param {object} [props.node] - The hast element, carrying the mark's description.
+ * @param {object} [props.children] - The mark's text.
+ * @returns {object} The rendered mark.
+ */
+function MarkdownMark({ node, children }) {
+    const mark = node?.data?.cqsMark;
+    return mark ? <HighlightMark mark={mark}>{children}</HighlightMark> : <mark>{children}</mark>;
+}
+
+/** The elements react-markdown renders with components of ours; one object, not one per render. */
+const COMPONENTS = { a: SafeLink, mark: MarkdownMark };
 
 /**
  * Render a message body.
@@ -77,9 +92,23 @@ export function BubbleBody({ body, format, highlights = null, drawn, describe })
         );
     }
 
+    // The marks are drawn into the tree react-markdown renders, in the text it renders; see
+    // src/highlight/markdown-projection.js. Without marks, no plugin runs at all.
+    const rehypePlugins = highlights?.spans?.length
+        ? [
+              [
+                  rehypeHighlights,
+                  { expected: highlights.text, highlights: highlights.spans, drawn, describe },
+              ],
+          ]
+        : undefined;
     return (
         <div className={`${styles.body} ${styles.bodyMarkdown}`}>
-            <Markdown remarkPlugins={PLUGINS} components={{ a: SafeLink }}>
+            <Markdown
+                remarkPlugins={REMARK_PLUGINS}
+                rehypePlugins={rehypePlugins}
+                components={COMPONENTS}
+            >
                 {body}
             </Markdown>
         </div>
