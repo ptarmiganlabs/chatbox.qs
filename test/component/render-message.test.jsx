@@ -404,3 +404,105 @@ describe('MessageRow — clicking a highlight', () => {
         expect(onHighlightClick).not.toHaveBeenCalled();
     });
 });
+
+describe('MessageRow — kind chips', () => {
+    const kinds = ['billing', 'urgent', 'vip', 'refund', 'late'];
+
+    it('shows the first kinds as chips above the message text', () => {
+        const { container } = render(
+            <MessageRow
+                message={message({ kinds: kinds.slice(0, 2) })}
+                showAuthor
+                showAvatar
+                selectable={false}
+                kindChips={{ max: 3 }}
+            />
+        );
+        const bubble = container.querySelector('[data-message-index]') ?? container;
+        const chips = [...bubble.querySelectorAll('span[title]')].map((chip) => chip.textContent);
+        expect(chips).toEqual(['billing', 'urgent']);
+        // Above the text: the chips come first in the bubble.
+        const text = screen.getByText('hello');
+        const first = screen.getByText('billing');
+        expect(first.compareDocumentPosition(text) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+
+    it('folds the kinds past the maximum into one chip that names them', () => {
+        render(
+            <MessageRow
+                message={message({ kinds })}
+                showAuthor
+                showAvatar
+                selectable={false}
+                kindChips={{ max: 3 }}
+            />
+        );
+        for (const kind of ['billing', 'urgent', 'vip']) {
+            expect(screen.getByText(kind)).toBeInTheDocument();
+        }
+        expect(screen.queryByText('refund')).not.toBeInTheDocument();
+        const more = screen.getByText('+2');
+        expect(more).toHaveAttribute('aria-hidden', 'true');
+        expect(more.parentElement).toHaveAttribute('title', 'refund, late');
+        expect(screen.getByText('and 2 more kinds')).toBeInTheDocument();
+    });
+
+    it('says when a message had more kinds than were kept', () => {
+        render(
+            <MessageRow
+                message={message({ kinds, kindsCapped: true })}
+                showAuthor
+                showAvatar
+                selectable={false}
+                kindChips={{ max: 4 }}
+            />
+        );
+        expect(screen.getByText('+1+')).toBeInTheDocument();
+        expect(screen.getByText('+1+').parentElement).toHaveAttribute('title', 'late, and more');
+        expect(screen.getByText('and over 1 more kind')).toBeInTheDocument();
+    });
+
+    it('shows no chips while chips are off, or for a message without kinds', () => {
+        const { container, rerender } = render(
+            <MessageRow message={message({ kinds })} showAuthor showAvatar selectable={false} />
+        );
+        expect(screen.queryByText('billing')).not.toBeInTheDocument();
+        rerender(
+            <MessageRow
+                message={message({ kinds: [] })}
+                showAuthor
+                showAvatar
+                selectable={false}
+                kindChips={{ max: 3 }}
+            />
+        );
+        expect(container.querySelector('span[title]')).toBeNull();
+    });
+
+    it('renders a kind shaped like markup as text', () => {
+        const evil = '<img src=x onerror="alert(1)">';
+        const { container } = render(
+            <MessageRow
+                message={message({ kinds: [evil] })}
+                showAuthor
+                showAvatar
+                selectable={false}
+                kindChips={{ max: 3 }}
+            />
+        );
+        expect(screen.getByText(evil)).toBeInTheDocument();
+        expect(container.querySelector('img[src="x"]')).toBeNull();
+    });
+
+    it('lists at most 20 hidden kinds in the tooltip', async () => {
+        const { hiddenKindsTitle } = await import('../../src/ui/KindChips');
+        const hidden = Array.from({ length: 23 }, (_, i) => `k${i}`);
+        expect(hiddenKindsTitle(hidden, false)).toBe(
+            `${hidden.slice(0, 20).join(', ')}, and 3 more`
+        );
+        expect(hiddenKindsTitle(hidden, true)).toBe(
+            `${hidden.slice(0, 20).join(', ')}, and over 3 more`
+        );
+        expect(hiddenKindsTitle(['a', 'b'], false)).toBe('a, b');
+    });
+});

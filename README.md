@@ -106,6 +106,21 @@ selection, because toggling a set flips each value on its own.
 Per-message metadata is configured under **Message metadata** in the property panel. Each expression
 must aggregate — `Only([Field])`, not a bare field reference.
 
+### Message kinds as chips
+
+Switch on **Show kinds as chips** under **Message kind** to show a message's kinds as chips above its
+text — tags, labels, a ticket's categories.
+
+- A message can have several kinds. `Only()` returns nothing for a message with more than one, so join
+  them in the expression: `Concat(DISTINCT [MsgKind], ',')`.
+- **Kinds are separated by** says what to split on: a comma, a semicolon, a vertical bar, or nothing, to
+  keep the whole text as one kind. A comma also splits a value such as `1,000`. Values are trimmed, and a
+  kind that repeats is shown once.
+- **Most chips per message** (1–20, default 3) caps the chips on a bubble; the rest fold into one **+N**
+  chip whose tooltip names them. At most 100 kinds are kept per message.
+- A message made of several rows — one per recipient, say — shows the kinds of all of them.
+- The details list every kind. Chips are not searched, and a click on one is a click on the message.
+
 ## Highlighting keywords
 
 The values of a field — keywords, product codes, the e-mail addresses and phone numbers a text-mining
@@ -186,8 +201,8 @@ A search box at the top of the object finds what is typed in the conversation sh
 Sense's search and of the highlights. It looks in the message text — a markdown message's rendered
 text — and in the names in each message's header line, where the header is shown: a sender's following
 messages share one header, and recipients folded into "and N more" are not searched. It ignores case,
-treats any run of spaces and line breaks alike, and finds text inside longer words. Nothing is
-selected.
+treats any run of spaces and line breaks alike, and finds text inside longer words. Kind chips are not
+searched. Nothing is selected.
 
 - Matches are marked in orange; the counter says **3 of 12**, **12 matches** or **No matches**.
 - Typing is searched after a short pause, and the first match from where you are reading becomes

@@ -32,6 +32,22 @@ describe('selectable message text', () => {
     });
 });
 
+describe('kind chips in the stylesheet', () => {
+    it('never lets a kind chip be selected or copied with the message text', () => {
+        const chip = declarationsOf('.kindChip');
+        expect(chip).not.toBeNull();
+        expect(chip).toMatch(/(^|;|\s)user-select:\s*none/);
+        expect(chip).toMatch(/-webkit-user-select:\s*none/);
+    });
+
+    it('cuts a long kind short instead of widening the bubble', () => {
+        const chip = declarationsOf('.kindChip');
+        expect(chip).toMatch(/max-width:\s*100%/);
+        expect(chip).toMatch(/text-overflow:\s*ellipsis/);
+        expect(declarationsOf('.kinds')).toMatch(/flex-wrap:\s*wrap/);
+    });
+});
+
 describe('highlights in the stylesheet', () => {
     it('never lets a category label be selected or copied with the text', () => {
         const label = declarationsOf(".root[data-labels='true'] .mark[data-label]::after");

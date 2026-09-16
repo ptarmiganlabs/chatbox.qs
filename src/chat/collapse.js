@@ -17,6 +17,7 @@
  * Pure, so every one of those cases is unit-testable with no engine.
  */
 
+import { mergeKinds } from './kind-chips';
 import { addRecipients } from './recipients';
 
 /** Separator for composite keys. It cannot occur in engine text. */
@@ -100,7 +101,9 @@ function contentKey(record) {
  * largest seen — summing would count recipients as messages. A KPI that differs
  * between rows has no single value to show, so it is marked as varying rather
  * than quietly showing the first row's number. The side attribute is honoured
- * only while every row agrees on it.
+ * only while every row agrees on it. Kinds, while they are read as a list, are
+ * gathered from every row: a message's rows can carry different kinds, as one
+ * per recipient does, and the first row's alone would drop the others.
  *
  * @param {object} bubble - The bubble to extend, mutated.
  * @param {object} record - The additional row.
@@ -112,6 +115,11 @@ function foldInto(bubble, record) {
     bubble.merged = bubble.merged || record.merged;
     bubble.rowCount = Math.max(bubble.rowCount, record.rowCount);
     if (bubble.sideHint !== record.sideHint) bubble.sideHint = null;
+    if (bubble.kinds) {
+        const merged = mergeKinds(bubble.kinds, record.kinds, bubble.kindsCapped);
+        bubble.kinds = merged.kinds;
+        bubble.kindsCapped = merged.capped || Boolean(record.kindsCapped);
+    }
     bubble.kpis = bubble.kpis.map((kpi, k) => {
         const other = record.kpis?.[k];
         if (kpi.varies || !other || other.text === kpi.text) return kpi;

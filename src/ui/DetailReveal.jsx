@@ -100,7 +100,8 @@ function DetailBody({ message, messages, index, showParticipant, quote = null })
         ],
         ['Sent', message.tsText],
         ['Thread', message.threadId],
-        ['Kind', message.kind],
+        // Every kind, where the bubble shows them as chips and may leave some out.
+        ['Kind', message.kinds?.length ? message.kinds.join(', ') : message.kind],
         ['Badge', message.badge],
     ].filter(([, value]) => value);
 

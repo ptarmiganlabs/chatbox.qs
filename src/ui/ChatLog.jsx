@@ -31,6 +31,7 @@ import { drawnCount } from '../highlight/conversation-highlights';
 import { legendEntries } from '../highlight/legend';
 import { HIGHLIGHT_KINDS } from '../qix/highlight-source';
 import { counted } from '../util/format';
+import { readKindChipSettings } from '../chat/kind-chips';
 import { Empty } from './states';
 
 /** How long typing must pause before the query is searched, in milliseconds. */
@@ -373,6 +374,8 @@ export function ChatLog({
     const live = snapshot === null;
     const gapSec = Number(settings.groupGapSec) >= 0 ? Number(settings.groupGapSec) : 120;
     const showAvatars = settings.showAvatars !== false;
+    const chipSettings = readKindChipSettings(settings.kindChips);
+    const kindChips = chipSettings.show ? chipSettings : null;
 
     // The search box: what is typed, and the query searched once typing pauses. The query outlives
     // the conversation: a selection searches the new messages for it.
@@ -831,6 +834,7 @@ export function ChatLog({
                     onHighlightClick={handleHighlightClick}
                     current={currentMarkIn(index)}
                     finds={finds ? finds.byMessage[index] : null}
+                    kindChips={kindChips}
                 />
                 {isOpen && revealMode === 'inline' ? (
                     <DetailReveal

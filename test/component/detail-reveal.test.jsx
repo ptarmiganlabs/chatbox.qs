@@ -71,6 +71,19 @@ describe('DetailReveal', () => {
         expect(screen.queryByText('Kind')).not.toBeInTheDocument();
     });
 
+    it('lists every kind of a message whose kinds show as chips', () => {
+        render(
+            <DetailReveal
+                message={msg({ kind: 'billing,urgent,vip', kinds: ['billing', 'urgent', 'vip'] })}
+                messages={[msg()]}
+                index={0}
+                mode="pane"
+                onClose={vi.fn()}
+            />
+        );
+        expect(screen.getByText('billing, urgent, vip')).toBeInTheDocument();
+    });
+
     it('closes from the header in pane and overlay modes', () => {
         const onClose = vi.fn();
         render(

@@ -402,6 +402,31 @@
     border: 1px solid var(--cqs-border, #d9d9d9);
 }
 
+/* A message's kinds, as chips above its text. They wrap, and a long kind is cut short with an ellipsis
+   rather than widening the bubble. They are labels, not message text, so they are never selected or
+   copied with it. */
+.kinds {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px;
+    margin-bottom: 3px;
+}
+
+.kindChip {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding: 0 6px;
+    border: 1px solid var(--cqs-border, #d9d9d9);
+    border-radius: 8px;
+    color: var(--cqs-muted, #6c6c6c);
+    font-size: 10px;
+    line-height: 1.5;
+    -webkit-user-select: none;
+    user-select: none;
+}
+
 .selectable {
     cursor: pointer;
 }

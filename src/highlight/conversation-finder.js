@@ -5,6 +5,7 @@
  * in its header line — the author and the recipients as shown — where the header line is shown at all.
  * Consecutive messages from one sender show the header once, and a long recipient list shows three
  * names and "and N more", so a name hidden there is not found; the message's details list everyone.
+ * Kind chips are labels on a message, not its text, and are not searched.
  *
  * Search matches like textview.qs's find box: case is ignored, any run of whitespace in the query
  * matches any run in the text, a match may sit inside a longer word, and every character is literal.

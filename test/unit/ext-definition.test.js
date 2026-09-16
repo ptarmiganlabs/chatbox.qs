@@ -1,6 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import ext from '../../src/ext/index';
-import { ATTR_ORDER, metadataSection } from '../../src/ext/metadata-section';
+import {
+    ATTR_ORDER,
+    kindChipsShown,
+    metadataSection,
+    tidyKindChipSettings,
+} from '../../src/ext/metadata-section';
+import { KIND_CHIP_DEFAULTS } from '../../src/chat/kind-chips';
 import { categoryFieldIsSet } from '../../src/ext/category-section';
 import { clickHelpIsShown, highlightFieldIsSet } from '../../src/ext/highlight-section';
 import { ON_OFF } from '../../src/ext/items';
@@ -52,8 +58,11 @@ describe('property panel definition', () => {
     });
 
     it("binds every metadata item to the extension's own property bag", () => {
+        // Attribute expressions under chatbox.attrs, the kind chip settings under chatbox.kindChips; a
+        // chip setting under chatbox.attrs would be taken for an expression the panel filled in.
         for (const item of Object.values(metadataSection().items)) {
-            expect(item.ref).toMatch(/^chatbox\.attrs\./);
+            if (item.ref === undefined) continue;
+            expect(item.ref).toMatch(/^chatbox\.(attrs|kindChips)\./);
         }
     });
 
@@ -92,12 +101,73 @@ describe('property panel definition', () => {
     });
 
     it('declares every metadata slot exactly once, in a stable order', () => {
-        const refs = Object.values(metadataSection().items).map((i) => i.ref);
+        const refs = Object.values(metadataSection().items)
+            .map((i) => i.ref)
+            .filter((ref) => typeof ref === 'string' && ref.startsWith('chatbox.attrs.'));
         expect(new Set(refs).size).toBe(refs.length);
         expect(refs).toHaveLength(ATTR_ORDER.length);
         // The panel order and the slot order are one contract: the engine
         // returns attribute-expression values positionally.
         expect(refs).toEqual(ATTR_ORDER.map((id) => `chatbox.attrs.${id}`));
+    });
+});
+
+describe('message metadata: kind chips', () => {
+    const { items } = metadataSection();
+    const chipItems = ['kindChipsShow', 'kindChipsHelp', 'kindChipsSeparator', 'kindChipsMax'];
+
+    it('follows the kind expression it shows', () => {
+        const keys = Object.keys(items);
+        expect(keys.slice(keys.indexOf('kind'), keys.indexOf('kind') + 5)).toEqual([
+            'kind',
+            ...chipItems,
+        ]);
+    });
+
+    it('binds under chatbox.kindChips, with the defaults from src/chat/kind-chips.js, covering them all', () => {
+        const bound = chipItems.map((key) => items[key]).filter((item) => item.ref);
+        for (const item of bound) {
+            const setting = item.ref.replace(/^chatbox\.kindChips\./, '');
+            expect(item.ref, item.ref).toMatch(/^chatbox\.kindChips\./);
+            expect(item.defaultValue, item.ref).toEqual(KIND_CHIP_DEFAULTS[setting]);
+        }
+        expect(new Set(bound.map((item) => item.ref))).toEqual(
+            new Set(Object.keys(KIND_CHIP_DEFAULTS).map((key) => `chatbox.kindChips.${key}`))
+        );
+    });
+
+    it('never adds a chip setting to the attribute expressions', () => {
+        expect(ATTR_ORDER.every((id) => !/kindChips/.test(id))).toBe(true);
+    });
+
+    it('shows the separator, the count and the help only while chips are on', () => {
+        expect(items.kindChipsShow.show).toBeUndefined();
+        for (const key of ['kindChipsHelp', 'kindChipsSeparator', 'kindChipsMax']) {
+            expect(items[key].show, key).toBe(kindChipsShown);
+        }
+        expect(kindChipsShown({ chatbox: { kindChips: { show: true } } })).toBe(true);
+        expect(kindChipsShown({ chatbox: { kindChips: { show: false } } })).toBe(false);
+        expect(kindChipsShown({ chatbox: {} })).toBe(false);
+    });
+
+    it('offers the separators the reader splits on, with a way not to split', () => {
+        expect(items.kindChipsSeparator.component).toBe('dropdown');
+        expect(items.kindChipsSeparator.options.map((o) => o.value)).toEqual([
+            ',',
+            ';',
+            '|',
+            'none',
+        ]);
+        // A typed separator would be sent to the engine when it starts with "=".
+        expect(items.kindChipsSeparator.expression).toBeUndefined();
+    });
+
+    it('keeps the chip count a whole number from 1 to 20', () => {
+        expect(items.kindChipsMax).toMatchObject({ component: 'slider', min: 1, max: 20, step: 1 });
+        const data = { chatbox: { kindChips: { show: true, max: 99 } } };
+        tidyKindChipSettings(data);
+        expect(data.chatbox.kindChips.max).toBe(20);
+        expect(items.kindChipsMax.change).toBe(tidyKindChipSettings);
     });
 });
 
