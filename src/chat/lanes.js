@@ -26,6 +26,9 @@ import { buildDayGroups, dayLabel, dayStarts } from './grouping';
 /** The most conversations side by side. Also keeps a row's lanes within a bitmask. */
 export const LANE_MAX = 10;
 
+/** Separator for cache signatures. It cannot occur in engine text. */
+const SEP = String.fromCharCode(0);
+
 /** The grouping gap when the setting holds no usable number, as the conversation view reads it. */
 export const DEFAULT_GAP_SEC = 120;
 
@@ -350,6 +353,48 @@ export function conversationsShownText(board) {
     return shown < board.total
         ? `${shown} of ${counted(board.total, 'conversation', 'conversations')}`
         : counted(shown, 'conversation', 'conversations');
+}
+
+/**
+ * Create a cache that keeps the last board while what it is built from is unchanged.
+ *
+ * The object renders again on every step of a resize and for every notice. A new board — new message
+ * arrays for its lanes — makes every lane's list look again for where the reader is, reading the layout
+ * while rendering, and every ruler count its ticks again, all for the same lanes. A resize only builds a
+ * new board when it changes how many lanes fit.
+ *
+ * @returns {{get: function(object): ?object}} The cache. `get` takes what {@link laneBoardFor} takes and
+ *     answers the same board object while the messages array, the lane settings, the grouping gap, the
+ *     lanes that fit and the recorded lanes are all unchanged.
+ */
+export function createBoardCache() {
+    let last = null;
+    return {
+        /**
+         * Get the board for a render, building it only when something it is built from changed.
+         *
+         * @param {object} request - What {@link laneBoardFor} takes.
+         * @returns {?object} The board, or null without lanes.
+         */
+        get(request) {
+            const { messages, settings, hasThread, width = 0, keys = null, gapSec } = request;
+            const signature = [
+                settings?.show === true,
+                Boolean(hasThread),
+                settings?.max,
+                settings?.scroll,
+                gapSecondsOf(gapSec),
+                fitLaneCount(width, clampLaneMax(settings?.max)),
+                Array.isArray(keys) ? keys.join(SEP) : '',
+            ].join(SEP);
+            if (last !== null && last.messages === messages && last.signature === signature) {
+                return last.board;
+            }
+            const board = laneBoardFor(request);
+            last = { messages, signature, board };
+            return board;
+        },
+    };
 }
 
 /**

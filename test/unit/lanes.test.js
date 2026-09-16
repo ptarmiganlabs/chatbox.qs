@@ -19,6 +19,7 @@ import {
     readLaneSettings,
     rowDayGroups,
     conversationsShownText,
+    createBoardCache,
 } from '../../src/chat/lanes';
 
 const DAY = 86_400_000;
@@ -398,6 +399,53 @@ describe('laneBoardFor', () => {
         ).toBeNull();
         expect(laneBoardFor({ messages, settings, hasThread: false })).toBeNull();
         expect(laneBoardFor({ messages: [], settings, hasThread: true })).toBeNull();
+    });
+});
+
+describe('createBoardCache', () => {
+    const messages = [msg('1', 'A'), msg('2', 'B'), msg('3', 'C')];
+    const settings = { show: true, max: 3, scroll: 'linked' };
+    const request = (over = {}) => ({
+        messages,
+        settings,
+        hasThread: true,
+        width: 900,
+        keys: null,
+        gapSec: 120,
+        ...over,
+    });
+
+    it('answers the same board while nothing it is built from changed', () => {
+        const cache = createBoardCache();
+        const board = cache.get(request());
+        expect(board).not.toBeNull();
+        // A resize that fits as many lanes changes nothing.
+        expect(cache.get(request({ width: 950 }))).toBe(board);
+        expect(cache.get(request({ settings: { ...settings } }))).toBe(board);
+    });
+
+    it('builds a new board when the messages, the fit, the settings, the gap or the recorded lanes change', () => {
+        const cache = createBoardCache();
+        let board = cache.get(request());
+        for (const over of [
+            { messages: [...messages] },
+            { width: 500 },
+            { settings: { ...settings, scroll: 'free' } },
+            { settings: { ...settings, max: 2 } },
+            { gapSec: 600 },
+            { keys: ['v:A'] },
+        ]) {
+            const next = cache.get(request(over));
+            expect(next, JSON.stringify(Object.keys(over))).not.toBe(board);
+            board = cache.get(request());
+        }
+    });
+
+    it('answers null without lanes, and a board again once they are on', () => {
+        const cache = createBoardCache();
+        expect(cache.get(request({ settings: { ...settings, show: false } }))).toBeNull();
+        expect(cache.get(request({ hasThread: false }))).toBeNull();
+        expect(cache.get(request())).not.toBeNull();
     });
 });
 

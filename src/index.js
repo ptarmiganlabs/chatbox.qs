@@ -40,7 +40,7 @@ import {
     writeLaneSnapshot,
     writeSnapshot,
 } from './ui/snapshot';
-import { laneBoardFor, laneKeys, readLaneSettings } from './chat/lanes';
+import { createBoardCache, laneKeys, readLaneSettings } from './chat/lanes';
 import { reloadingView } from './ui/reload-view';
 import { createHighlightLoader } from './qix/highlight-loader';
 import { loadHighlightResult } from './highlight/highlight-result';
@@ -148,6 +148,14 @@ export default function supernova(galaxy) {
             // The props of the conversation last shown, so a reload after a selection can keep it
             // on screen instead of swapping in Loading — see src/ui/reload-view.js.
             const lastViewRef = useRef(null);
+
+            // The conversation and its lanes, kept while what they are built from is unchanged. Every
+            // step of a resize and every notice renders again, and new message arrays for the same
+            // conversation would make each list look again for where the reader is, and each ruler
+            // count its ticks again, for nothing.
+            const conversationCacheRef = useRef(null);
+            const boardCacheRef = useRef(null);
+            if (!boardCacheRef.current) boardCacheRef.current = createBoardCache();
 
             // Highlighting keywords. The loader owns the companion object that reads the highlight
             // field; the view keeps the matched conversation between renders. Both live in refs,
@@ -395,13 +403,28 @@ export default function supernova(galaxy) {
                     return undefined;
                 }
 
-                const conversation = normalize({
-                    layout: staleLayout,
-                    rows: page.rows,
-                    props: settings,
-                    theme,
-                    area: page.area,
-                });
+                const themeName = theme?.name?.();
+                const cached = conversationCacheRef.current;
+                if (
+                    cached === null ||
+                    cached.page !== page ||
+                    cached.layout !== staleLayout ||
+                    cached.themeName !== themeName
+                ) {
+                    conversationCacheRef.current = {
+                        page,
+                        layout: staleLayout,
+                        themeName,
+                        conversation: normalize({
+                            layout: staleLayout,
+                            rows: page.rows,
+                            props: settings,
+                            theme,
+                            area: page.area,
+                        }),
+                    };
+                }
+                const { conversation } = conversationCacheRef.current;
 
                 // The live layout carries current selection state; the stale one
                 // does not, so the highlight reads from the live cube.
@@ -480,7 +503,7 @@ export default function supernova(galaxy) {
                 // it. An export shows the lanes a snapshot recorded, not the ones its size would fit.
                 const laneSettings = readLaneSettings(settings.lanes);
                 const hasThread = Boolean(byRole[ROLES.THREAD]);
-                const board = laneBoardFor({
+                const board = boardCacheRef.current.get({
                     messages: conversation.messages,
                     settings: laneSettings,
                     hasThread,
