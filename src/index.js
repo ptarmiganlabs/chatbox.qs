@@ -29,11 +29,18 @@ import dataTargets from './data';
 import ext from './ext/index';
 import { normalize } from './chat/normalize';
 import { fetchAllRows } from './qix/paging';
-import { conversationModelOf, resolveRoles } from './qix/column-map';
+import { ROLES, conversationModelOf, resolveRoles } from './qix/column-map';
 import { buildSelection } from './qix/selection';
 import { describeAssignments } from './qix/role-labels';
 import { syncAttributeExpressions } from './qix/sync-attrs';
-import { isSnapshot, shouldRenderAll, writeSnapshot } from './ui/snapshot';
+import {
+    isSnapshot,
+    readLaneSnapshot,
+    shouldRenderAll,
+    writeLaneSnapshot,
+    writeSnapshot,
+} from './ui/snapshot';
+import { laneBoardFor, laneKeys, readLaneSettings } from './chat/lanes';
 import { reloadingView } from './ui/reload-view';
 import { createHighlightLoader } from './qix/highlight-loader';
 import { loadHighlightResult } from './highlight/highlight-result';
@@ -124,7 +131,10 @@ export default function supernova(galaxy) {
             // anything that must survive — scroll position, the open detail —
             // has to be written into the layout copy here.
             onTakeSnapshot(async (snapshotLayout) =>
-                writeSnapshot(snapshotLayout, viewStateRef.current)
+                writeLaneSnapshot(
+                    writeSnapshot(snapshotLayout, viewStateRef.current),
+                    laneKeys(lastViewRef.current?.board ?? null)
+                )
             );
 
             // Page against the STALE layout: it is pinned while a selection is
@@ -465,6 +475,20 @@ export default function supernova(galaxy) {
                     return undefined;
                 }
 
+                // Conversations side by side: a board of lanes, whose order of messages everything below
+                // follows — the highlights, search, stepping and copying count messages by their index in
+                // it. An export shows the lanes a snapshot recorded, not the ones its size would fit.
+                const laneSettings = readLaneSettings(settings.lanes);
+                const hasThread = Boolean(byRole[ROLES.THREAD]);
+                const board = laneBoardFor({
+                    messages: conversation.messages,
+                    settings: laneSettings,
+                    hasThread,
+                    width: rect?.width ?? 0,
+                    keys: readLaneSnapshot(staleLayout)?.keys ?? null,
+                });
+                const shown = board ? { ...conversation, messages: board.messages } : conversation;
+
                 // A click on a highlight or a chip selects in the highlight or category field: never in
                 // an export render, whose server reports every interaction as allowed, nor in edit mode.
                 const canSelectHighlights =
@@ -478,7 +502,7 @@ export default function supernova(galaxy) {
                     tagged: highlightResult,
                     layout: staleLayout,
                     version: companionVersion,
-                    messages: conversation.messages,
+                    messages: shown.messages,
                     theme,
                     renderAll: shouldRenderAll(staleLayout, settings),
                     canSelect: canSelectHighlights,
@@ -530,7 +554,14 @@ export default function supernova(galaxy) {
                 };
 
                 const view = {
-                    conversation,
+                    conversation: shown,
+                    board,
+                    // Lanes switched on without a thread to put in them: said in a banner, since the
+                    // conversation then shows as one.
+                    laneNotice:
+                        laneSettings.show && !hasThread
+                            ? 'Conversations side by side need a Conversation / thread dimension.'
+                            : null,
                     settings,
                     canSelect,
                     onSelect,

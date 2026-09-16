@@ -13,6 +13,9 @@
 /** Where our state lives inside the layout copy. */
 const KEY = 'snapshotData';
 
+/** Where the lanes shown live, beside the view state rather than inside it. */
+const LANES_KEY = 'chatboxLanes';
+
 /**
  * Report whether this layout is a snapshot being re-rendered.
  *
@@ -59,6 +62,38 @@ export function readSnapshot(layout) {
         firstVisibleIndex: Number.isInteger(state.firstVisibleIndex) ? state.firstVisibleIndex : 0,
         openId: typeof state.openId === 'string' ? state.openId : null,
     };
+}
+
+/**
+ * Write the conversations shown side by side into a layout copy, for a snapshot.
+ *
+ * An export draws the object at the export's size, where a different number of lanes may fit: the
+ * snapshot shows the lanes the reader saw instead.
+ *
+ * @param {object} layout - The layout copy handed to onTakeSnapshot.
+ * @param {?Array<string>} keys - The lane keys shown, in order, or null without lanes.
+ * @returns {object} The same layout, mutated when there are lanes.
+ */
+export function writeLaneSnapshot(layout, keys) {
+    if (!layout || typeof layout !== 'object') return layout;
+    const kept = Array.isArray(keys) ? keys.filter((key) => typeof key === 'string') : [];
+    if (kept.length === 0) return layout;
+    const existing = layout[KEY] && typeof layout[KEY] === 'object' ? layout[KEY] : {};
+    layout[KEY] = { ...existing, [LANES_KEY]: { keys: kept } };
+    return layout;
+}
+
+/**
+ * Read back the conversations a snapshot showed side by side.
+ *
+ * @param {object} [layout] - The object layout.
+ * @returns {?{keys: Array<string>}} The lane keys, or null when this is not a snapshot or had no lanes.
+ */
+export function readLaneSnapshot(layout) {
+    if (!isSnapshot(layout)) return null;
+    const keys = layout[KEY][LANES_KEY]?.keys;
+    const kept = Array.isArray(keys) ? keys.filter((key) => typeof key === 'string') : [];
+    return kept.length > 0 ? { keys: kept } : null;
 }
 
 /**

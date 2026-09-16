@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { isSnapshot, readSnapshot, shouldRenderAll, writeSnapshot } from '../../src/ui/snapshot';
+import {
+    isSnapshot,
+    readLaneSnapshot,
+    readSnapshot,
+    shouldRenderAll,
+    writeLaneSnapshot,
+    writeSnapshot,
+} from '../../src/ui/snapshot';
 
 describe('snapshot round trip', () => {
     it('survives write then read — the whole point', () => {
@@ -56,5 +63,29 @@ describe('shouldRenderAll', () => {
 
     it('defaults to virtualized when there are no settings', () => {
         expect(shouldRenderAll(undefined, undefined)).toBe(false);
+    });
+});
+
+describe('lanes in a snapshot', () => {
+    it('records the lanes shown beside the view state, which reads back unchanged', () => {
+        const layout = writeLaneSnapshot(
+            writeSnapshot({}, { firstVisibleIndex: 4, openId: null }),
+            ['v:T3', 'n:-2']
+        );
+        expect(readLaneSnapshot(layout)).toEqual({ keys: ['v:T3', 'n:-2'] });
+        expect(readSnapshot(layout)).toEqual({ firstVisibleIndex: 4, openId: null });
+    });
+
+    it('records nothing without lanes, and reads nothing from an ordinary layout', () => {
+        const layout = writeSnapshot({}, { firstVisibleIndex: 0, openId: null });
+        writeLaneSnapshot(layout, null);
+        expect(readLaneSnapshot(layout)).toBeNull();
+        expect(readLaneSnapshot({ snapshotData: { chatboxLanes: { keys: ['v:A'] } } })).toBeNull();
+        expect(() => writeLaneSnapshot(null, ['v:A'])).not.toThrow();
+    });
+
+    it('keeps only keys that are text', () => {
+        const layout = writeLaneSnapshot(writeSnapshot({}, {}), ['v:A', 7, null]);
+        expect(readLaneSnapshot(layout)).toEqual({ keys: ['v:A'] });
     });
 });
