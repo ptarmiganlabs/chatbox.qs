@@ -214,3 +214,44 @@ describe('fetchAllRows — prefetched page width regression', () => {
         expect(model.getHyperCubeData).not.toHaveBeenCalled();
     });
 });
+
+describe('fetchAllRows — stopping when the caller has enough', () => {
+    it('asks before every call, and stops asking the engine once the rows are enough', async () => {
+        // 1 column, so a page is 10 000 rows; 25 000 rows would take three calls.
+        const model = mkModel(25000, 1);
+        const isEnough = vi.fn((rows) => rows.length >= 10000);
+        const result = await fetchAllRows({
+            model,
+            layout: mkLayout({ qcy: 25000, qcx: 1 }),
+            maxRows: 25000,
+            isEnough,
+        });
+        expect(model.getHyperCubeData).toHaveBeenCalledTimes(1);
+        expect(result.rows).toHaveLength(10000);
+        expect(result.truncated).toBe(true);
+        expect(isEnough).toHaveBeenCalledTimes(2);
+    });
+
+    it('needs no call at all when the rows delivered with the layout are enough', async () => {
+        const model = mkModel(3000, 2);
+        const result = await fetchAllRows({
+            model,
+            layout: mkLayout({ qcy: 3000, qcx: 2, prefetched: 1000 }),
+            maxRows: 3000,
+            isEnough: (rows) => rows.length >= 1000,
+        });
+        expect(model.getHyperCubeData).not.toHaveBeenCalled();
+        expect(result.rows).toHaveLength(1000);
+    });
+
+    it('pages as before when nobody says the rows are enough', async () => {
+        const model = mkModel(25000, 1);
+        const result = await fetchAllRows({
+            model,
+            layout: mkLayout({ qcy: 25000, qcx: 1 }),
+            maxRows: 25000,
+        });
+        expect(model.getHyperCubeData).toHaveBeenCalledTimes(3);
+        expect(result.rows).toHaveLength(25000);
+    });
+});

@@ -9,6 +9,7 @@
  */
 import { ATTR_IDS } from './qix/attr-map';
 import { DEFAULT_CIDS, ROLES } from './qix/column-map';
+import { textToolSettingsBag } from './highlight/settings';
 
 /**
  * Column budget for the initial fetch.
@@ -97,6 +98,11 @@ export default {
         onBubbleClick: 'selectAuthor',
         revealMode: 'auto', // 'auto' | 'pane' | 'overlay' | 'inline'
         virtualize: true,
+
+        // highlight, match, category: keyword highlighting. One definition in
+        // src/highlight/settings.js serves these defaults, the property panel and
+        // the render code, so they cannot drift apart.
+        ...textToolSettingsBag(),
     },
 };
 
