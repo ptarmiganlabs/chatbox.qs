@@ -301,20 +301,29 @@ component would have been lost on every selection too.
 the highlighter, the finder and the search query live in `src/index.js`, not in the component.
 _Guard: `test/unit/reload-view.test.js`, `test/component/chatlog-reload.test.jsx`._
 
-## 28. The virtualizer reports the new range before any effect runs
+## 28. The virtualizer cannot say where the reader is
 
-react-virtuoso keeps its pixel offset when the data changes and reports whatever message now sits at
-the top — before an effect can read where the reader was. The first version of the return to the
-reader's message read the key in an effect, and so returned to the wrong message.
+Returning the reader to their message after a selection ran into react-virtuoso five times:
 
-Its `followOutput` option undid the return in the other direction, and only on a live server: a list
-short enough to fit counts as scrolled to the bottom, so when clearing a selection brought the other
-messages back, the list followed them to the last one. While Loading replaced the list, that option
-never came into play.
+- It keeps its pixel offset when the data changes and reports whatever message now sits at the top,
+  before an effect can read where the reader was. The first version read the key in an effect, and so
+  returned to the wrong message.
+- Its range counts the rows it draws beyond the view (`increaseViewportBy`), so the first message of the
+  range is one the reader cannot see. When a selection removed that message there was nothing to return
+  to, and the list kept a pixel offset past the end of the shorter list.
+- With day separators it holds the day's header at the top of the view, over the row behind it; a
+  message scrolled to the top sits below the header.
+- It draws a longer list's height in an update of its own, after the commit that brought the messages,
+  so a scroll to a message further down than the old list reached stopped at the old end.
+- Its `followOutput` option counts a list short enough to fit as scrolled to the bottom, so clearing a
+  selection followed the returning messages to the last one.
 
-**Rule:** the key of the message the reader was at is captured while rendering the new messages, range
-reports are not taken as the reader's place until the return is done, the return runs in a layout
-effect, and the list does not follow new rows to the bottom. _Guard:
+While Loading replaced the list none of this came into play, and in jsdom none of it can be seen: the
+first two were found on Qlik Sense, the rest in headless Chrome over 12,000 messages.
+
+**Rule:** the reader's place is read while rendering the new messages, from the rows on screen below any
+held day header; the return goes to that message, or to the nearest one still shown, in a layout effect
+and once more after the commit; the list does not follow new rows to the bottom. _Guard:
 `test/component/chatlog-reload.test.jsx`._
 
 ## 29. An image or PDF export draws the object without the engine

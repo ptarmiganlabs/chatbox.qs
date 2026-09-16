@@ -70,6 +70,61 @@ export function isSelectable(message, mode) {
     return false;
 }
 
+/** How far a row must reach below the top of the view to count as shown, in pixels. */
+const SHOWN_BELOW_TOP_PX = 2;
+
+/**
+ * Find the message the reader is at: the first one whose bottom is below the top of the view.
+ *
+ * Read from the rows on screen rather than from the virtualizer's range, which also counts the rows it
+ * draws beyond the view. The day header the virtualizer holds at the top of the view covers the rows
+ * under it, so the view starts below it; a row reaching a fraction of a pixel further is not shown.
+ *
+ * @param {?HTMLElement} view - The element that scrolls.
+ * @param {?HTMLElement} list - The element the rows are in.
+ * @returns {number} The message's index, or -1 when no row is laid out below the top of the view.
+ */
+export function messageAtTop(view, list) {
+    const viewTop = view?.getBoundingClientRect?.().top;
+    if (typeof viewTop !== 'number') return -1;
+    const held = view.querySelector?.('[data-testid="virtuoso-top-item-list"]');
+    const top = Math.max(viewTop, held?.getBoundingClientRect().bottom ?? viewTop);
+    for (const node of list?.querySelectorAll?.('[data-message-index]') ?? []) {
+        if (node.getBoundingClientRect().bottom > top + SHOWN_BELOW_TOP_PX) {
+            return Number(node.getAttribute('data-message-index'));
+        }
+    }
+    return -1;
+}
+
+/**
+ * Find where to put the reader back once other messages are shown.
+ *
+ * @param {{messages: Array<object>, index: number}} place - The messages that were shown, and the index
+ *     of the one the reader was at.
+ * @param {Array<object>} messages - The messages shown now.
+ * @returns {number} The index of the reader's message among `messages`; when a selection removed it, of
+ *     the first message after it that is still shown, else of the last one before it; -1 when none is.
+ */
+export function returnIndex(place, messages) {
+    const before = place?.messages ?? [];
+    const from = Math.min(Math.max(place?.index ?? 0, 0), before.length);
+    // A render that rebuilt the same messages leaves the reader's message where it was.
+    if (from < messages.length && from < before.length) {
+        if (bubbleKey(messages[from]) === bubbleKey(before[from])) return from;
+    }
+    const at = new Map(messages.map((message, index) => [bubbleKey(message), index]));
+    for (let i = from; i < before.length; i++) {
+        const index = at.get(bubbleKey(before[i]));
+        if (index !== undefined) return index;
+    }
+    for (let i = from - 1; i >= 0; i--) {
+        const index = at.get(bubbleKey(before[i]));
+        if (index !== undefined) return index;
+    }
+    return -1;
+}
+
 /**
  * A thin line across the top of the conversation while newer rows load.
  *
@@ -193,17 +248,24 @@ export function ChatLog({
         scrollerRef.current = node;
     }, []);
 
-    // Where the reader is, by message key. A selection replaces the messages, and the reader's message
-    // can move to another index or go; the key is what finds it again. `shownRef` holds the messages
-    // the key was read against, and `restoreRef` the key to return to once new messages are shown.
-    const anchorKeyRef = useRef(null);
+    // Where the reader is: the messages on screen, and the index of the one at the top of the view. A
+    // selection replaces the messages, and the reader's message can move to another index or go.
+    // `shownRef` holds the messages on screen, and `restoreRef` the place to return to once new messages
+    // are shown.
     const shownRef = useRef(messages);
     const restoreRef = useRef(null);
     if (shownRef.current !== messages) {
-        // Captured while rendering, before the virtualizer can report a range for the new messages:
-        // it keeps its pixel offset across a data change and reports whatever now sits there, which
-        // would otherwise overwrite where the reader actually was.
-        if (restoreRef.current === null) restoreRef.current = anchorKeyRef.current;
+        // Read while rendering, while the rows on screen are still the messages the reader saw: once they
+        // are replaced, the virtualizer keeps its pixel offset and reports whatever now sits there. Read
+        // from the rows, because the virtualizer's range starts with rows drawn above the view, which a
+        // selection may remove. Its range is the fallback where nothing is laid out.
+        if (restoreRef.current === null) {
+            const atTop = renderAll ? -1 : messageAtTop(scrollerRef.current, listRef.current);
+            restoreRef.current = {
+                messages: shownRef.current,
+                index: atTop >= 0 ? atTop : firstVisibleRef.current,
+            };
+        }
         shownRef.current = messages;
     }
 
@@ -216,32 +278,35 @@ export function ChatLog({
     const handleRangeChanged = useCallback(
         (range) => {
             firstVisibleRef.current = range?.startIndex ?? 0;
-            // While a return to the reader's message is pending, a range is not where they were.
-            if (restoreRef.current === null) {
-                const first = shownRef.current[firstVisibleRef.current];
-                anchorKeyRef.current = first ? bubbleKey(first) : null;
-            }
             onViewState?.({ firstVisibleIndex: firstVisibleRef.current, openId });
         },
         [onViewState, openId]
     );
 
-    // When newer rows replace the messages, put the reader back at the message they were reading.
-    // After a selection, the kept pixel offset lands on whatever message now happens to sit there. A
-    // message the selection removed cannot be returned to; the list then stays where it is. A layout
-    // effect, so the jump back happens before the new messages are painted at the wrong place.
+    // When newer rows replace the messages, put the reader back at the message they were reading, or at
+    // the nearest one still shown when the selection removed it. After a selection, the kept pixel
+    // offset lands on whatever message now happens to sit there, or past the end of a shorter list. A
+    // layout effect, so the jump back happens before the new messages are painted at the wrong place.
     useLayoutEffect(() => {
-        const key = restoreRef.current;
-        if (key === null) return;
+        const place = restoreRef.current;
+        if (place === null) return;
         restoreRef.current = null;
         if (renderAll) return;
-        const index = messages.findIndex((m) => bubbleKey(m) === key);
-        if (index < 0) return;
-        anchorKeyRef.current = key;
-        if (index !== firstVisibleRef.current) {
-            firstVisibleRef.current = index;
-            virtuosoRef.current?.scrollToIndex?.({ index, align: 'start' });
-        }
+        const index = returnIndex(place, messages);
+        if (index < 0 || index === place.index) return;
+        firstVisibleRef.current = index;
+        const location = { index, align: 'start' };
+        virtuosoRef.current?.scrollToIndex?.(location);
+        // Once more after this commit: the virtualizer draws the new list's height in an update of its
+        // own, and until then a message further down than the old list reached is out of the browser's
+        // reach, so the first scroll stops at the old end.
+        let current = true;
+        queueMicrotask(() => {
+            if (current) virtuosoRef.current?.scrollToIndex?.(location);
+        });
+        return () => {
+            current = false;
+        };
     }, [messages, renderAll]);
 
     useEffect(() => {
@@ -394,17 +459,11 @@ export function ChatLog({
      * @returns {number} Its index.
      */
     const readingIndex = () => {
-        const scroller = renderAll ? listRef.current : scrollerRef.current;
-        const top = scroller?.getBoundingClientRect?.().top;
-        const nodes = listRef.current?.querySelectorAll?.('[data-message-index]') ?? [];
-        if (typeof top === 'number') {
-            for (const node of nodes) {
-                if (node.getBoundingClientRect().bottom > top) {
-                    return Number(node.getAttribute('data-message-index'));
-                }
-            }
-        }
-        return firstVisibleRef.current;
+        const atTop = messageAtTop(
+            renderAll ? listRef.current : scrollerRef.current,
+            listRef.current
+        );
+        return atTop >= 0 ? atTop : firstVisibleRef.current;
     };
 
     /**
