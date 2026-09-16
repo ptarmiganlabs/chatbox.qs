@@ -67,11 +67,23 @@ A sender and a recipient dimension, for one-to-one conversations — an agent's 
 - **Spell each person identically** in From and To. People are matched by exact, case-sensitive text.
 - **Keep _Include null values_ on for To.** Unticking it silently drops every message without a
   recipient, and nothing downstream can detect that.
-- **Maximum messages counts rows**, so a message to 20 people uses 20 of the budget. Data export
-  likewise has one row per recipient.
+- **Maximum messages counts rows**, so a message to 20 people uses 20 of the budget (see
+  [Maximum messages](#maximum-messages)). Data export likewise has one row per recipient.
 - **Why not `Count([MsgId])` for the probe:** a From → To model usually links messages to a
   recipients table by that id, and counting a key field counts the linked table's rows — every group
   message would be reported as merged.
+
+### Maximum messages
+
+**Behaviour → Maximum messages** (default 5,000) caps the rows read. When the cube has more, which rows
+are kept follows what is shown first:
+
+- **Message order** _Oldest first_ keeps the **oldest** rows, where the conversation starts.
+- _Newest first_ keeps the **newest**, and so do **conversations side by side**, in either order.
+
+A banner says which, e.g. **Showing the newest 5000 of 9000 messages. Filter to see the rest.** Where the
+limit falls part-way through a message's rows — one per recipient — its details say some recipients may
+be missing.
 
 ## Two-sided layout
 
@@ -120,10 +132,12 @@ with free scrolling, where each lane has an overview ruler of its own. **↑** a
 every lane, and automatic **Density** follows a lane's width. An image or PDF export shows the lanes the
 reader saw.
 
-Rows are read oldest first, up to **Maximum messages**. When that limit cuts the rows short, the lanes are
-the latest conversations among the rows read — the newest may not have been read at all — and the line
-above the lanes always says so, e.g. **4 of 12 conversations among the first 5,000 of 9,000 rows**, or
-**3 conversations among the first 5,000 of 9,000 rows** when every conversation read has a lane.
+With lanes, the newest rows are read, up to **Maximum messages**, so a limit that cuts the rows short
+leaves out older conversations, not the latest. The conversations are then counted among the rows read,
+and the line above the lanes always says so, e.g.
+**4 of 12 conversations among the newest 5,000 of 9,000 rows**, or
+**3 conversations among the newest 5,000 of 9,000 rows** when every conversation read has a lane — an
+older one that was not read may be missing a lane.
 
 ## Clicking a message
 

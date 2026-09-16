@@ -61,7 +61,7 @@ export function addRecipients(target, more) {
  * @param {object} [options] - Formatting options.
  * @param {number} [options.max] - Names to show before summarising the rest.
  * @param {boolean} [options.partial] - Whether the list may be incomplete because
- *   the load was truncated part-way through this message's rows.
+ *   the load was truncated part-way through this message's rows, at either end.
  * @returns {string} e.g. "Bob, Cy, Dan and 2 more"; '' for an empty list.
  */
 export function formatRecipients(list, { max = 3, partial = false } = {}) {

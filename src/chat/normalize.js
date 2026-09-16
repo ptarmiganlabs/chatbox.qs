@@ -61,6 +61,9 @@ function emptyConversation(diagnostics = [], meta = {}) {
             rowsLoaded: 0,
             phantomRows: 0,
             truncated: false,
+            // Which rows the limit kept when it cut them short: 'oldest' or
+            // 'newest'; null when nothing was left out, or rows at both ends were.
+            truncatedTo: null,
             mergedCount: 0,
             conflictCount: 0,
             ...meta,
@@ -224,7 +227,8 @@ function collectRecipientElems(records) {
  * @param {Array[]} options.rows - qMatrix rows, already paged and concatenated.
  * @param {object} [options.props] - The `chatbox` property bag.
  * @param {object} [options.theme] - The stardust theme, for the colour palette.
- * @param {object} [options.area] - The qArea of the first page, for row offsets.
+ * @param {object} [options.area] - The area of the rows read, from fetchAllRows: where
+ *   they start in the cube, for absolute row indices and for where the limit cut them.
  * @returns {object} The normalized Conversation.
  */
 export function normalize({ layout, rows, props = {}, theme, area }) {
@@ -368,20 +372,31 @@ export function normalize({ layout, rows, props = {}, theme, area }) {
     const rowsLoaded = records.length;
     const total = hc.qSize?.qcy ?? rowsLoaded;
     const truncated = total > rowsLoaded;
+
+    // The rows read are one unbroken run of the cube, so the limit left rows out
+    // before its first row — the newest were kept — or after its last — the
+    // oldest were. Both at once only when the cube changed while it was read.
+    const firstRow = cell.absoluteRow(area, 0);
+    const cutBefore = truncated && firstRow > 0;
+    const cutAfter = truncated && firstRow + rowsLoaded < total;
+    const truncatedTo = cutBefore === cutAfter ? null : cutBefore ? 'newest' : 'oldest';
+
     if (truncated) {
+        const which = truncatedTo ? `the ${truncatedTo} ` : '';
         diagnostics.push({
             severity: SEVERITY.WARNING,
             code: 'truncated',
             message:
                 rowsLoaded === messages.length
-                    ? `Showing ${messages.length} of ${total} messages. Filter to see the rest.`
-                    : `Showing ${messages.length} messages from ${rowsLoaded} of ${total} rows. ` +
+                    ? `Showing ${which}${messages.length} of ${total} messages. Filter to see the rest.`
+                    : `Showing ${messages.length} messages from ${which}${rowsLoaded} of ${total} rows. ` +
                       'Filter to see the rest.',
         });
     }
 
     // Phantoms only cost something when the cap cut the load short: then they
-    // used up budget that real messages needed.
+    // used up budget that real messages needed. Null message ids sort last, so
+    // a cap that keeps the newest rows keeps the phantoms among them.
     if (truncated && phantomRows > 0) {
         diagnostics.push({
             severity: SEVERITY.WARNING,
@@ -392,13 +407,20 @@ export function normalize({ layout, rows, props = {}, theme, area }) {
         });
     }
 
-    // The cap can fall part-way through a group message's rows, so the last
-    // bubble loaded may be missing recipients the engine would still return —
-    // unless the last row loaded was a phantom. Then the cut fell after every
-    // message row, and the last real bubble is complete.
+    // The cap can fall part-way through a group message's rows, so the bubble at
+    // a cut may be missing recipients the engine would still return: the last
+    // bubble loaded when rows after it were left out, the first when rows before
+    // it were. Not when the row at the cut is a phantom: then the cut fell among
+    // phantom rows, outside every message's rows, and the bubble is complete.
+    const firstRecord = records[0];
     const lastRecord = records[records.length - 1];
-    if (truncated && lastBubble?.recipients && lastRecord && !isPhantomRecord(lastRecord)) {
+    if (cutAfter && lastBubble?.recipients && lastRecord && !isPhantomRecord(lastRecord)) {
         lastBubble.recipientsPartial = true;
+    }
+    // The first bubble is the first record's, whenever that record is no phantom.
+    const firstBubble = messages[0];
+    if (cutBefore && firstBubble?.recipients && firstRecord && !isPhantomRecord(firstRecord)) {
+        firstBubble.recipientsPartial = true;
     }
 
     if (props.order === 'newest') messages.reverse();
@@ -413,6 +435,7 @@ export function normalize({ layout, rows, props = {}, theme, area }) {
             rowsLoaded,
             phantomRows,
             truncated,
+            truncatedTo,
             mergedCount,
             conflictCount,
         },

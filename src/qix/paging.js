@@ -49,7 +49,11 @@ export class StaleError extends Error {
 }
 
 /**
- * Fetch every row of the hypercube, up to a cap.
+ * Fetch the rows of the hypercube, up to a cap.
+ *
+ * The rows read are one unbroken run: the first `maxRows` rows, or with
+ * `fromEnd` the last. A cube sorted oldest first keeps its newest rows that way
+ * when the cap cuts it short.
  *
  * Rows already delivered with the layout are reused first: `qInitialDataFetch`
  * results arrive inside `getLayout`, and the engine re-evaluates them on every
@@ -62,11 +66,15 @@ export class StaleError extends Error {
  * @param {Function} [options.isStale] - Returns true when this run is superseded.
  * @param {Function} [options.onProgress] - Called with (loaded, total) per page.
  * @param {number} [options.maxRows] - Hard cap on rows fetched.
+ * @param {boolean} [options.fromEnd] - Read the last rows rather than the first.
  * @param {Function} [options.isEnough] - Given the rows so far, returns true when
  *   no more are needed; asked before every call to the engine. The highlight
  *   values stop at a whole value past their limit this way, rather than at a row
- *   count that could cut a value off from some of its categories.
- * @returns {Promise<object>} { rows, area, total, truncated }.
+ *   count that could cut a value off from some of its categories. The rows so far
+ *   start at the first row read, so with `fromEnd` stopping early leaves out the
+ *   last rows.
+ * @returns {Promise<object>} { rows, area, total, truncated }. `area` covers the
+ *   rows read, so `absoluteRow(area, index)` is the cube row of `rows[index]`.
  */
 export async function fetchAllRows({
     model,
@@ -74,17 +82,24 @@ export async function fetchAllRows({
     isStale = () => false,
     onProgress,
     maxRows = 5000,
+    fromEnd = false,
     isEnough = () => false,
 }) {
     const hc = layout?.qHyperCube;
     if (!hc) return { rows: [], area: null, total: 0, truncated: false };
 
     const colCount = hc.qSize?.qcx || 1;
-    const engineRows = hc.qSize?.qcy || 0;
-    const total = engineRows;
-    const wanted = Math.min(engineRows, maxRows);
+    const total = hc.qSize?.qcy || 0;
+    // A whole number of rows: a limit such as 2500.5 would otherwise ask the
+    // engine for a fractional row.
+    const wanted = Math.max(0, Math.min(total, Math.floor(maxRows)));
+    // The cube row the rows read start at.
+    const first = fromEnd ? total - wanted : 0;
 
-    // 1. Reuse the pages that came with the layout — free, already evaluated.
+    // 1. Reuse the pages that came with the layout — free, already evaluated —
+    // for the rows wanted they hold, from the first row wanted on. The initial
+    // fetch starts at row 0, so reading the end of a cube longer than the cap
+    // uses only the part of it that reaches into the last rows, or none of it.
     //
     // Only if they are FULL WIDTH. qInitialDataFetch declares a fixed qWidth, so
     // a cube with more columns than that (the user added KPI measures) delivers
@@ -92,33 +107,29 @@ export async function fetchAllRows({
     // correctly-sized rows fetched later gives undefined cells for exactly the
     // first page of messages — wrong output, no error.
     const rows = [];
-    let area = null;
     for (const page of hc.qDataPages || []) {
         const pageWidth = page.qArea?.qWidth ?? 0;
         if (pageWidth < colCount) {
             rows.length = 0;
-            area = null;
             break;
         }
-        if (!area) area = page.qArea ?? null;
-        for (const matrixRow of page.qMatrix || []) rows.push(matrixRow);
-    }
-
-    if (rows.length >= wanted) {
-        const trimmed = rows.slice(0, wanted);
-        return { rows: trimmed, area, total, truncated: total > trimmed.length };
+        const matrix = page.qMatrix || [];
+        // Where the next row wanted is in this page. A page that starts past it
+        // leaves a gap, and rows after a gap would sit at the wrong row numbers.
+        const from = first + rows.length - (page.qArea?.qTop ?? 0);
+        if (from < 0) break;
+        for (let i = from; i < matrix.length && rows.length < wanted; i++) rows.push(matrix[i]);
     }
 
     // 2. Page the remainder sequentially, resuming rather than refetching.
     const perPage = rowsPerPage(colCount);
-    let top = rows.length;
 
-    while (top < wanted && !isEnough(rows)) {
+    while (rows.length < wanted && !isEnough(rows)) {
         if (isStale()) throw new StaleError();
 
-        const qHeight = Math.min(wanted - top, perPage);
+        const qHeight = Math.min(wanted - rows.length, perPage);
         const pages = await model.getHyperCubeData('/qHyperCubeDef', [
-            { qTop: top, qLeft: 0, qWidth: colCount, qHeight },
+            { qTop: first + rows.length, qLeft: 0, qWidth: colCount, qHeight },
         ]);
 
         // Check again after the await: the layout may have changed while the
@@ -126,9 +137,7 @@ export async function fetchAllRows({
         // a conversation silently duplicates itself.
         if (isStale()) throw new StaleError();
 
-        const page = pages?.[0];
-        const matrix = page?.qMatrix ?? [];
-        if (!area) area = page?.qArea ?? null;
+        const matrix = pages?.[0]?.qMatrix ?? [];
         if (matrix.length === 0) break;
 
         for (const matrixRow of matrix) rows.push(matrixRow);
@@ -136,10 +145,16 @@ export async function fetchAllRows({
 
         // A short page means the engine has no more rows for us.
         if (matrix.length < qHeight) break;
-        top += qHeight;
     }
 
-    return { rows, area, total, truncated: total > rows.length };
+    return {
+        rows,
+        // One area for the whole run, since a run can start part-way into a
+        // page that came with the layout.
+        area: { qTop: first, qLeft: 0, qWidth: colCount, qHeight: rows.length },
+        total,
+        truncated: total > rows.length,
+    };
 }
 
 export default fetchAllRows;

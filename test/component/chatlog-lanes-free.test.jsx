@@ -136,12 +136,17 @@ describe('ChatLog with conversations side by side, scrolling freely', () => {
         expect(screen.queryByText('hello one')).not.toBeInTheDocument();
     });
 
-    it('says the lanes come from the rows read, when the message limit cut them short', () => {
-        // Every conversation read has a lane, but newer ones may never have been read.
+    it('says the lanes come from the newest rows, when the message limit cut them short', () => {
+        // Every conversation read has a lane, but older ones may not have been read.
         const board = buildBoard(MESSAGES, { max: 3, scroll: 'free' });
         render(
             <ChatLog
-                conversation={conversationOf(board, { truncated: true, rowsLoaded: 9, total: 900 })}
+                conversation={conversationOf(board, {
+                    truncated: true,
+                    truncatedTo: 'newest',
+                    rowsLoaded: 9,
+                    total: 900,
+                })}
                 board={board}
                 settings={settings}
                 rect={{ width: 900, height: 600 }}
@@ -150,7 +155,7 @@ describe('ChatLog with conversations side by side, scrolling freely', () => {
             { wrapper: Viewport }
         );
         expect(
-            screen.getByText('3 conversations among the first 9 of 900 rows')
+            screen.getByText('3 conversations among the newest 9 of 900 rows')
         ).toBeInTheDocument();
     });
 
@@ -315,11 +320,23 @@ describe('laneCaption', () => {
     });
 
     it('says the rows were cut short, whether or not every conversation read has a lane', () => {
-        const meta = { truncated: true, rowsLoaded: 5000, total: 12000 };
+        const meta = { truncated: true, truncatedTo: 'newest', rowsLoaded: 5000, total: 12000 };
         expect(laneCaption(board, meta)).toBe(
-            '2 of 3 conversations among the first 5,000 of 12,000 rows'
+            '2 of 3 conversations among the newest 5,000 of 12,000 rows'
         );
-        expect(laneCaption(all, meta)).toBe('3 conversations among the first 5,000 of 12,000 rows');
+        expect(laneCaption(all, meta)).toBe(
+            '3 conversations among the newest 5,000 of 12,000 rows'
+        );
+    });
+
+    it('says which rows were kept as the conversation does, and none when it cannot tell', () => {
+        const meta = { truncated: true, rowsLoaded: 5000, total: 12000 };
+        expect(laneCaption(all, { ...meta, truncatedTo: 'oldest' })).toBe(
+            '3 conversations among the oldest 5,000 of 12,000 rows'
+        );
+        expect(laneCaption(all, { ...meta, truncatedTo: null })).toBe(
+            '3 conversations among 5,000 of 12,000 rows'
+        );
     });
 
     it('leaves the rows out rather than print a count it does not have', () => {
