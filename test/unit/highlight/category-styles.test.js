@@ -104,6 +104,23 @@ describe('categoryStyles', () => {
         expect(dark.key).not.toBe(base.key);
     });
 
+    // An answer that is not a colour falls back to the very colour the palette gives, so the colours
+    // alone cannot tell a broken colour expression from a fixed or cleared one.
+    it('changes its key when what the colour expression answered changes, the colours alike', () => {
+        const cleared = categoryStyles({ categories: categories([email]), palette: PALETTE });
+        const broken = categoryStyles({
+            categories: categories([{ ...email, color: { text: 'banana', number: null } }]),
+            palette: PALETTE,
+        });
+        const otherwise = categoryStyles({
+            categories: categories([{ ...email, color: { text: 'plum-ish', number: null } }]),
+            palette: PALETTE,
+        });
+        expect(broken.byName.get('email').fill).toBe(cleared.byName.get('email').fill);
+        expect(broken.key).not.toBe(cleared.key);
+        expect(otherwise.key).not.toBe(broken.key);
+    });
+
     it('styles a category listed twice once', () => {
         const styles = categoryStyles({ categories: categories([email, email]), palette: PALETTE });
         expect(styles.order).toEqual(['email']);

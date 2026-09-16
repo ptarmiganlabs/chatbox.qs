@@ -83,6 +83,37 @@ describe('createHighlightView', () => {
         expect(second.describe).toBe(first.describe);
     });
 
+    // Found reviewing the change: clearing a colour expression that answered something other than a
+    // colour left the categories in the same palette colours, the kept styles still carried the old
+    // answer, and the warning stayed.
+    it('drops the colour expression warning once the expression no longer answers a non-colour', () => {
+        const view = createHighlightView();
+        const withColors = (color) => ({
+            ...answer,
+            categories: {
+                ...answer.categories,
+                list: answer.categories.list.map((category) => ({ ...category, color })),
+            },
+        });
+        const broken = view.build({
+            tagged: tagged(withColors({ text: 'banana', number: null })),
+            layout,
+            version: 0,
+            messages,
+        });
+        expect(broken.placement.banner?.text).toMatch(/returned "banana", which is not a colour/);
+
+        const cleared = view.build({
+            tagged: tagged(withColors(null)),
+            layout,
+            version: 0,
+            messages,
+        });
+        expect(cleared.styles.invalidColor).toBeNull();
+        expect(cleared.placement.banner).toBeNull();
+        expect(cleared.summary.level).toBe('info');
+    });
+
     it('says an answer for an older layout or companion version is still being replaced', () => {
         const view = createHighlightView();
         expect(

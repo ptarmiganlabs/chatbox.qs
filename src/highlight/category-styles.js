@@ -103,6 +103,9 @@ export function categoryStyles({ categories, palette, dark = false }) {
         index: order.length,
         ...highlightColors(colorFromText(NO_CATEGORY_COLOR), { dark }),
     };
+    // What the colour expression answered belongs in the key too: an answer that is not a colour falls
+    // back to the palette's colour, so fixing or clearing the expression can leave every colour as it
+    // was, and styles kept by the key would go on reporting the old answer.
     const key = JSON.stringify([
         dark,
         order.map((name) => {
@@ -110,6 +113,7 @@ export function categoryStyles({ categories, palette, dark = false }) {
             return [name, style.fill, style.line, style.ink];
         }),
         none.line,
+        invalidColor,
     ]);
     return { enabled: true, order, byName: byNameInOrder, none, invalidColor, key };
 }
