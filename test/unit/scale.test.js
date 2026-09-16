@@ -3,6 +3,7 @@ import { normalize } from '../../src/chat/normalize';
 import { buildDayGroups } from '../../src/chat/grouping';
 import { fetchAllRows, rowsPerPage } from '../../src/qix/paging';
 import { assignBubbleKeys, collapseRecords } from '../../src/chat/collapse';
+import { fastestTime } from '../helpers/timing';
 
 /**
  * Matches the ChatBig fixture on the PTLAB server: 12,000 generated messages
@@ -64,18 +65,18 @@ describe('scale: 12,000 messages', () => {
     });
 
     it('does not degrade super-linearly from 3,000 to 12,000', () => {
-        const time = (n) => {
-            const rows = bigRows(n);
-            const layout = bigLayout(n);
-            const t = performance.now();
-            normalize({ layout, rows });
-            return performance.now() - t;
-        };
-        time(500); // warm up, so the first run's JIT cost is not attributed
-        const small = Math.max(time(3000), 1);
-        const large = time(12000);
+        const input = (n) => ({ layout: bigLayout(n), rows: bigRows(n) });
+        const small = input(3000);
+        const large = input(12000);
+        // The fastest of several runs, each after a warm-up: a single run picked up the load of
+        // the other test files running beside this one, and failed at 12.6 on an idle change.
+        const smallTime = Math.max(
+            fastestTime(() => normalize(small)),
+            1
+        );
+        const largeTime = fastestTime(() => normalize(large));
         // 4x the rows should cost well under 16x the time.
-        expect(large / small).toBeLessThan(12);
+        expect(largeTime / smallTime).toBeLessThan(12);
     });
 
     it('groups a year of messages into days without losing any', () => {

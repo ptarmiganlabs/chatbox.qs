@@ -309,3 +309,98 @@ describe('MessageRow — recipients', () => {
         expect(screen.queryByText('→')).not.toBeInTheDocument();
     });
 });
+
+describe('MessageRow — selectable text', () => {
+    it('does not act on the message when a click ends a text selection in it', () => {
+        const onSelect = vi.fn();
+        render(
+            <MessageRow message={message()} showAuthor showAvatar selectable onSelect={onSelect} />
+        );
+        const body = screen.getByText('hello');
+        const range = document.createRange();
+        range.setStart(body.firstChild, 0);
+        range.setEnd(body.firstChild, 4);
+        document.getSelection().removeAllRanges();
+        document.getSelection().addRange(range);
+
+        fireEvent.click(body);
+        expect(onSelect).not.toHaveBeenCalled();
+
+        document.getSelection().removeAllRanges();
+        fireEvent.click(body);
+        expect(onSelect).toHaveBeenCalledTimes(1);
+    });
+
+    it('lets a link in a markdown body open without also acting on the message', () => {
+        const onSelect = vi.fn();
+        render(
+            <MessageRow
+                message={message({
+                    body: 'See [the order](https://x.se/1)',
+                    bodyFormat: 'markdown',
+                })}
+                showAuthor
+                showAvatar
+                selectable
+                onSelect={onSelect}
+            />
+        );
+        fireEvent.click(screen.getByRole('link', { name: 'the order' }));
+        expect(onSelect).not.toHaveBeenCalled();
+        fireEvent.click(screen.getByText(/See/));
+        expect(onSelect).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe('MessageRow — clicking a highlight', () => {
+    const highlighted = {
+        text: 'Please reload now',
+        spans: [{ start: 7, end: 13, values: ['reload'], categories: [] }],
+    };
+
+    /** Render a selectable row with one highlight. */
+    function renderRow(props = {}) {
+        const onSelect = vi.fn();
+        const onHighlightClick = vi.fn();
+        const utils = render(
+            <MessageRow
+                message={message({ body: 'Please reload now' })}
+                index={4}
+                showAuthor
+                showAvatar
+                selectable
+                onSelect={onSelect}
+                highlights={highlighted}
+                drawn={1}
+                highlightClick="select"
+                onHighlightClick={onHighlightClick}
+                {...props}
+            />
+        );
+        return { ...utils, onSelect, onHighlightClick };
+    }
+
+    it('selects the highlight’s value instead of acting on the message', () => {
+        const { container, onSelect, onHighlightClick } = renderRow();
+        fireEvent.click(container.querySelector('mark'));
+        expect(onHighlightClick).toHaveBeenCalledWith(4, 0, false);
+        expect(onSelect).not.toHaveBeenCalled();
+
+        fireEvent.click(container.querySelector('mark'), { ctrlKey: true });
+        expect(onHighlightClick).toHaveBeenLastCalledWith(4, 0, true);
+    });
+
+    it('acts on the message for a click beside the highlight', () => {
+        const { onSelect, onHighlightClick } = renderRow();
+        fireEvent.click(screen.getByText(/now/));
+        expect(onSelect).toHaveBeenCalledTimes(1);
+        expect(onHighlightClick).not.toHaveBeenCalled();
+    });
+
+    it('acts on the message for a click on a highlight while clicking highlights does not select', () => {
+        const { container, onSelect, onHighlightClick } = renderRow({ highlightClick: null });
+        fireEvent.click(container.querySelector('mark'));
+        expect(onSelect).toHaveBeenCalledTimes(1);
+        expect(onHighlightClick).not.toHaveBeenCalled();
+    });
+});

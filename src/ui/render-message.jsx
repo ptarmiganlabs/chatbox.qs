@@ -14,6 +14,8 @@
  */
 import { formatRecipients } from '../chat/recipients';
 import BubbleBody from './BubbleBody';
+import { routeClick } from './click-route';
+import HighlightedText from './HighlightedText';
 import styles from './chat.module.css';
 
 /**
@@ -46,6 +48,16 @@ function initials(label) {
  * @param {boolean} [props.expanded] - Whether this message's detail is open.
  * @param {Function} [props.onSelect] - Click handler receiving the message.
  * @param {Function} [props.onShowDetails] - Opens the detail view, when clicking selects instead.
+ * @param {?object} [props.highlights] - This message's highlights, from the conversation highlighter.
+ * @param {number} [props.drawn] - How many of them are drawn.
+ * @param {function(object): object} [props.describe] - Describes a highlight span.
+ * @param {?string} [props.highlightClick] - 'select' while a click on a highlight selects its value,
+ *   'locked' while its field is locked, null otherwise.
+ * @param {Function} [props.onHighlightClick] - Called with (index, ordinal, toggle) for a click that
+ *   selects a highlight's value.
+ * @param {?{kind: string, ordinal: number, part?: string}} [props.current] - The current mark in this
+ *   message: a highlight in its body, or a search match in the part it names.
+ * @param {?object} [props.finds] - This message's search matches: `author`, `recipients` and `body`.
  * @returns {object} The rendered row.
  */
 export function MessageRow({
@@ -59,7 +71,24 @@ export function MessageRow({
     expanded,
     onSelect,
     onShowDetails,
+    highlights = null,
+    drawn,
+    describe,
+    highlightClick = null,
+    onHighlightClick,
+    current = null,
+    finds = null,
 }) {
+    /**
+     * Find the current mark within one part of the message.
+     *
+     * @param {string} part - 'author', 'recipients' or 'body'.
+     * @returns {?{kind: string, ordinal: number}} The current mark there, or null.
+     */
+    const currentIn = (part) =>
+        current !== null && (current.part ?? 'body') === part
+            ? { kind: current.kind, ordinal: current.ordinal }
+            : null;
     const own = message.side === 'right';
     const groupSize = message.recipients?.length ?? 0;
     const accent = message.accent || message.author?.color || 'transparent';
@@ -81,11 +110,18 @@ export function MessageRow({
         .join(' ');
 
     /**
-     * Forward a click to the selection handler.
+     * Forward a click to the selection handler, unless it was for copying text or a link.
      *
+     * @param {object} event - The React mouse event.
      * @returns {void}
      */
-    const handleClick = () => {
+    const handleClick = (event) => {
+        const route = routeClick(event, highlightClick);
+        if (route.kind === 'none') return;
+        if (route.kind === 'highlight') {
+            onHighlightClick?.(index, route.ordinal, route.toggle);
+            return;
+        }
         if (selectable) onSelect?.(message);
     };
 
@@ -135,12 +171,23 @@ export function MessageRow({
     }
 
     return (
-        <div className={rowClass} role="listitem" style={{ '--cqs-accent': accent }}>
+        <div
+            className={rowClass}
+            role="listitem"
+            data-row={index}
+            style={{ '--cqs-accent': accent }}
+        >
             {avatar}
             <div className={styles.bubbleWrap}>
                 {showAuthor ? (
                     <div className={styles.author}>
-                        <span>{message.author?.label}</span>
+                        <span>
+                            <HighlightedText
+                                text={message.author?.label}
+                                finds={finds?.author}
+                                current={currentIn('author')}
+                            />
+                        </span>
                         {message.recipients?.length ? (
                             <span
                                 className={styles.recipients}
@@ -149,9 +196,13 @@ export function MessageRow({
                                 {/* The arrow is decoration; a screen reader hears "to". */}
                                 <span aria-hidden="true"> → </span>
                                 <span className={styles.srOnly}> to </span>
-                                {formatRecipients(message.recipients, {
-                                    partial: message.recipientsPartial,
-                                })}
+                                <HighlightedText
+                                    text={formatRecipients(message.recipients, {
+                                        partial: message.recipientsPartial,
+                                    })}
+                                    finds={finds?.recipients}
+                                    current={currentIn('recipients')}
+                                />
                             </span>
                         ) : null}
                     </div>
@@ -172,7 +223,15 @@ export function MessageRow({
                     }
                 >
                     {message.body ? (
-                        <BubbleBody body={message.body} format={message.bodyFormat} />
+                        <BubbleBody
+                            body={message.body}
+                            format={message.bodyFormat}
+                            highlights={highlights}
+                            drawn={drawn}
+                            describe={describe}
+                            current={currentIn('body')}
+                            finds={finds}
+                        />
                     ) : message.merged ? (
                         <div className={styles.bodyMissing}>
                             {message.rowCount} messages share this Message ID, so{' '}

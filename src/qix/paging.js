@@ -62,6 +62,10 @@ export class StaleError extends Error {
  * @param {Function} [options.isStale] - Returns true when this run is superseded.
  * @param {Function} [options.onProgress] - Called with (loaded, total) per page.
  * @param {number} [options.maxRows] - Hard cap on rows fetched.
+ * @param {Function} [options.isEnough] - Given the rows so far, returns true when
+ *   no more are needed; asked before every call to the engine. The highlight
+ *   values stop at a whole value past their limit this way, rather than at a row
+ *   count that could cut a value off from some of its categories.
  * @returns {Promise<object>} { rows, area, total, truncated }.
  */
 export async function fetchAllRows({
@@ -70,6 +74,7 @@ export async function fetchAllRows({
     isStale = () => false,
     onProgress,
     maxRows = 5000,
+    isEnough = () => false,
 }) {
     const hc = layout?.qHyperCube;
     if (!hc) return { rows: [], area: null, total: 0, truncated: false };
@@ -108,7 +113,7 @@ export async function fetchAllRows({
     const perPage = rowsPerPage(colCount);
     let top = rows.length;
 
-    while (top < wanted) {
+    while (top < wanted && !isEnough(rows)) {
         if (isStale()) throw new StaleError();
 
         const qHeight = Math.min(wanted - top, perPage);

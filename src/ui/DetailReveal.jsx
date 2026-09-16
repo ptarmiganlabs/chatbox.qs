@@ -13,6 +13,8 @@
  */
 import { formatRecipients } from '../chat/recipients';
 import styles from './chat.module.css';
+import HighlightedText from './HighlightedText';
+import { routeClick } from './click-route';
 import Sparkline from './Sparkline';
 
 /** Width below which a side pane cannot work. */
@@ -75,9 +77,11 @@ function KpiRow({ kpi, series, activeIndex }) {
  * @param {object[]} props.messages - The whole conversation, for KPI series.
  * @param {number} props.index - Index of the message being shown.
  * @param {boolean} props.showParticipant - Include the participant row.
+ * @param {?object} [props.quote] - Marks for the quoted body: `highlights`, `describe`, and for
+ *   clicking them `clickMode` and `onPick(values, toggle)`.
  * @returns {object} The rendered body.
  */
-function DetailBody({ message, messages, index, showParticipant }) {
+function DetailBody({ message, messages, index, showParticipant, quote = null }) {
     const facts = [
         // Only where there is no header to name them already — repeating the
         // author immediately under its own heading is noise.
@@ -123,7 +127,28 @@ function DetailBody({ message, messages, index, showParticipant }) {
                 </div>
             ) : null}
 
-            {message.body ? <div className={styles.detailQuote}>{message.body}</div> : null}
+            {message.body ? (
+                // A click on a highlight in the quote selects its value, as in the bubble. The quote
+                // has no click action of its own, so anything else does nothing.
+                <div
+                    className={styles.detailQuote}
+                    onClick={(event) => {
+                        const route = routeClick(event, quote?.clickMode ?? null);
+                        const span = quote?.highlights?.[route.ordinal];
+                        if (route.kind === 'highlight' && span) {
+                            quote.onPick?.(span.values, route.toggle);
+                        }
+                    }}
+                >
+                    <HighlightedText
+                        text={message.body}
+                        highlights={quote?.highlights}
+                        finds={quote?.finds}
+                        current={quote?.current ?? null}
+                        describe={quote?.describe}
+                    />
+                </div>
+            ) : null}
 
             {facts.length ? (
                 <dl className={styles.detailFacts}>
@@ -173,9 +198,10 @@ function DetailBody({ message, messages, index, showParticipant }) {
  * @param {number} props.index - Index of the message being shown.
  * @param {string} props.mode - 'inline' | 'overlay' | 'pane'.
  * @param {Function} props.onClose - Called to dismiss the detail.
+ * @param {?object} [props.quote] - Marks for the quoted body: `highlights` and `describe`.
  * @returns {object} The rendered detail view.
  */
-export function DetailReveal({ message, messages, index, mode, onClose }) {
+export function DetailReveal({ message, messages, index, mode, onClose, quote = null }) {
     const title = message.author?.label || 'Message';
 
     const header = (
@@ -198,6 +224,7 @@ export function DetailReveal({ message, messages, index, mode, onClose }) {
             messages={messages}
             index={index}
             showParticipant={mode === 'inline'}
+            quote={quote}
         />
     );
 

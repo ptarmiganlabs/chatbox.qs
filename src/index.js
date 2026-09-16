@@ -11,6 +11,7 @@ import {
     useElement,
     useInteractionState,
     useKeyboard,
+    onContextMenu,
     onTakeSnapshot,
     useLayout,
     useModel,
@@ -32,13 +33,29 @@ import { conversationModelOf, resolveRoles } from './qix/column-map';
 import { buildSelection } from './qix/selection';
 import { describeAssignments } from './qix/role-labels';
 import { syncAttributeExpressions } from './qix/sync-attrs';
-import { isSnapshot, writeSnapshot } from './ui/snapshot';
+import { isSnapshot, shouldRenderAll, writeSnapshot } from './ui/snapshot';
+import { reloadingView } from './ui/reload-view';
+import { createHighlightLoader } from './qix/highlight-loader';
+import { loadHighlightResult } from './highlight/highlight-result';
+import { createHighlightView } from './highlight/highlight-view';
+import { createConversationFinder } from './highlight/conversation-finder';
+import {
+    planCategorySelection,
+    planValueSelection,
+    selectionNotice,
+} from './highlight/click-selection';
+import { readTextToolSettings } from './highlight/settings';
+import { selectInFieldBesideObjectSelections, stateNameOf } from './qix/field-selection';
 import { render, destroy } from './ui/chat-renderer';
 import ChatLog from './ui/ChatLog';
 import { Empty, Failed, Loading, NotConfigured, emptyStateMessage } from './ui/states';
 import { themeVars } from './ui/theme-vars';
 import { extensionState } from './util/extension-state';
-import logger from './util/logger';
+import logger, { PACKAGE_VERSION } from './util/logger';
+import { copyConversation } from './export/copy-conversation';
+
+/** How long a notice stays in the corner, in milliseconds. */
+const NOTICE_MS = 5000;
 
 /**
  * The supernova.
@@ -118,6 +135,111 @@ export default function supernova(galaxy) {
 
             const [progress, setProgress] = useState(null);
 
+            // The props of the conversation last shown, so a reload after a selection can keep it
+            // on screen instead of swapping in Loading — see src/ui/reload-view.js.
+            const lastViewRef = useRef(null);
+
+            // Highlighting keywords. The loader owns the companion object that reads the highlight
+            // field; the view keeps the matched conversation between renders. Both live in refs,
+            // because the conversation component can unmount and remount between renders.
+            const loaderRef = useRef(null);
+            if (!loaderRef.current) loaderRef.current = createHighlightLoader({ logger });
+            const highlightViewRef = useRef(null);
+            if (!highlightViewRef.current) highlightViewRef.current = createHighlightView();
+            // Monotonic token for highlight loads, like runIdRef for rows.
+            const highlightRunRef = useRef(0);
+
+            // Copy the conversation shown, as text or JSON, from the object's context menu. The hook is
+            // not in stardust's type declarations but is exported at runtime (7.4.0), as textview.qs
+            // and QvsView.qs use it. The items appear only while a conversation is shown.
+            onContextMenu((menu) => {
+                const view = lastViewRef.current;
+                if (!view?.conversation?.messages?.length) return;
+                for (const [format, label] of [
+                    ['text', 'Copy conversation as text'],
+                    ['json', 'Copy conversation as JSON'],
+                ]) {
+                    menu.addItem({
+                        translation: label,
+                        tid: `chatbox-copy-${format}`,
+                        icon: 'copy',
+                        /**
+                         * Copy the conversation last shown, and say how it went.
+                         *
+                         * @returns {Promise<void>} Resolves once the notice is set.
+                         */
+                        select: async () => {
+                            const message = await copyConversation({
+                                view: lastViewRef.current,
+                                format,
+                                projectionOf: highlightViewRef.current.projections.get,
+                                version: PACKAGE_VERSION,
+                            });
+                            if (message) setNotice({ ...message, id: ++noticeIdRef.current });
+                        },
+                    });
+                }
+            });
+
+            // Search: the finder shares the markdown projections with the highlighter, and the query
+            // is kept here, so it survives the conversation component unmounting and mounting again.
+            const finderRef = useRef(null);
+            if (!finderRef.current) {
+                finderRef.current = createConversationFinder({
+                    projections: highlightViewRef.current.projections,
+                });
+            }
+            const queryRef = useRef('');
+            const handleQueryRef = useRef(null);
+            if (!handleQueryRef.current) {
+                /**
+                 * Keep the query the reader searched for.
+                 *
+                 * @param {string} query - The query.
+                 * @returns {void}
+                 */
+                handleQueryRef.current = (query) => {
+                    queryRef.current = query;
+                };
+            }
+
+            // A short notice in the corner: why a click selected nothing, or what a copy did. It clears
+            // itself after a few seconds.
+            const [notice, setNotice] = useState(null);
+            const noticeIdRef = useRef(0);
+            useEffect(() => {
+                if (!notice) return undefined;
+                const timer = setTimeout(() => setNotice(null), NOTICE_MS);
+                /**
+                 * Stop the timer when the notice is replaced or the object leaves the sheet.
+                 *
+                 * @returns {void}
+                 */
+                return () => clearTimeout(timer);
+            }, [notice]);
+
+            // Bumped when the companion changes: a selection in a highlight field that is not
+            // associated with the messages leaves this object's own layout untouched.
+            const [companionVersion, setCompanionVersion] = useState(0);
+            useEffect(
+                () =>
+                    loaderRef.current.subscribe(() => {
+                        setCompanionVersion((version) => version + 1);
+                    }),
+                []
+            );
+            useEffect(() => {
+                /**
+                 * Release the companion object when the object leaves the sheet.
+                 *
+                 * @returns {void}
+                 */
+                return () => {
+                    highlightRunRef.current += 1;
+                    loaderRef.current.destroy();
+                };
+            }, []);
+
             // Stash the enigma handles for property-panel callbacks, which run
             // outside hook scope and cannot call useModel()/useApp() themselves.
             extensionState.model = model;
@@ -189,6 +311,25 @@ export default function supernova(galaxy) {
                 return { ...result, derivedFrom: staleLayout };
             }, [staleLayout, model, settings.maxMessages]);
 
+            // The highlight values load beside the rows, in usePromise for the same reason: nebula
+            // waits for it before it declares the render complete. The conversation does not wait for
+            // them, and the answer never rejects — see src/highlight/highlight-result.js.
+            const [highlightResult] = usePromise(async () => {
+                const run = ++highlightRunRef.current;
+                return loadHighlightResult({
+                    layout: staleLayout,
+                    app,
+                    loader: loaderRef.current,
+                    version: companionVersion,
+                    /**
+                     * Report whether a newer highlight load has started.
+                     *
+                     * @returns {boolean} True when this load has been superseded.
+                     */
+                    isStale: () => highlightRunRef.current !== run,
+                });
+            }, [staleLayout, app, companionVersion]);
+
             useEffect(() => {
                 if (!element) return undefined;
 
@@ -200,6 +341,7 @@ export default function supernova(galaxy) {
 
                 const conversationModel = conversationModelOf(settings);
                 if (!hc) {
+                    lastViewRef.current = null;
                     render(element, NotConfigured, { missing: [], conversationModel });
                     return undefined;
                 }
@@ -208,6 +350,7 @@ export default function supernova(galaxy) {
                     conversationModel,
                 });
                 if (missing.length) {
+                    lastViewRef.current = null;
                     render(element, NotConfigured, {
                         missing,
                         conversationModel,
@@ -219,12 +362,26 @@ export default function supernova(galaxy) {
                 // An aborted run is our own doing, not a failure to report.
                 if (fetchError && fetchError.name !== 'AbortError') {
                     logger.warn('paging failed:', fetchError);
+                    lastViewRef.current = null;
                     render(element, Failed, { error: fetchError });
                     return undefined;
                 }
 
                 if (!page || page.derivedFrom !== staleLayout) {
-                    render(element, Loading, { loaded: progress?.loaded, total: progress?.total });
+                    const reloading = reloadingView(lastViewRef.current, {
+                        rect,
+                        keyboard,
+                        progress,
+                        notice,
+                    });
+                    if (reloading) {
+                        render(element, ChatLog, reloading);
+                    } else {
+                        render(element, Loading, {
+                            loaded: progress?.loaded,
+                            total: progress?.total,
+                        });
+                    }
                     return undefined;
                 }
 
@@ -303,11 +460,76 @@ export default function supernova(galaxy) {
                         liveLayout?.qHyperCube?.qCalcCondMsg ||
                         staleLayout?.qHyperCube?.qCalcCondMsg ||
                         null;
+                    lastViewRef.current = null;
                     render(element, Empty, { message: emptyStateMessage(conversation, calcMsg) });
                     return undefined;
                 }
 
-                render(element, ChatLog, {
+                // A click on a highlight or a chip selects in the highlight or category field: never in
+                // an export render, whose server reports every interaction as allowed, nor in edit mode.
+                const canSelectHighlights =
+                    !isSnapshot(staleLayout) &&
+                    readTextToolSettings(settings).highlight.clickToSelect &&
+                    interactions?.active !== false &&
+                    Boolean(interactions?.select) &&
+                    !interactions?.edit;
+
+                const highlightView = highlightViewRef.current.build({
+                    tagged: highlightResult,
+                    layout: staleLayout,
+                    version: companionVersion,
+                    messages: conversation.messages,
+                    theme,
+                    renderAll: shouldRenderAll(staleLayout, settings),
+                    canSelect: canSelectHighlights,
+                });
+
+                /**
+                 * Carry out a selection a click on a highlight or a chip planned, and say when it
+                 * did not happen.
+                 *
+                 * @param {object} plan - From planValueSelection or planCategorySelection.
+                 * @returns {Promise<void>} Resolves once the selection is sent.
+                 */
+                const pick = async (plan) => {
+                    const result = plan.locked
+                        ? { outcome: 'locked' }
+                        : await selectInFieldBesideObjectSelections({
+                              selections,
+                              app,
+                              field: plan.field,
+                              stateName: stateNameOf(staleLayout),
+                              elemNumbers: plan.elemNumbers,
+                              toggle: plan.toggle,
+                              logger,
+                          });
+                    const message = selectionNotice(plan.field, result);
+                    if (message) setNotice({ ...message, id: ++noticeIdRef.current });
+                };
+
+                const highlights = highlightView && {
+                    ...highlightView,
+                    /**
+                     * Select every spelling of a highlight's value in the highlight field.
+                     *
+                     * @param {string[]} values - The spellings the highlight stands for.
+                     * @param {boolean} toggle - Whether Ctrl or Cmd was held.
+                     * @returns {Promise<void>} Resolves once the selection is sent.
+                     */
+                    onSelectValues: (values, toggle) =>
+                        pick(planValueSelection(highlightView.answer, values, toggle)),
+                    /**
+                     * Select a category in the category field.
+                     *
+                     * @param {string} name - The category.
+                     * @param {boolean} toggle - Whether Ctrl or Cmd was held.
+                     * @returns {Promise<void>} Resolves once the selection is sent.
+                     */
+                    onSelectCategory: (name, toggle) =>
+                        pick(planCategorySelection(highlightView.answer, name, toggle)),
+                };
+
+                const view = {
                     conversation,
                     settings,
                     canSelect,
@@ -317,7 +539,24 @@ export default function supernova(galaxy) {
                     keyboard,
                     layout: staleLayout,
                     onViewState: handleViewStateRef.current,
-                });
+                    reloading: null,
+                    highlights,
+                    notice,
+                    // The search box, where a reader can use it: never in an export render, nor where
+                    // Sense allows no interaction with the object.
+                    search:
+                        !isSnapshot(staleLayout) &&
+                        interactions?.active !== false &&
+                        readTextToolSettings(settings).showSearch
+                            ? {
+                                  finder: finderRef.current,
+                                  initialQuery: queryRef.current,
+                                  onQueryChange: handleQueryRef.current,
+                              }
+                            : null,
+                };
+                lastViewRef.current = view;
+                render(element, ChatLog, view);
                 return undefined;
             }, [
                 element,
@@ -335,6 +574,9 @@ export default function supernova(galaxy) {
                 keyboard?.enabled,
                 interactions,
                 selections,
+                highlightResult,
+                companionVersion,
+                notice,
             ]);
 
             // Tear the root down when the object is removed from the sheet.

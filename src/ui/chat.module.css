@@ -37,6 +37,7 @@
 }
 
 .root {
+    position: relative;
     display: flex;
     flex-direction: column;
     width: 100%;
@@ -449,4 +450,363 @@
 .bannerWarning {
     background: #fdf3e3;
     color: #7a4b00;
+}
+
+/* A highlight field that is not there, or an engine error: not a hint, a fault. */
+.bannerWarning[data-level='error'] {
+    background: #fbeae9;
+    color: #8c1d18;
+}
+
+/* Newer rows are loading after a selection, and the conversation on screen is the one before it.
+   The line overlays the top edge instead of taking a row, so nothing shifts as it comes and goes. */
+.reloading {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 3;
+    height: 2px;
+    overflow: hidden;
+    pointer-events: none;
+}
+
+.reloadingBar {
+    height: 100%;
+    background: var(--cqs-muted, #6c6c6c);
+    transform: scaleX(var(--cqs-progress, 0));
+    transform-origin: left center;
+}
+
+.reloadingSliver {
+    width: 30%;
+    height: 100%;
+    background: var(--cqs-muted, #6c6c6c);
+    animation: cqs-reloading 1.2s ease-in-out infinite;
+}
+
+@keyframes cqs-reloading {
+    from {
+        transform: translateX(-100%);
+    }
+    to {
+        transform: translateX(340%);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .reloadingSliver {
+        width: 100%;
+        animation: none;
+        opacity: 0.5;
+    }
+}
+
+/* Message text can be selected and copied. The Qlik Sense client switches text selection off on
+   every element, so it is switched back on here, under the root for the extra specificity that
+   wins against the client's own rule. A drag that selects text ends in a click on the bubble, which
+   src/ui/click-route.js does not treat as a click on the message. */
+.root .body,
+.root .body *,
+.root .detailQuote,
+.root .detailQuote *,
+.root .author,
+.root .author * {
+    -webkit-user-select: text;
+    user-select: text;
+}
+
+/* ---- Highlights ----------------------------------------------------------------------------------
+   Ported from textview.qs (src/render/viewer.module.css at df84a5e). A highlight is tinted and
+   underlined in its category's colour, both from custom properties set on the mark; the underline is a
+   background image, so several categories can stand side by side in it, and a search match changes
+   only the background colour, keeping the underline. box-decoration-break repeats the tint on each
+   line of a value that wraps. Nothing here uses color-mix(). */
+.mark {
+    padding: 0 0 2px;
+    border-radius: 2px;
+    background-color: var(--cqs-mark-fill, var(--cqs-highlight, rgba(255, 196, 0, 0.35)));
+    background-image: var(
+        --cqs-mark-line,
+        linear-gradient(var(--cqs-highlight-line, #b58900), var(--cqs-highlight-line, #b58900))
+    );
+    background-position: left bottom;
+    background-size: 100% 2px;
+    background-repeat: no-repeat;
+    color: inherit;
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
+}
+
+/* A highlight cut into pieces goes on where a piece is cut: no rounded corner there. */
+.mark[data-cut-start] {
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+}
+
+.mark[data-cut-end] {
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+}
+
+/* Category labels: a box in the category's colour, with the names after the value. The label is
+   generated content, so it is never selected or copied with the text. */
+.root[data-labels='true'] .mark {
+    padding: 0 3px;
+    border: 1px solid var(--cqs-mark-border, var(--cqs-highlight-line, #b58900));
+    border-radius: 4px;
+    background-image: none;
+}
+
+.root[data-labels='true'] .mark[data-cut-start] {
+    padding-left: 0;
+    border-left-width: 0;
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+}
+
+.root[data-labels='true'] .mark[data-cut-end] {
+    padding-right: 0;
+    border-right-width: 0;
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+}
+
+.root[data-labels='true'] .mark[data-label]::after {
+    content: attr(data-label);
+    margin-left: 5px;
+    color: var(--cqs-mark-ink, inherit);
+    font-size: 0.75em;
+    font-weight: 600;
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+.find,
+.mark.find {
+    border-radius: 2px;
+    background-color: var(--cqs-find, rgba(255, 140, 0, 0.45));
+    color: inherit;
+}
+
+.markCurrent {
+    outline: 2px solid var(--cqs-current, #262626);
+    outline-offset: 1px;
+}
+
+/* ---- The bar above the conversation --------------------------------------------------------------
+   flex: none, or a long conversation squeezes it to nothing (textview.qs GOTCHAS 23). The legend
+   scrolls rather than growing past a few lines. */
+.bar {
+    flex: none;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 4px 8px;
+    border-bottom: 1px solid var(--cqs-border, #d9d9d9);
+    font-size: 11px;
+    color: var(--cqs-muted, #6c6c6c);
+}
+
+.toolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.summary {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.counter {
+    flex: none;
+    margin-left: auto;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.legend {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 6px;
+    max-height: 4.8em;
+    overflow-y: auto;
+}
+
+.chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 1px 8px;
+    border: 1px solid var(--cqs-border, #d9d9d9);
+    border-radius: 10px;
+    background: transparent;
+    color: var(--cqs-text, #404040);
+    font: inherit;
+    white-space: nowrap;
+}
+
+.chip[data-empty='true'] {
+    opacity: 0.5;
+}
+
+.chip[data-none='true'] {
+    font-style: italic;
+}
+
+.swatch {
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+    background: var(--cqs-chip-color, var(--cqs-highlight-line, #b58900));
+}
+
+.chipCount {
+    color: var(--cqs-muted, #6c6c6c);
+    font-variant-numeric: tabular-nums;
+}
+
+/* A click on a highlight selects its value; inside a link, the click is the link's. */
+.root[data-marks='select'] .mark:not([data-link]) {
+    cursor: pointer;
+}
+
+button.chip {
+    cursor: pointer;
+}
+
+button.chip[aria-pressed='true'] {
+    border-color: var(--cqs-selected, #009845);
+    background: var(--cqs-selected, #009845);
+    color: #ffffff;
+}
+
+button.chip[aria-pressed='true'] .chipCount {
+    color: inherit;
+}
+
+button.chip:disabled {
+    cursor: default;
+    opacity: 0.6;
+}
+
+button.chip:focus-visible {
+    outline: 2px solid var(--cqs-focus, #3f8ab3);
+    outline-offset: 1px;
+}
+
+/* The notice in the corner: why a click selected nothing, or what a copy did. */
+.notice {
+    position: absolute;
+    right: 8px;
+    bottom: 8px;
+    z-index: 4;
+    max-width: calc(100% - 16px);
+    pointer-events: none;
+}
+
+.noticeText {
+    display: block;
+    padding: 4px 8px;
+    border: 1px solid var(--cqs-border, #d9d9d9);
+    border-radius: 4px;
+    background: var(--cqs-bg, #ffffff);
+    color: var(--cqs-text, #404040);
+    font-size: 11px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+
+.noticeText[data-level='warning'] {
+    border-color: #d98324;
+}
+
+.noticeText[data-level='error'] {
+    border-color: #b3261e;
+}
+
+/* Step buttons beside the counter. */
+.stepper {
+    display: inline-flex;
+    flex: none;
+    gap: 2px;
+}
+
+.step {
+    width: 20px;
+    height: 18px;
+    padding: 0;
+    border: 1px solid var(--cqs-border, #d9d9d9);
+    border-radius: 3px;
+    background: transparent;
+    color: var(--cqs-text, #404040);
+    font-size: 9px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.step:disabled {
+    cursor: default;
+    opacity: 0.4;
+}
+
+.step:focus-visible {
+    outline: 2px solid var(--cqs-focus, #3f8ab3);
+    outline-offset: 1px;
+}
+
+/* ---- The overview ruler ---------------------------------------------------------------------------
+   A tick sits at its message's place in the conversation: by index, since bubbles differ in height and
+   a virtualized list has not measured the ones it has not drawn. */
+.ruler {
+    position: relative;
+    flex: 0 0 10px;
+    margin: 6px 4px 6px 0;
+    border-radius: 5px;
+    background: var(--cqs-ruler, rgba(0, 0, 0, 0.06));
+    cursor: pointer;
+}
+
+.tick {
+    position: absolute;
+    left: 1px;
+    right: 1px;
+    top: calc(var(--cqs-tick-pos, 0) * (100% - 4px));
+    height: 4px;
+    border-radius: 1px;
+    background: var(--cqs-tick-color, var(--cqs-highlight-line, #b58900));
+}
+
+.ruler[data-kind='find'] .tick {
+    background: var(--cqs-find-line, #c26a00);
+}
+
+/* Every row rendered in a live object: without the virtualizer, the list must scroll itself. */
+.listScroll {
+    overflow-y: auto;
+}
+
+/* The search box, first in the bar. */
+.search {
+    flex: 0 1 180px;
+    min-width: 80px;
+    height: 20px;
+    padding: 0 6px;
+    border: 1px solid var(--cqs-border, #d9d9d9);
+    border-radius: 3px;
+    background: var(--cqs-bg, #ffffff);
+    color: var(--cqs-text, #404040);
+    font: inherit;
+    -webkit-user-select: text;
+    user-select: text;
+}
+
+.search:focus-visible {
+    outline: 2px solid var(--cqs-focus, #3f8ab3);
+    outline-offset: 0;
 }

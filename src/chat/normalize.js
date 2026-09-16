@@ -36,7 +36,8 @@ import {
     safeUrl,
 } from './sanitize';
 import { assignBubbleKeys, collapseRecords, isPhantomRecord } from './collapse';
-import { colorForElem, paletteFromTheme, resolveSides } from './participants';
+import { resolveSides } from './participants';
+import { colorForElem, paletteFromTheme } from '../theme/palette';
 
 /** Severity levels for collected diagnostics. */
 export const SEVERITY = { WARNING: 'warning', ERROR: 'error' };

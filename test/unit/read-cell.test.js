@@ -104,3 +104,21 @@ describe('read-cell — regressions', () => {
         expect(cell.text({})).toBe('');
     });
 });
+
+describe('isNullDimensionCell', () => {
+    it('keeps a dimension value whose text really is "-"', () => {
+        // isNull reads "-" as the engine's null sentinel; a keyword can be exactly that.
+        expect(cell.isNull({ qText: '-', qElemNumber: 4 })).toBe(true);
+        expect(cell.isNullDimensionCell({ qText: '-', qElemNumber: 4 })).toBe(false);
+    });
+
+    it('treats a missing cell, a null cell and a synthetic row as no value', () => {
+        expect(cell.isNullDimensionCell(undefined)).toBe(true);
+        expect(cell.isNullDimensionCell({ qText: '-', qElemNumber: 7, qIsNull: true })).toBe(true);
+        expect(cell.isNullDimensionCell({ qText: '-', qElemNumber: -2 })).toBe(true);
+    });
+
+    it('keeps a value without an element number, keyed by its text elsewhere', () => {
+        expect(cell.isNullDimensionCell({ qText: 'x' })).toBe(false);
+    });
+});

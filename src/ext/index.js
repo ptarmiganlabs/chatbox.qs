@@ -17,7 +17,9 @@ import { aboutSection } from './about-section';
 import { appearanceSection } from './appearance-section';
 import { conversationSection } from './conversation-section';
 import { behaviourSection } from './behaviour-section';
+import { categorySection } from './category-section';
 import { detailSection } from './detail-section';
+import { highlightSection } from './highlight-section';
 import { metadataSection } from './metadata-section';
 
 /**
@@ -55,6 +57,9 @@ export default function ext(_galaxy) {
                 conversation: conversationSection(),
                 appearance: appearanceSection(),
                 metadata: metadataSection(),
+                // After the metadata: both put data from elsewhere in the model into the bubbles.
+                highlights: highlightSection(),
+                categories: categorySection(),
                 detail: detailSection(),
                 behaviour: behaviourSection(),
                 addons: { uses: 'addons', items: { dataHandling: { uses: 'dataHandling' } } },

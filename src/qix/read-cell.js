@@ -125,6 +125,24 @@ export function isNull(cell) {
 }
 
 /**
+ * Report whether a DIMENSION cell holds no value.
+ *
+ * Unlike {@link isNull}, the text is never the test: a keyword that really is
+ * "-" is a perfectly good value to highlight. A dimension cell is null when the
+ * engine says so (`qIsNull`) or when its element number is negative (-2 is the
+ * null row). Do not use this for measures, whose `qIsNull` is set for any string
+ * result (GOTCHAS 1).
+ *
+ * @param {object} [cell] - The NxCell from a dimension column.
+ * @returns {boolean} True for a missing cell, a null cell or a synthetic row.
+ */
+export function isNullDimensionCell(cell) {
+    if (!cell) return true;
+    if (cell.qIsNull === true) return true;
+    return typeof cell.qElemNumber === 'number' && cell.qElemNumber < 0;
+}
+
+/**
  * Resolve a row's absolute engine row index from its page area.
  *
  * A data page is only a window: `qArea.qTop` is the first row it contains, so

@@ -10,6 +10,7 @@
  * no `theme.validateColor` and no `isDark()`. Light/dark is derived here from
  * the resolved background's relative luminance.
  */
+import { colorFromText, relativeLuminance } from '../theme/color-parse';
 
 /** Fallbacks used when the theme resolves nothing. */
 const DEFAULTS = {
@@ -51,33 +52,25 @@ function resolveStyle(theme, attribute) {
 /**
  * Compute relative luminance for a CSS colour, for light/dark detection.
  *
- * @param {string} color - A hex or rgb() colour.
+ * @param {*} color - A CSS colour text: hex, rgb(), hsl() or a name.
  * @returns {number} Luminance in 0..1; defaults to 1 (light) when unparseable.
  */
 export function luminance(color) {
-    if (typeof color !== 'string') return 1;
-    let r;
-    let g;
-    let b;
+    const parsed = colorFromText(color);
+    return parsed === null ? 1 : relativeLuminance(parsed);
+}
 
-    const hex = color.trim().replace(/^#/, '');
-    if (/^[0-9a-f]{3}$/i.test(hex)) {
-        [r, g, b] = [...hex].map((c) => parseInt(c + c, 16));
-    } else if (/^[0-9a-f]{6,8}$/i.test(hex)) {
-        r = parseInt(hex.slice(0, 2), 16);
-        g = parseInt(hex.slice(2, 4), 16);
-        b = parseInt(hex.slice(4, 6), 16);
-    } else {
-        const m = /rgba?\(\s*(\d+)[\s,]+(\d+)[\s,]+(\d+)/i.exec(color);
-        if (!m) return 1;
-        [, r, g, b] = m.map(Number);
-    }
-
-    const srgb = [r, g, b].map((v) => {
-        const c = v / 255;
-        return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
-    });
-    return 0.2126 * srgb[0] + 0.7152 * srgb[1] + 0.0722 * srgb[2];
+/**
+ * Decide whether the theme puts objects on a dark background.
+ *
+ * The one place the light/dark threshold lives: the custom properties below and the highlight
+ * colours both follow it.
+ *
+ * @param {object} [theme] - The stardust theme object.
+ * @returns {boolean} True when the resolved background is dark.
+ */
+export function isDarkTheme(theme) {
+    return luminance(resolveStyle(theme, 'backgroundColor') || DEFAULTS.background) < 0.4;
 }
 
 /**
@@ -88,7 +81,7 @@ export function luminance(color) {
  */
 export function themeVars(theme) {
     const background = resolveStyle(theme, 'backgroundColor') || DEFAULTS.background;
-    const isDark = luminance(background) < 0.4;
+    const isDark = isDarkTheme(theme);
 
     const text = resolveStyle(theme, 'color') || (isDark ? '#f0f0f0' : DEFAULTS.text);
     const fontFamily =
@@ -104,6 +97,15 @@ export function themeVars(theme) {
         '--cqs-bubble-own-bg': isDark ? '#26414f' : '#e3f1fb',
         '--cqs-font': fontFamily,
         '--cqs-radius': '10px',
+        // Highlights, search matches and the bar above the conversation (from textview.qs).
+        '--cqs-highlight': isDark ? 'rgba(255, 196, 0, 0.28)' : 'rgba(255, 196, 0, 0.35)',
+        '--cqs-highlight-line': isDark ? '#e0b000' : '#b58900',
+        '--cqs-find': isDark ? 'rgba(255, 160, 60, 0.45)' : 'rgba(255, 140, 0, 0.45)',
+        '--cqs-find-line': isDark ? '#ffa64d' : '#c26a00',
+        '--cqs-current': isDark ? '#f0f0f0' : '#262626',
+        '--cqs-ruler': isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)',
+        '--cqs-selected': '#009845',
+        '--cqs-focus': isDark ? '#8cc4e6' : '#3f8ab3',
     };
 }
 

@@ -1,6 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import ext from '../../src/ext/index';
 import { ATTR_ORDER, metadataSection } from '../../src/ext/metadata-section';
+import { categoryFieldIsSet } from '../../src/ext/category-section';
+import { clickHelpIsShown, highlightFieldIsSet } from '../../src/ext/highlight-section';
+import { ON_OFF } from '../../src/ext/items';
+import { TEXT_TOOL_DEFAULTS } from '../../src/highlight/settings';
 
 const definition = ext({}).definition;
 
@@ -145,5 +149,176 @@ describe('support flags', () => {
         expect(support.snapshot).toBe(true);
         expect(support.export).toBe(true);
         expect(support.exportData).toBe(true);
+    });
+});
+
+describe('highlights and categories sections', () => {
+    /** Walk every node of the definition, with or without a ref. */
+    function walkAll(node, path = []) {
+        const out = [];
+        if (!node || typeof node !== 'object') return out;
+        out.push([path.join('.'), node]);
+        for (const [key, child] of Object.entries(node.items ?? {})) {
+            out.push(...walkAll(child, [...path, key]));
+        }
+        return out;
+    }
+
+    /** Read a dotted path from an object. */
+    const get = (object, path) => path.split('.').reduce((node, key) => node?.[key], object);
+
+    /** Every leaf path of the defaults, e.g. 'highlight.limit'. */
+    function leafPaths(object, prefix = []) {
+        return Object.entries(object).flatMap(([key, value]) =>
+            value && typeof value === 'object'
+                ? leafPaths(value, [...prefix, key])
+                : [[...prefix, key].join('.')]
+        );
+    }
+
+    const highlights = definition.items.highlights;
+    const categories = definition.items.categories;
+    const TEXT_TOOL_REF = /^chatbox\.((highlight|match|category)\.|showRuler$|showSearch$)/;
+    const SECTION_REF = /^chatbox\.(highlight|match|category)\./;
+
+    it('sit after the message metadata and before the details', () => {
+        const keys = Object.keys(definition.items);
+        expect(keys.slice(keys.indexOf('metadata'), keys.indexOf('detail') + 1)).toEqual([
+            'metadata',
+            'highlights',
+            'categories',
+            'detail',
+        ]);
+    });
+
+    it('uses only component strings the panel already renders', () => {
+        // A wrong component string, or a section Sense rejects, removes the WHOLE panel without
+        // an error (GOTCHAS 6), and nebula serve cannot show the panel to catch it.
+        const components = new Set(
+            walkAll(definition)
+                .map(([, node]) => node.component)
+                .filter(Boolean)
+        );
+        for (const component of components) {
+            expect(['accordion', 'dropdown', 'switch', 'slider', 'text', 'link']).toContain(
+                component
+            );
+        }
+    });
+
+    it('binds their settings only under chatbox.highlight, match and category', () => {
+        const refs = [...walk(highlights), ...walk(categories)].map(([, item]) => item.ref);
+        expect(refs.length).toBeGreaterThan(0);
+        for (const ref of refs) expect(ref).toMatch(SECTION_REF);
+    });
+
+    it('gives every setting the default from src/highlight/settings.js, and covers them all', () => {
+        const bound = walk(definition).filter(([, item]) => TEXT_TOOL_REF.test(item.ref));
+        for (const [, item] of bound) {
+            const path = item.ref.replace(/^chatbox\./, '');
+            expect(item.defaultValue, item.ref).toEqual(get(TEXT_TOOL_DEFAULTS, path));
+        }
+        const refs = new Set(bound.map(([, item]) => item.ref));
+        for (const path of leafPaths(TEXT_TOOL_DEFAULTS)) {
+            expect(refs.has(`chatbox.${path}`), path).toBe(true);
+        }
+    });
+
+    it('builds every switch in the panel with On and Off options', () => {
+        const switches = walkAll(definition).filter(([, node]) => node.component === 'switch');
+        expect(switches.length).toBeGreaterThan(0);
+        for (const [path, node] of switches) {
+            expect(node.type, path).toBe('boolean');
+            expect(node.options, path).toEqual(ON_OFF);
+        }
+    });
+
+    it('binds the dropdown and the typed name to the same property, never as expressions', () => {
+        for (const section of [highlights, categories]) {
+            const { field, fieldName } = section.items;
+            expect(field.component).toBe('dropdown');
+            expect(typeof field.options).toBe('function');
+            expect(fieldName.ref).toBe(field.ref);
+            expect(fieldName.component).toBeUndefined();
+            expect(field.expression).toBeUndefined();
+            expect(fieldName.expression).toBeUndefined();
+            expect(typeof field.change).toBe('function');
+            expect(fieldName.change).toBe(field.change);
+        }
+    });
+
+    it('stores the limit as an integer, tidied on change', () => {
+        const { limit } = highlights.items;
+        expect(limit.type).toBe('integer');
+        const data = { chatbox: { highlight: { field: '[match]', limit: 250000 } } };
+        limit.change(data);
+        expect(data.chatbox.highlight).toEqual({ field: 'match', limit: 10000 });
+    });
+
+    it('keeps the colour expression plain text, so the engine evaluates it per category', () => {
+        const { colorExpression, colorExpressionHelp } = categories.items;
+        expect(colorExpression.expression).toBeUndefined();
+        expect(colorExpression.component).toBeUndefined();
+        expect(colorExpressionHelp.component).toBe('text');
+        expect(colorExpressionHelp.ref).toBeUndefined();
+    });
+
+    it('shows everything but the field only once a highlight field is set', () => {
+        const none = { chatbox: { highlight: { field: '' } } };
+        const set = { chatbox: { highlight: { field: 'match' } } };
+        for (const [key, item] of Object.entries(highlights.items)) {
+            if (key === 'field' || key === 'fieldName') {
+                expect(item.show, key).toBeUndefined();
+                continue;
+            }
+            expect(item.show(none), key).toBe(false);
+            expect(item.show(set), key).toBe(true);
+        }
+        expect(highlightFieldIsSet({ chatbox: { highlight: { field: ' [match] ' } } })).toBe(true);
+    });
+
+    it('explains the click only while clicking a highlight selects', () => {
+        expect(clickHelpIsShown({ chatbox: { highlight: { field: 'match' } } })).toBe(true);
+        expect(
+            clickHelpIsShown({ chatbox: { highlight: { field: 'match', clickToSelect: false } } })
+        ).toBe(false);
+        expect(clickHelpIsShown({ chatbox: { highlight: { field: '' } } })).toBe(false);
+    });
+
+    it('shows the categories once a highlight field is set, their details once a category is', () => {
+        expect(categories.show).toBe(highlightFieldIsSet);
+        const noCategory = { chatbox: { highlight: { field: 'match' }, category: { field: '' } } };
+        const category = {
+            chatbox: { highlight: { field: 'match' }, category: { field: 'pattern' } },
+        };
+        for (const key of ['colorExpression', 'colorExpressionHelp', 'showLegend', 'showLabels']) {
+            expect(categories.items[key].show, key).toBe(categoryFieldIsSet);
+            expect(categoryFieldIsSet(noCategory)).toBe(false);
+            expect(categoryFieldIsSet(category)).toBe(true);
+        }
+    });
+});
+
+describe('appearance: the overview ruler', () => {
+    it('is a switch under Appearance, since it shows search matches as well as highlights', () => {
+        const item = definition.items.appearance.items.showRuler;
+        expect(item).toMatchObject({
+            ref: 'chatbox.showRuler',
+            component: 'switch',
+            defaultValue: true,
+        });
+        expect(item.show).toBeUndefined();
+    });
+});
+
+describe('appearance: the search box', () => {
+    it('is a switch under Appearance, on by default', () => {
+        const item = definition.items.appearance.items.showSearch;
+        expect(item).toMatchObject({
+            ref: 'chatbox.showSearch',
+            component: 'switch',
+            defaultValue: true,
+        });
+        expect(item.show).toBeUndefined();
     });
 });
