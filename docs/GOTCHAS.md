@@ -179,8 +179,10 @@ were met here.
 ## 15. A selection in an unassociated field leaves the object's layout untouched
 
 A highlight field in a data island, or any field not associated with the messages, can change what
-should be highlighted without changing anything the object's cube computes. The engine sends no change
-for the object, nebula does not render, and the highlights silently stay as they were.
+should be highlighted without changing anything the object's cube computes. Where the engine then sends
+no change for the object, nebula does not render, and the highlights silently stay as they were.
+Textview.qs met this. On Qlik Sense May 2026 a chatbox object did get a change for a selection in a data
+island, so a check on that server does not show the trap.
 
 **Rule:** a companion session object holds the highlight counts and values, and the object loads the
 highlights again on the companion's `changed` event.
