@@ -40,7 +40,7 @@ import { Empty } from './states';
 import ConversationList from './ConversationList';
 import LaneBoard, { laneCaption } from './LaneBoard';
 import { lanePlace } from '../chat/lanes';
-import { bubbleKey } from './reader-place';
+import { NO_FOCUS, bubbleKey, resolveFocusIndex } from './reader-place';
 
 export { bubbleKey, messageAtTop, returnIndex } from './reader-place';
 
@@ -204,10 +204,31 @@ export function ChatLog({
 
     // Roving tabindex: exactly one message is tabbable at a time, so the whole
     // conversation costs the sheet a single tab stop instead of one per message.
-    const [focusIndex, setFocusIndex] = useState(-1);
+    // Focus is held by the message, not only its index: a selection or lanes that
+    // change move a message to another index (see resolveFocusIndex).
+    const [focus, setFocus] = useState(NO_FOCUS);
+    const focusIndex = resolveFocusIndex(focus, messages);
     const tabbable = canReceiveTabStop(keyboard);
     // Set when a step has already scrolled to the message focus moves to.
     const revealedRef = useRef(false);
+    // Focus follows a message the new messages moved without scrolling to it: the
+    // list keeps the reader's place (GOTCHAS 28), and the message is focused again
+    // only where it is drawn.
+    if (focusIndex >= 0 && focusIndex !== focus.index) revealedRef.current = true;
+
+    /**
+     * Put focus on a message, or on none.
+     *
+     * @param {number} index - The message's index, or -1 for none.
+     * @returns {void}
+     */
+    const focusAt = (index) => {
+        setFocus(
+            index >= 0 && index < messages.length
+                ? { key: bubbleKey(messages[index]), index }
+                : NO_FOCUS
+        );
+    };
 
     // Move real DOM focus after the index changes. In a virtualized list the
     // target may not be mounted yet, so scroll it into view first and focus on
@@ -225,6 +246,12 @@ export function ChatLog({
         });
         return () => cancelAnimationFrame(frame);
     }, [focusIndex, tabbable]);
+
+    // Remember where a moved message is now, or that it is gone, so the next render finds it at once.
+    useEffect(() => {
+        if (focus.index === focusIndex) return;
+        setFocus(focusIndex < 0 ? NO_FOCUS : { key: focus.key, index: focusIndex });
+    }, [focus, focusIndex]);
 
     // The current stop: the highlight the reader stepped to, by the message it is in. It counts
     // only while the stops it was found among are the ones shown, so new highlights or a new
@@ -431,7 +458,7 @@ export function ChatLog({
         bodyRef.current?.reveal(messageIndex, { behavior: 'auto', done: afterScroll });
         if (moveFocus && tabbable) {
             revealedRef.current = true;
-            setFocusIndex(messageIndex);
+            focusAt(messageIndex);
         }
     };
 
@@ -581,7 +608,7 @@ export function ChatLog({
             event.preventDefault();
             // Moving on leaves the stop the reader stepped to.
             setCurrent(null);
-            setFocusIndex(moved);
+            focusAt(moved);
             return;
         }
 
@@ -613,7 +640,7 @@ export function ChatLog({
             } else if (currentStop) {
                 setCurrent(null);
             } else {
-                setFocusIndex(-1);
+                setFocus(NO_FOCUS);
                 keyboard?.blur?.(true);
             }
         }

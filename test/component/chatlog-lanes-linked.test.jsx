@@ -242,6 +242,50 @@ describe('ChatLog with conversations side by side, scrolling linked', () => {
         expect(focused()).toBe('two closes');
     });
 
+    it('keeps focus on its message when narrowing the object drops a lane', () => {
+        const three = [
+            message('1', 'T3', 'c1'),
+            message('2', 'T1', 'a1'),
+            message('3', 'T2', 'b1'),
+            message('4', 'T1', 'a2'),
+            message('5', 'T2', 'b2'),
+        ];
+        const wide = buildBoard(three, { max: 3, scroll: 'linked' });
+        const { container, rerender } = render(
+            <ChatLog
+                conversation={conversationOf(wide)}
+                board={wide}
+                settings={settings}
+                rect={{ width: 900, height: 600 }}
+                keyboard={active}
+            />,
+            { wrapper: Viewport }
+        );
+        const list = container.querySelector('[role="list"]');
+        // Lanes T2 | T1 | T3; rows [c1 a1 b1] [a2 b2]. Down to b1, right to a1, down to a2.
+        fireEvent.keyDown(list, { key: 'ArrowDown' });
+        fireEvent.keyDown(list, { key: 'ArrowRight' });
+        fireEvent.keyDown(list, { key: 'ArrowDown' });
+        const focusedBody = () =>
+            container.querySelector('[data-message-index][tabindex="0"] [class*="body"]')
+                ?.textContent;
+        expect(focusedBody()).toBe('a2');
+
+        // Narrower: lane T3 goes, and every later message moves one place up the board.
+        const narrow = buildBoard(three, { max: 2, scroll: 'linked' });
+        rerender(
+            <ChatLog
+                conversation={conversationOf(narrow)}
+                board={narrow}
+                settings={settings}
+                rect={{ width: 500, height: 600 }}
+                keyboard={active}
+            />
+        );
+        expect(container.querySelectorAll('[data-message-index][tabindex="0"]')).toHaveLength(1);
+        expect(focusedBody()).toBe('a2');
+    });
+
     it('steps through matches in time order, bringing each one’s row into view', () => {
         const { container } = renderLanes({ search: { initialQuery: 'reload' } });
         const root = container.firstChild;

@@ -240,6 +240,42 @@ describe('ChatLog keyboard navigation', () => {
         expect(container.querySelectorAll('[tabindex="0"]')).toHaveLength(0);
     });
 
+    it('keeps focus on the same message when a selection moves it to another index', () => {
+        const { container, rerender } = renderList(
+            <ChatLog conversation={conversation(five)} settings={{}} keyboard={active} />
+        );
+        const list = container.querySelector('[role="list"]');
+        fireEvent.keyDown(list, { key: 'ArrowDown' });
+        fireEvent.keyDown(list, { key: 'ArrowDown' });
+        fireEvent.keyDown(list, { key: 'ArrowDown' });
+        // A selection removes the first message: "msg 3" is now at index 1.
+        rerender(
+            <ChatLog conversation={conversation(five.slice(1))} settings={{}} keyboard={active} />
+        );
+        const stops = container.querySelectorAll('[data-message-index][tabindex="0"]');
+        expect(stops).toHaveLength(1);
+        expect(stops[0].getAttribute('data-message-index')).toBe('1');
+        expect(stops[0].textContent).toContain('msg 3');
+    });
+
+    it('gives the tab stop back to the first message when the focused one is gone', () => {
+        const { container, rerender } = renderList(
+            <ChatLog conversation={conversation(five)} settings={{}} keyboard={active} />
+        );
+        const list = container.querySelector('[role="list"]');
+        fireEvent.keyDown(list, { key: 'End' });
+        rerender(
+            <ChatLog
+                conversation={conversation(five.slice(0, 3))}
+                settings={{}}
+                keyboard={active}
+            />
+        );
+        const stops = container.querySelectorAll('[data-message-index][tabindex="0"]');
+        expect(stops).toHaveLength(1);
+        expect(stops[0].getAttribute('data-message-index')).toBe('0');
+    });
+
     it('announces how many messages the list holds', () => {
         renderList(<ChatLog conversation={conversation(five)} settings={{}} keyboard={active} />);
         expect(screen.getByLabelText('Conversation, 5 messages')).toBeInTheDocument();

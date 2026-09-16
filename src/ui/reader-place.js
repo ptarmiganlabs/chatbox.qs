@@ -20,6 +20,28 @@ export function bubbleKey(message) {
     return message.key ?? message.id;
 }
 
+/** No message holds focus. Shared: never change it. */
+export const NO_FOCUS = Object.freeze({ key: null, index: -1 });
+
+/**
+ * Find the focused message among the messages shown now.
+ *
+ * Focus is held by the message's key as well as its index. A selection, or lanes that change with the
+ * object's width, can move a message to another index, and an index alone would then hand focus to a
+ * different message — or, past the end of fewer messages, to none, leaving no tab stop.
+ *
+ * @param {{key: ?string, index: number}} focus - The message focus was put on, and its index then.
+ * @param {Array<object>} messages - The messages shown now.
+ * @returns {number} Its index now; -1 when nothing is focused or the message is no longer shown.
+ */
+export function resolveFocusIndex(focus, messages) {
+    if (focus?.key === null || focus?.key === undefined) return -1;
+    const { index } = focus;
+    if (index >= 0 && index < messages.length && bubbleKey(messages[index]) === focus.key)
+        return index;
+    return messages.findIndex((message) => bubbleKey(message) === focus.key);
+}
+
 /** How far a row must reach below the top of the view to count as shown, in pixels. */
 const SHOWN_BELOW_TOP_PX = 2;
 
