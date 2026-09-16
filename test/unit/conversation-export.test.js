@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { dayKey } from '../../src/chat/grouping';
 import { HIGHLIGHT_KINDS } from '../../src/qix/highlight-source';
 import { createHighlightView } from '../../src/highlight/highlight-view';
 import { projectMarkdown } from '../../src/highlight/markdown-projection';
@@ -58,6 +59,8 @@ describe('conversationText', () => {
     it('writes a readable transcript: who to whom and when, then the body as written', () => {
         expect(conversationText(conversation)).toBe(
             [
+                dayKey(MESSAGES[0].ts),
+                '',
                 'Ada → Bob, Cy, Dan, Eve · 2026-09-14 10:32',
                 'Please reload the task',
                 '',
@@ -86,7 +89,51 @@ describe('conversationText', () => {
         expect(conversationText(cut).split('\n').slice(0, 3)).toEqual([
             'Showing 3 of 12000 messages. Filter to see the rest.',
             '',
-            'Ada → Bob, Cy, Dan, Eve · 2026-09-14 10:32',
+            dayKey(MESSAGES[0].ts),
+        ]);
+    });
+
+    // Found on the server: the object's time expression showed only the time, so a transcript of a
+    // conversation over two days could not say which day a message was from. On screen the day
+    // separators say it.
+    it('starts each day with its date, since the time as shown may not say which day', () => {
+        const at = (day, hour) => new Date(2026, 8, day, hour, 5).getTime();
+        const message = (id, ts, tsText) => ({
+            id,
+            key: `k${id}`,
+            author: person('Ada'),
+            body: `message ${id}`,
+            bodyFormat: 'text',
+            ts,
+            tsText,
+            kpis: [],
+        });
+        const days = {
+            messages: [
+                message('1', at(8, 8), '08:05'),
+                message('2', at(8, 9), '09:05'),
+                message('3', null, null),
+                message('4', at(9, 10), '10:05'),
+            ],
+            diagnostics: [],
+        };
+        expect(conversationText(days).split('\n')).toEqual([
+            '2026-09-08',
+            '',
+            'Ada · 08:05',
+            'message 1',
+            '',
+            'Ada · 09:05',
+            'message 2',
+            '',
+            'Ada',
+            'message 3',
+            '',
+            '2026-09-09',
+            '',
+            'Ada · 10:05',
+            'message 4',
+            '',
         ]);
     });
 });

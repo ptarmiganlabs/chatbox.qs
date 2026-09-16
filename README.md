@@ -216,8 +216,9 @@ place, in the categories' colours; hover to count them, click to go there. **Sho
 Right-click the object for **Copy conversation as text** or **Copy conversation as JSON**. Both copy the
 messages the object shows under the current selections, in the order shown.
 
-- **Text** is a transcript: a line with the sender, every recipient and the time, then the message as
-  it was written.
+- **Text** is a transcript: the date (YYYY-MM-DD) where a new day starts, then for each message a line
+  with the sender, every recipient and the time as the object shows it, then the message as it was
+  written.
 - **JSON** holds each message's id, sender, recipients, thread, time, kind, badge, format, body and KPIs,
   and, while highlighting is on, its highlights with their values, categories and offsets — into the
   body, or into `plainText`, the text a markdown message shows — after a summary of the highlight field

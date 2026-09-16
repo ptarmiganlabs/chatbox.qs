@@ -2,15 +2,18 @@
  * The conversation as text to copy out: a transcript a person reads, or JSON a program reads.
  *
  * Both hold exactly the messages the object shows under the current selections, in the order it shows
- * them, and say when the message limit left some out. The transcript is plain: a line naming the sender,
- * every recipient and the time, then the body as it was written — markdown source for a markdown
- * message — then a blank line. The JSON carries each message's fields, KPIs and highlights, with offsets
+ * them, and say when the message limit left some out. The transcript is plain: the date where a new day
+ * starts, then for each message a line naming the sender, every recipient and the time, then the body as
+ * it was written — markdown source for a markdown message — then a blank line. The time is shown as the
+ * object shows it, often without a date, so the date lines say which day; the day separators do that on
+ * screen. The JSON carries each message's fields, KPIs and highlights, with offsets
  * a program can slice: into the body of a plain-text message, and into `plainText`, the text a markdown
  * message renders, for a markdown one. Search matches are the reader's, not the data's, and are left
  * out.
  *
  * Pure: it builds strings and objects, and copies nothing.
  */
+import { dayKey } from '../chat/grouping';
 import { HIGHLIGHT_KINDS } from '../qix/highlight-source';
 import { BLOCK_SEPARATOR } from '../highlight/markdown-projection';
 
@@ -24,7 +27,7 @@ const NAME_ORDER = new Intl.Collator('en', { sensitivity: 'base', numeric: true 
  * Write a message's header line.
  *
  * @param {object} message - The message.
- * @returns {string} The sender, every recipient and the time, e.g. "Ada → Bob, Cy · 2026-09-14 10:32".
+ * @returns {string} The sender, every recipient and the time as shown, e.g. "Ada → Bob, Cy · 10:32".
  */
 function headerLine(message) {
     const author = message.author?.label ?? '';
@@ -39,14 +42,20 @@ function headerLine(message) {
  * Write the conversation as a transcript.
  *
  * @param {object} conversation - The normalized conversation.
- * @returns {string} The transcript.
+ * @returns {string} The transcript. A dated message on a new day is preceded by the day, as YYYY-MM-DD
+ *     in the reader's time zone, the day its separator shows; a message without a time is not.
  */
 export function conversationText(conversation) {
     const messages = conversation?.messages ?? [];
     const parts = [];
     const truncated = (conversation?.diagnostics ?? []).find((d) => d.code === 'truncated');
     if (truncated) parts.push(`${truncated.message}\n`);
+    let day = null;
     for (const message of messages) {
+        if (Number.isFinite(message.ts) && dayKey(message.ts) !== day) {
+            day = dayKey(message.ts);
+            parts.push(`${day}\n`);
+        }
         parts.push(`${headerLine(message)}\n${message.body ? message.body : '(no text)'}\n`);
     }
     return parts.join('\n');
