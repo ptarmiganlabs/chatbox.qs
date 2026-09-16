@@ -1,14 +1,17 @@
 /**
  * Conversations side by side: a lane per conversation, each headed by its name.
  *
- * With free scrolling every lane is a list of its own, which keeps its own place. The conversation view
- * reaches the lanes through one handle, by message index, as it reaches a single list: the handle sends
- * each call to the lane the message is in.
+ * With free scrolling every lane is a list of its own, which keeps its own place. With linked scrolling
+ * the lanes are columns of one list, whose items are rows lined up in time: a row holds at most one
+ * message per lane, and everything in it is later than everything above it, so every height on screen is
+ * the same moment in all lanes. The conversation view reaches either through one handle, by message
+ * index, as it reaches a single list.
  *
  * Conversation names are field data, and reach the DOM as React children and attributes only.
  */
 import { useImperativeHandle, useRef } from 'react';
 import { buildDayGroups } from '../chat/grouping';
+import { rowDayGroups } from '../chat/lanes';
 import { counted, formatCount } from '../util/format';
 import ConversationList from './ConversationList';
 import styles from './chat.module.css';
@@ -46,7 +49,8 @@ export function laneCaption(board, meta = {}) {
  * @param {Function} [props.onKeyDown] - Keyboard handler for the lists.
  * @param {function(number): void} [props.onRange] - Called with the board index of the first message a
  *   lane draws, as it changes.
- * @param {function(number): ?object} [props.renderRuler] - Renders a lane's overview ruler, by lane number.
+ * @param {function(?number): ?object} [props.renderRuler] - Renders the overview ruler: a lane's, by lane
+ *   number, with free scrolling; the one beside the rows, given null, with linked scrolling.
  * @returns {object} The rendered lanes.
  */
 export function LaneBoard({
@@ -70,17 +74,21 @@ export function LaneBoard({
     // The lane the reader last scrolled, clicked or focused: where "where the reader is" is read.
     const activeRef = useRef(0);
 
+    // The one list of rows, with linked scrolling.
+    const rowsRef = useRef(null);
+
     const latest = useRef(null);
     latest.current = { board };
 
     /**
-     * Get the handle of the lane a message is in.
+     * Get the handle of the list a message is in: its lane's, or the list of rows.
      *
      * @param {number} index - The message's board index.
-     * @returns {?object} The lane's list handle.
+     * @returns {?object} The list handle.
      */
     const listOf = (index) => {
         const { board: now } = latest.current;
+        if (now.rows) return rowsRef.current;
         const lane = now.lanes[now.laneOf[index]];
         return lane ? (lists.current.get(lane.key) ?? null) : null;
     };
@@ -121,6 +129,11 @@ export function LaneBoard({
              */
             readingIndex(lane = activeRef.current) {
                 const { board: now } = latest.current;
+                if (now.rows) {
+                    // A row's messages share its height: the reader is at the row's first.
+                    const index = rowsRef.current?.readingIndex() ?? 0;
+                    return now.rows.start[now.rows.of[index] ?? 0] ?? 0;
+                }
                 const target = now.lanes[lane] ?? now.lanes[0];
                 const list = target ? lists.current.get(target.key) : null;
                 return list ? list.readingIndex() : (target?.start ?? 0);
@@ -133,6 +146,7 @@ export function LaneBoard({
              */
             firstVisibleIndex() {
                 const { board: now } = latest.current;
+                if (now.rows) return rowsRef.current?.firstVisibleIndex() ?? 0;
                 const target = now.lanes[activeRef.current] ?? now.lanes[0];
                 return lists.current.get(target?.key)?.firstVisibleIndex() ?? 0;
             },
@@ -183,16 +197,93 @@ export function LaneBoard({
         []
     );
 
+    const captionLine = caption ? (
+        <div
+            className={styles.laneCaption}
+            title="The conversations with the latest activity. Select conversations to choose which are shown."
+        >
+            {caption}
+        </div>
+    ) : null;
+
+    /**
+     * Render a lane's header: its name and how many messages it has.
+     *
+     * @param {object} lane - The lane.
+     * @returns {object} The header.
+     */
+    const header = (lane) => (
+        <div className={styles.laneHeader} title={lane.label}>
+            <span className={styles.laneName}>{lane.label}</span>
+            <span className={styles.laneCount}>{formatCount(lane.count)}</span>
+        </div>
+    );
+
+    if (board.rows) {
+        const { rows, laneOf, lanes } = board;
+        const ruler = renderRuler?.(null) ?? null;
+        /**
+         * Render a row: a cell per lane, holding the lane's message in the row or nothing.
+         *
+         * @param {number} row - The row's index.
+         * @returns {object} The row.
+         */
+        const renderCells = (row) => {
+            const cells = new Array(lanes.length).fill(-1);
+            for (let index = rows.start[row]; index < rows.start[row + 1]; index++) {
+                cells[laneOf[index]] = index;
+            }
+            return (
+                <div className={styles.laneRow} data-lane-row={row}>
+                    {cells.map((index, number) => (
+                        <div key={lanes[number].key} className={styles.laneCell}>
+                            {index >= 0 ? renderRow(index) : null}
+                        </div>
+                    ))}
+                </div>
+            );
+        };
+        return (
+            <div
+                className={styles.lanes}
+                ref={rootRef}
+                data-scroll={board.scroll}
+                style={{ '--cqs-lanes': String(lanes.length) }}
+            >
+                {captionLine}
+                <div className={styles.laneHeaders} data-ruler={ruler ? 'true' : undefined}>
+                    {lanes.map((lane) => (
+                        <section key={lane.key} aria-label={lane.label}>
+                            {header(lane)}
+                        </section>
+                    ))}
+                </div>
+                <div className={styles.laneBody}>
+                    <ConversationList
+                        ref={rowsRef}
+                        messages={board.messages}
+                        rows={rows}
+                        dayGroups={dateSeparators ? rowDayGroups(board.messages, rows) : null}
+                        renderItem={renderCells}
+                        renderAll={renderAll}
+                        live={live}
+                        label={`Conversations side by side, ${counted(board.messages.length, 'message', 'messages')}`}
+                        busy={busy}
+                        onKeyDown={onKeyDown}
+                        onRange={onRange}
+                        context={{ lane: 'linked' }}
+                        // The headers above reserve the same gutter, so their columns line up with the rows.
+                        scrollerStyle={{ scrollbarGutter: 'stable' }}
+                    />
+                    {ruler}
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className={styles.lanes} ref={rootRef} data-scroll={board.scroll}>
-            {caption ? (
-                <div
-                    className={styles.laneCaption}
-                    title="The conversations with the latest activity. Select conversations to choose which are shown."
-                >
-                    {caption}
-                </div>
-            ) : null}
+            {captionLine}
             <div className={styles.laneColumns}>
                 {board.lanes.map((lane, number) => {
                     /**
@@ -212,10 +303,7 @@ export function LaneBoard({
                             onWheel={use}
                             onFocusCapture={use}
                         >
-                            <div className={styles.laneHeader} title={lane.label}>
-                                <span className={styles.laneName}>{lane.label}</span>
-                                <span className={styles.laneCount}>{formatCount(lane.count)}</span>
-                            </div>
+                            {header(lane)}
                             <div className={styles.laneBody}>
                                 <ConversationList
                                     ref={refFor(lane.key)}

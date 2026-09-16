@@ -11,14 +11,40 @@
  * messages (GOTCHAS 28), so every list that shows messages keeps its place the same way.
  *
  * Indices: the messages given are a stretch of the conversation starting at `offset`. Everything that
- * comes in or goes out — rendering a row, scrolling to a message, where the reader is — uses the index
- * in the whole conversation; inside, the virtualizer counts from 0.
+ * comes in or goes out — scrolling to a message, where the reader is — uses the index in the whole
+ * conversation; inside, the virtualizer counts from 0.
+ *
+ * Items: the virtualizer's items are the messages, or, given `rows`, rows of messages — conversations
+ * side by side lined up in time, where one row holds a message from each of several lanes. Scrolling to a
+ * message then scrolls to its row, and the reader's place is still kept by message.
  */
 import { useImperativeHandle, useLayoutEffect, useRef } from 'react';
 import { GroupedVirtuoso, Virtuoso } from 'react-virtuoso';
 import styles from './chat.module.css';
 import { bubbleKey, messageAtTop, returnIndex } from './reader-place';
 import { scrollToElement } from './scroll';
+
+/**
+ * Find the item a message is in.
+ *
+ * @param {?{of: Int32Array}} rows - The rows, or null when every message is an item.
+ * @param {number} index - The message's index within the list.
+ * @returns {number} The item's index.
+ */
+function itemOf(rows, index) {
+    return rows ? (rows.of[index] ?? -1) : index;
+}
+
+/**
+ * Find the first message of an item.
+ *
+ * @param {?{start: Int32Array}} rows - The rows, or null when every message is an item.
+ * @param {number} item - The item's index.
+ * @returns {number} The message's index within the list.
+ */
+function firstMessageOf(rows, item) {
+    return rows ? (rows.start[item] ?? 0) : item;
+}
 
 /**
  * Render a list of messages.
@@ -28,9 +54,12 @@ import { scrollToElement } from './scroll';
  *   `jumpTo(index)`, `reveal(index, options)`, `container(index)` and `contains(node)`.
  * @param {Array<object>} props.messages - The messages in this list, in display order.
  * @param {number} [props.offset] - The conversation index of the first of them.
- * @param {?{groupCounts: number[], labels: string[]}} [props.dayGroups] - Day groups over the messages,
- *   or null for no day headers.
- * @param {function(number): object} props.renderItem - Renders the message at a conversation index.
+ * @param {?{count: number, start: Int32Array, of: Int32Array}} [props.rows] - Rows of messages to show as
+ *   the items, from src/chat/lanes.js; null to show each message as an item.
+ * @param {?{groupCounts: number[], labels: string[]}} [props.dayGroups] - Day groups over the items, or
+ *   null for no day headers.
+ * @param {function(number): object} props.renderItem - Renders an item: the message at a conversation
+ *   index, or given `rows`, the row at a row index.
  * @param {boolean} [props.renderAll] - Render every message rather than virtualizing.
  * @param {boolean} [props.live] - Whether this is a live object, not an export render.
  * @param {number} [props.initialIndex] - The index within this list to start at.
@@ -47,6 +76,7 @@ export function ConversationList({
     ref,
     messages,
     offset = 0,
+    rows = null,
     dayGroups = null,
     renderItem,
     renderAll = false,
@@ -63,13 +93,12 @@ export function ConversationList({
     const virtuosoRef = useRef(null);
     // The element that scrolls: Virtuoso's scroller, or the list itself when every row is rendered.
     const scrollerRef = useRef(null);
-    // The first row the virtualizer draws, within this list. The fallback for where the reader is, where
-    // nothing is laid out.
+    // The first item the virtualizer draws. The fallback for where the reader is, where nothing is laid out.
     const firstVisibleRef = useRef(0);
 
     // The props as they are now, for the handle and the callbacks, which are made once.
     const latest = useRef(null);
-    latest.current = { offset, renderAll, onRange };
+    latest.current = { offset, rows, renderAll, onRange };
 
     // Both handed to the virtualizer, and made once: a new function each render would change its props
     // on every frame of a drag-resize.
@@ -95,15 +124,17 @@ export function ConversationList({
          */
         handleRangeRef.current = (range) => {
             firstVisibleRef.current = range?.startIndex ?? 0;
-            latest.current.onRange?.(latest.current.offset + firstVisibleRef.current);
+            const { offset: at, rows: items, onRange: report } = latest.current;
+            report?.(at + firstMessageOf(items, firstVisibleRef.current));
         };
     }
 
     // Where the reader is: the messages on screen, and the index of the one at the top of the view. A
     // selection replaces the messages, and the reader's message can move to another index or go.
-    // `shownRef` holds the messages on screen and the offset they were drawn at, and `restoreRef` the
-    // place to return to once new messages are shown.
-    const shownRef = useRef({ messages, offset });
+    // `shownRef` holds the messages on screen, with the offset and rows they were drawn with, and
+    // `restoreRef` the place to return to — the message, and the item it was in — once new messages are
+    // shown.
+    const shownRef = useRef({ messages, offset, rows });
     const restoreRef = useRef(null);
     if (shownRef.current.messages !== messages) {
         // Read while rendering, while the rows on screen are still the messages the reader saw: once they
@@ -111,15 +142,22 @@ export function ConversationList({
         // from the rows, because the virtualizer's range starts with rows drawn above the view, which a
         // selection may remove. Its range is the fallback where nothing is laid out.
         if (restoreRef.current === null) {
+            const shown = shownRef.current;
             const atTop = renderAll ? -1 : messageAtTop(scrollerRef.current, listRef.current);
+            const index =
+                atTop >= 0
+                    ? atTop - shown.offset
+                    : firstMessageOf(shown.rows, firstVisibleRef.current);
             restoreRef.current = {
-                messages: shownRef.current.messages,
-                index: atTop >= 0 ? atTop - shownRef.current.offset : firstVisibleRef.current,
+                messages: shown.messages,
+                index,
+                item: itemOf(shown.rows, index),
             };
         }
-        shownRef.current = { messages, offset };
+        shownRef.current = { messages, offset, rows };
     } else {
         shownRef.current.offset = offset;
+        shownRef.current.rows = rows;
     }
 
     // When newer rows replace the messages, put the reader back at the message they were reading, or at
@@ -132,9 +170,12 @@ export function ConversationList({
         restoreRef.current = null;
         if (renderAll) return;
         const index = returnIndex(place, messages);
-        if (index < 0 || index === place.index) return;
-        firstVisibleRef.current = index;
-        const location = { index, align: 'start' };
+        if (index < 0) return;
+        const item = itemOf(rows, index);
+        // The virtualizer keeps its pixel offset, so an item at the place it was needs no scroll.
+        if (item < 0 || item === place.item) return;
+        firstVisibleRef.current = item;
+        const location = { index: item, align: 'start' };
         virtuosoRef.current?.scrollToIndex?.(location);
         // Once more after this commit: the virtualizer draws the new list's height in an update of its
         // own, and until then a message further down than the old list reached is out of the browser's
@@ -146,7 +187,7 @@ export function ConversationList({
         return () => {
             current = false;
         };
-    }, [messages, renderAll]);
+    }, [messages, rows, renderAll]);
 
     useImperativeHandle(
         ref,
@@ -162,7 +203,8 @@ export function ConversationList({
                     latest.current.renderAll ? list : scrollerRef.current,
                     list
                 );
-                return atTop >= 0 ? atTop : latest.current.offset + firstVisibleRef.current;
+                const { offset: at, rows: items } = latest.current;
+                return atTop >= 0 ? atTop : at + firstMessageOf(items, firstVisibleRef.current);
             },
 
             /**
@@ -171,7 +213,8 @@ export function ConversationList({
              * @returns {number} Its conversation index.
              */
             firstVisibleIndex() {
-                return latest.current.offset + firstVisibleRef.current;
+                const { offset: at, rows: items } = latest.current;
+                return at + firstMessageOf(items, firstVisibleRef.current);
             },
 
             /**
@@ -184,7 +227,7 @@ export function ConversationList({
                 const list = listRef.current;
                 if (!latest.current.renderAll) {
                     virtuosoRef.current?.scrollToIndex?.({
-                        index: index - latest.current.offset,
+                        index: itemOf(latest.current.rows, index - latest.current.offset),
                         align: 'start',
                         behavior: 'auto',
                     });
@@ -208,7 +251,7 @@ export function ConversationList({
                     return;
                 }
                 virtuosoRef.current?.scrollIntoView?.({
-                    index: index - latest.current.offset,
+                    index: itemOf(latest.current.rows, index - latest.current.offset),
                     ...options,
                 });
             },
@@ -243,8 +286,8 @@ export function ConversationList({
      * GroupedVirtuoso renders its own sticky headers, so this is only needed
      * where virtualization is off — the export path, which re-renders every row.
      *
-     * @param {number} index - Index of the message within this list.
-     * @returns {?string} The label, or null when this message continues the day.
+     * @param {number} index - Index of the item.
+     * @returns {?string} The label, or null when this item continues the day.
      */
     const separatorBefore = (index) => {
         if (!dayGroups) return null;
@@ -257,12 +300,13 @@ export function ConversationList({
     };
 
     /**
-     * Render the virtualizer's item at an index within this list.
+     * Render the virtualizer's item.
      *
-     * @param {number} index - Index within this list.
-     * @returns {object} The rendered row.
+     * @param {number} index - The item's index within this list.
+     * @returns {object} The rendered item.
      */
-    const itemContent = (index) => renderItem(offset + index);
+    const itemContent = (index) => renderItem(rows ? index : offset + index);
+    const itemCount = rows ? rows.count : messages.length;
 
     return (
         <div
@@ -280,12 +324,12 @@ export function ConversationList({
                 // Export and print re-render from the layout in a headless
                 // browser, where a virtualized window would capture only the
                 // rows that happened to be visible.
-                messages.map((message, i) => (
-                    <div key={bubbleKey(message)}>
+                Array.from({ length: itemCount }, (_, i) => (
+                    <div key={bubbleKey(messages[firstMessageOf(rows, i)])}>
                         {separatorBefore(i) ? (
                             <div className={styles.separator}>{separatorBefore(i)}</div>
                         ) : null}
-                        {renderItem(offset + i)}
+                        {itemContent(i)}
                     </div>
                 ))
             ) : dayGroups ? (
@@ -329,7 +373,7 @@ export function ConversationList({
                     tabIndex={-1}
                     style={{ height: '100%', ...scrollerStyle }}
                     context={context}
-                    totalCount={messages.length}
+                    totalCount={itemCount}
                     itemContent={itemContent}
                     // No followOutput: a list short enough to fit counts as scrolled
                     // to the bottom, so following the rows a cleared selection brings

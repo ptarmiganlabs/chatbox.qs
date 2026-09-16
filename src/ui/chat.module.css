@@ -887,6 +887,35 @@ button.chip:focus-visible {
     min-height: 0;
 }
 
+/* Linked scrolling: the lanes are the columns of one list of rows. The headers reserve the gutter the
+   scroller's scrollbar takes, and the ruler's width when it shows, so their columns line up with the
+   rows' cells. */
+.laneHeaders {
+    flex: none;
+    display: grid;
+    grid-template-columns: repeat(var(--cqs-lanes, 1), minmax(0, 1fr));
+    overflow: hidden;
+    scrollbar-gutter: stable;
+}
+
+.laneHeaders[data-ruler='true'] {
+    padding-right: 14px;
+}
+
+.laneRow {
+    display: grid;
+    grid-template-columns: repeat(var(--cqs-lanes, 1), minmax(0, 1fr));
+}
+
+.laneCell {
+    min-width: 0;
+}
+
+.laneHeaders > section + section,
+.laneCell + .laneCell {
+    border-inline-start: 1px solid var(--cqs-border, #d9d9d9);
+}
+
 /* A lane is narrow: an inline detail keeps to it. */
 .lanes .detailInline {
     margin: 0 6px 6px;

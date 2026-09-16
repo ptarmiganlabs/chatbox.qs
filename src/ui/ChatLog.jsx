@@ -337,7 +337,8 @@ export function ChatLog({
     }
 
     const showRuler = settings.showRuler !== false;
-    // One ruler for the conversation, or with free scrolling one per lane, over the lane's messages.
+    // One ruler for the conversation; with free scrolling one per lane, over the lane's messages; with
+    // linked scrolling one beside the rows, where messages that share a row share a place.
     const laneRulers = board?.scroll === 'free';
     const ticks = useMemo(() => {
         if (!showRuler || !stops || stopTotal === 0)
@@ -354,8 +355,34 @@ export function ChatLog({
                 })
             );
         }
-        return rulerTicks({ stops, count: messages.length, kind: stopKind, styles: tickStyles });
-    }, [showRuler, stops, stopTotal, messages.length, stopKind, highlights?.styles, board]);
+        return rulerTicks({
+            stops,
+            count: messages.length,
+            kind: stopKind,
+            styles: tickStyles,
+            ...(board?.rows
+                ? {
+                      slots: board.rows.count,
+                      /**
+                       * Find the row a message is in.
+                       *
+                       * @param {number} index - The message's board index.
+                       * @returns {number} Its row.
+                       */
+                      slotOf: (index) => board.rows.of[index],
+                  }
+                : {}),
+        });
+    }, [
+        showRuler,
+        stops,
+        stopTotal,
+        messages.length,
+        stopKind,
+        highlights?.styles,
+        board,
+        laneRulers,
+    ]);
 
     /**
      * Find the message the reader is at: the first one whose bottom is below the top of the view.
@@ -723,24 +750,27 @@ export function ChatLog({
     };
 
     /**
-     * Render one lane's overview ruler, with free scrolling.
+     * Render the overview ruler of conversations side by side.
      *
-     * @param {number} number - The lane.
-     * @returns {?object} The ruler, or null when the lane has nothing to show on it.
+     * @param {?number} number - A lane, with free scrolling; null for the ruler beside linked rows.
+     * @returns {?object} The ruler, or null when it has nothing to show.
      */
     const renderLaneRuler = (number) => {
-        const lane = board.lanes[number];
-        const laneTicks = ticks[number] ?? [];
-        if (laneTicks.length === 0) return null;
+        const lane = number === null ? null : board.lanes[number];
+        const shown = lane ? (ticks[number] ?? []) : ticks;
+        if (shown.length === 0) return null;
+        const { rows } = board;
         return (
             <HighlightRuler
-                ticks={laneTicks}
-                count={lane.count}
+                ticks={shown}
+                count={lane ? lane.count : messages.length}
                 kind={stopKind}
                 interactive={live}
                 onJump={jumpTo}
                 indexAt={(fraction) =>
-                    lane.start + Math.min(lane.count - 1, Math.floor(fraction * lane.count))
+                    lane
+                        ? lane.start + Math.min(lane.count - 1, Math.floor(fraction * lane.count))
+                        : rows.start[Math.min(rows.count - 1, Math.floor(fraction * rows.count))]
                 }
             />
         );
@@ -834,7 +864,7 @@ export function ChatLog({
                         caption={laneCaption(board, conversation.meta)}
                         onKeyDown={handleKeyDown}
                         onRange={handleRange}
-                        renderRuler={laneRulers ? renderLaneRuler : undefined}
+                        renderRuler={renderLaneRuler}
                     />
                 ) : (
                     <ConversationList
@@ -851,7 +881,7 @@ export function ChatLog({
                         onRange={handleRange}
                     />
                 )}
-                {!laneRulers && ticks.length ? (
+                {!board && ticks.length ? (
                     <HighlightRuler
                         ticks={ticks}
                         count={messages.length}
