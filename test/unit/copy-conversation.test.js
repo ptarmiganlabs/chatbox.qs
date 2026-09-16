@@ -45,6 +45,27 @@ describe('copyConversation', () => {
         });
     });
 
+    it('says how many conversations the messages came from, side by side', async () => {
+        const copy = vi.fn(async () => true);
+        const board = {
+            total: 5,
+            lanes: [
+                { label: 'A', indices: [0] },
+                { label: 'B', indices: [1] },
+            ],
+        };
+        const notice = await copyConversation({
+            view: { ...view, board },
+            format: 'text',
+            copy,
+            version: '1',
+        });
+        expect(notice.text).toBe('Copied 2 messages from 2 conversations as text');
+        expect(copy.mock.calls[0][0]).toBe(
+            '2 of 5 conversations\n\nConversation: A\n\nAda\nhello\n\nConversation: B\n\nBob\nhi\n'
+        );
+    });
+
     it('says when the browser did not allow copying', async () => {
         const copy = vi.fn(async () => false);
         await expect(copyConversation({ view, format: 'text', copy })).resolves.toEqual({

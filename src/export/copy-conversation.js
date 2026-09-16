@@ -41,16 +41,20 @@ export async function copyConversation({
                   exportedAt: now.toISOString(),
                   version,
                   order: view.settings?.order,
+                  board: view.board ?? null,
               }),
               null,
               2
           )
-        : conversationText(conversation);
+        : conversationText(conversation, { board: view.board ?? null });
     const copied = await copy(text);
     if (!copied)
         return { level: 'error', text: 'The browser did not allow copying to the clipboard' };
+    const from = view.board
+        ? ` from ${counted(view.board.lanes.length, 'conversation', 'conversations')}`
+        : '';
     return {
         level: 'info',
-        text: `Copied ${counted(count, 'message', 'messages')} as ${json ? 'JSON' : 'text'}`,
+        text: `Copied ${counted(count, 'message', 'messages')}${from} as ${json ? 'JSON' : 'text'}`,
     };
 }

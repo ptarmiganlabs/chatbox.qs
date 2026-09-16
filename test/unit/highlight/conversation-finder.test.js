@@ -51,6 +51,22 @@ describe('createConversationFinder', () => {
         expect(finder.find({ messages: timed, query: 'lovelace', gapSec: 3600 }).total).toBe(1);
     });
 
+    it('searches names where the header line follows the previous message in the same lane', () => {
+        // Side by side, the message before one in board order can be in another lane.
+        const board = [
+            message('1', 'a'),
+            message('2', 'b', { authorKey: 'Bob', author: person('Bob') }),
+        ];
+        const third = message('3', 'c');
+        const messages = [...board, third];
+        const finder = createConversationFinder();
+        // Without lanes, Ada's second message follows Bob's, so its header shows.
+        expect(finder.find({ messages, query: 'lovelace', gapSec: 120 }).total).toBe(2);
+        // In Ada's lane it follows her own first message, so it shares that header.
+        const previous = Int32Array.from([-1, -1, 0]);
+        expect(finder.find({ messages, query: 'lovelace', gapSec: 120, previous }).total).toBe(1);
+    });
+
     it('searches the recipients as shown, three names and "and N more"', () => {
         const recipients = ['Cy', 'Dan', 'Eve', 'Zoe'].map(person);
         const group = [message('1', 'hello', { recipients })];
