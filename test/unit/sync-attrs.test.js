@@ -28,15 +28,32 @@ const mkModel = (dims, attrs) => ({
         qHyperCubeDef: { qDimensions: dims },
         chatbox: attrs === undefined ? {} : { attrs },
     })),
+    applyPatches: vi.fn(async () => {}),
+    // Never used: the sync patches the paths it owns. One test pins that.
     setProperties: vi.fn(async () => {}),
 });
 
+/** The value the first write put at a property path, or undefined when it left that path alone. */
+const patched = (model, qPath) => {
+    const patch = model.applyPatches.mock.calls[0][0].find((p) => p.qPath === qPath);
+    return patch && JSON.parse(patch.qValue);
+};
+
 /** The attribute expressions the first write put on the message-id dimension. */
-const written = (model) =>
-    model.setProperties.mock.calls[0][0].qHyperCubeDef.qDimensions[0].qAttributeExpressions;
+const written = (model) => patched(model, '/qHyperCubeDef/qDimensions/0/qAttributeExpressions');
 
 /** One slot's expression. */
 const expressionOf = (expressions, id) => expressions.find((e) => e.id === id).qExpression;
+
+/**
+ * An attribute-expression array shaped the way GetProperties returns one: a slot left empty in the
+ * panel has no `qExpression` key at all, because the engine leaves out a default-valued q-property.
+ * Checked on the lab server, object AaesP of the Claude scratch app.
+ */
+const asEngineReturns = (attrs) =>
+    ATTR_ORDER.map((id) =>
+        attrs[id] ? { qExpression: attrs[id], qAttribute: true, id } : { qAttribute: true, id }
+    );
 
 describe('formulaOf', () => {
     it('reads a plain value as it was typed', () => {
@@ -86,6 +103,24 @@ describe('isInSync', () => {
         const reordered = [...desired].reverse();
         expect(isInSync(reordered, desired)).toBe(false);
     });
+
+    it('takes a slot with no qExpression for the empty slot it is', () => {
+        // Regression: GetProperties leaves out a q-property whose value is the default, so the slots
+        // left empty in the panel come back as `{ id, qAttribute: true }` while the build emits
+        // `qExpression: ''`. Compared raw, `undefined === ''` failed for every one of them, so the
+        // guard never held for a real object and every layout change in edit mode wrote again.
+        const attrs = { ts: 'Num(Min(FtSentAt))', tsText: "Only(Time(FtSentAt, 'hh:mm'))" };
+        expect(isInSync(asEngineReturns(attrs), buildAttributeExpressions(attrs))).toBe(true);
+    });
+
+    it('still sees drift in a slot the engine left out', () => {
+        expect(
+            isInSync(
+                asEngineReturns({ ts: 'A' }),
+                buildAttributeExpressions({ ts: 'A', badge: 'B' })
+            )
+        ).toBe(false);
+    });
 });
 
 describe('isBagUnset', () => {
@@ -120,9 +155,11 @@ describe('syncAttributeExpressions', () => {
         });
         const wrote = await syncAttributeExpressions({ model, layout: fromTo, canEdit: true });
         expect(wrote).toBe(true);
-        const dims = model.setProperties.mock.calls[0][0].qHyperCubeDef.qDimensions;
-        expect(dims[0].qAttributeExpressions).toHaveLength(ATTR_ORDER.length);
-        expect(dims[2].qAttributeExpressions).toBeUndefined();
+        expect(written(model)).toHaveLength(ATTR_ORDER.length);
+        // and nothing at all on the recipient dimension
+        expect(
+            patched(model, '/qHyperCubeDef/qDimensions/2/qAttributeExpressions')
+        ).toBeUndefined();
     });
 
     it('writes the expressions onto the message-id dimension', async () => {
@@ -133,8 +170,9 @@ describe('syncAttributeExpressions', () => {
         expect(wrote).toBe(true);
         expect(expressionOf(written(model), 'ts')).toBe('Num(Min(SentAt))');
         // and NOT onto the author dimension
-        const author = model.setProperties.mock.calls[0][0].qHyperCubeDef.qDimensions[1];
-        expect(author.qAttributeExpressions).toBeUndefined();
+        expect(
+            patched(model, '/qHyperCubeDef/qDimensions/1/qAttributeExpressions')
+        ).toBeUndefined();
     });
 
     it('copies the formula of a value typed with =, not the result the layout holds', async () => {
@@ -167,7 +205,49 @@ describe('syncAttributeExpressions', () => {
             canEdit: true,
         });
         expect(wrote).toBe(false);
+        expect(model.applyPatches).not.toHaveBeenCalled();
+    });
+
+    it('does NOT write for the shape the engine returns — this is what looped', async () => {
+        // Regression: on a real object the empty slots come back without a qExpression, the guard
+        // never held, and the effect wrote on every layout change in edit mode. The engine answers a
+        // write with a change notification, so that write brought the next layout, which brought the
+        // next write — an endless loop, re-fetching the data each time round.
+        const attrs = { ts: 'A' };
+        const model = mkModel(
+            [
+                {
+                    qDef: { cId: 'd_msgid', qSortCriterias: timeSortCriteria('A') },
+                    qAttributeExpressions: asEngineReturns(attrs),
+                },
+            ],
+            attrs
+        );
+        const wrote = await syncAttributeExpressions({
+            model,
+            layout: layout([{ cId: 'd_msgid' }]),
+            canEdit: true,
+        });
+        expect(wrote).toBe(false);
+        expect(model.applyPatches).not.toHaveBeenCalled();
+    });
+
+    it('patches only the paths it owns, never the whole properties object', async () => {
+        // The sync reads the properties, then writes. Sending that whole read back makes every render
+        // in edit mode an authority on every property, and undoes a panel edit made in between.
+        const model = mkModel([{ qDef: { cId: 'd_msgid' } }, { qDef: { cId: 'd_author' } }], {
+            ts: 'Num(Min(SentAt))',
+        });
+        await syncAttributeExpressions({ model, layout: layout(), canEdit: true });
         expect(model.setProperties).not.toHaveBeenCalled();
+        const [patches, softPatch] = model.applyPatches.mock.calls[0];
+        // Saved with the object, like any other panel edit — not for this session only.
+        expect(softPatch).toBe(false);
+        expect(patches.map((p) => p.qPath)).toEqual([
+            '/qHyperCubeDef/qDimensions/0/qAttributeExpressions',
+            '/qHyperCubeDef/qDimensions/0/qDef/qSortCriterias',
+        ]);
+        expect(patches.every((p) => p.qOp === 'replace')).toBe(true);
     });
 
     it('never writes outside edit mode', async () => {
@@ -180,13 +260,13 @@ describe('syncAttributeExpressions', () => {
 
     it('swallows a write failure rather than blanking the chart', async () => {
         const model = mkModel([{ qDef: { cId: 'd_msgid' } }], { ts: 'A' });
-        model.setProperties = vi.fn(async () => {
+        model.applyPatches = vi.fn(async () => {
             throw new Error('Access denied');
         });
         await expect(
             syncAttributeExpressions({ model, layout: layout(), canEdit: true })
         ).resolves.toBe(false);
-        expect(model.setProperties).toHaveBeenCalled();
+        expect(model.applyPatches).toHaveBeenCalled();
     });
 
     it('does nothing when there is no message-id dimension yet', async () => {
@@ -203,8 +283,7 @@ describe('syncAttributeExpressions', () => {
 
 describe('syncAttributeExpressions — time order', () => {
     /** The sort the first write saved on the message-id dimension. */
-    const savedSort = (model) =>
-        model.setProperties.mock.calls[0][0].qHyperCubeDef.qDimensions[0].qDef.qSortCriterias;
+    const savedSort = (model) => patched(model, '/qHyperCubeDef/qDimensions/0/qDef/qSortCriterias');
 
     it('saves the sort by the timestamp with the expressions', async () => {
         // Regression: the message id only ever sorted numerically, so ids that do not rise with time
@@ -254,7 +333,8 @@ describe('syncAttributeExpressions — time order', () => {
                 canEdit: true,
             })
         ).toBe(true);
-        expect(written(model)).toEqual(live);
+        // Left alone means no patch for that path at all, so nothing can reach it.
+        expect(written(model)).toBeUndefined();
         expect(savedSort(model)).toEqual(timeSortCriteria('Num(Min(SentAt))'));
     });
 
@@ -268,7 +348,8 @@ describe('syncAttributeExpressions — time order', () => {
         expect(await syncAttributeExpressions({ model, layout: layout(), canEdit: true })).toBe(
             true
         );
-        expect(savedSort(model)).toEqual([{ qSortByNumeric: 1 }]);
+        // Left alone means no patch for that path at all: the numeric sort stands untouched.
+        expect(savedSort(model)).toBeUndefined();
     });
 });
 
@@ -304,7 +385,7 @@ describe('syncAttributeExpressions — clobber guard', () => {
                 canEdit: true,
             });
             expect(wrote).toBe(false);
-            expect(model.setProperties).not.toHaveBeenCalled();
+            expect(model.applyPatches).not.toHaveBeenCalled();
         }
     );
 
