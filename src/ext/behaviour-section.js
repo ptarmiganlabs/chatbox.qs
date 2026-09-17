@@ -19,8 +19,8 @@ export function behaviourSection() {
                 component: 'dropdown',
                 label: 'Message order',
                 description:
-                    'Messages follow the Message ID in numeric order, so ids should rise over time; ' +
-                    'the timestamp does not reorder them. Newest first starts at the other end, and ' +
+                    'Messages are in time order when Timestamp (numeric) is set under Message metadata, ' +
+                    'and in Message ID order when it is not. Newest first starts at the other end, and ' +
                     'keeps the newest rows when Maximum messages cuts them short.',
                 defaultValue: 'oldest',
                 options: [

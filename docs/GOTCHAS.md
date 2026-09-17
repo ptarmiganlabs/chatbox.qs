@@ -443,3 +443,20 @@ true. _Guard: `test/unit/sanitize.test.js`, `test/unit/normalize.test.js`._
 seconds below 1e11, milliseconds from there (`isUnixTime`), and a real instant either way. A result no
 `Date` can hold is no timestamp. _Guard: `test/unit/sanitize.test.js`, `test/unit/time-zones.test.js`,
 `test/unit/conversation-export.test.js`._
+
+## 37. Messages followed the Message ID, not the time
+
+A straight cube lists rows in its sort order, and the conversation reads that order as time: Oldest first
+from the first row, Newest first and lanes from the last. The Message ID was only ever sorted numerically,
+which is time order only while ids rise with time. On a 0.4.0 server whose ids did not, Newest first showed
+Feb 3, Feb 5, Feb 3 from the top, and "the newest 1,000" were only the highest ids. Test data numbered in
+time order never shows it: on the lab, ChatBig's ids rise with its timestamps for all 12,000 rows.
+
+**Rule:** with a timestamp expression on the message id, the message id sorts by it, earliest first, in one
+criteria entry with the numeric sort, where the engine applies the expression first and the id only breaks
+ties (checked on the engine). The engine sorts, so the message limit keeps the newest messages, not the
+highest ids; a sort in the browser could only reorder rows the limit had already chosen. In edit mode
+`syncAttributeExpressions` saves the sort. Elsewhere `createTimeOrder` in `src/qix/time-order.js` applies
+it as a soft patch — session only, and allowed without edit rights, so a published app is sorted for every
+reader — once per object, before any row is read, and never in a snapshot. _Guard:
+`test/unit/time-order.test.js`, `test/unit/sync-attrs.test.js`._

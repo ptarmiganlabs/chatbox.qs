@@ -15,6 +15,7 @@
 import logger from '../util/logger';
 import { ATTR_ORDER } from '../ext/metadata-section';
 import { ROLES, conversationModelOf, resolveRoles } from './column-map';
+import { isSortedBy, timeSortCriteria, timestampExpressionOf } from './time-order';
 
 /**
  * Read one value from the `chatbox.attrs` bag as the formula it holds.
@@ -100,7 +101,11 @@ export function isBagUnset(attrs) {
 }
 
 /**
- * Reconcile `chatbox.attrs` into the message-id dimension's attribute expressions.
+ * Reconcile `chatbox.attrs` into the message-id dimension's attribute expressions, and save the sort that
+ * puts the messages in time order.
+ *
+ * The sort follows the timestamp the dimension ends up with, whether the panel set it or it was set
+ * outside the panel (src/qix/time-order.js). Without a timestamp the sort is left as it is.
  *
  * @param {object} options - Inputs.
  * @param {object} options.model - The enigma GenericObject model.
@@ -125,20 +130,26 @@ export async function syncAttributeExpressions({ model, layout, canEdit }) {
         // From the properties, never the layout: see formulaOf.
         const attrs = properties?.chatbox?.attrs;
         const desired = buildAttributeExpressions(attrs);
-
-        if (isInSync(dimension.qAttributeExpressions, desired)) return false;
+        const inSync = isInSync(dimension.qAttributeExpressions, desired);
 
         // Never let a panel that was never filled in wipe expressions that are
         // already working. An object configured outside the panel — set by an API
         // call, or imported — must not be blanked just because it has no bag to
         // sync from. A panel whose fields were all cleared has one.
-        if (isBagUnset(attrs) && hasConfiguredExpressions(dimension.qAttributeExpressions)) {
-            return false;
+        const keep =
+            inSync ||
+            (isBagUnset(attrs) && hasConfiguredExpressions(dimension.qAttributeExpressions));
+        if (!keep) dimension.qAttributeExpressions = desired;
+
+        const expression = timestampExpressionOf(dimension);
+        const resort = Boolean(expression) && !isSortedBy(dimension, expression);
+        if (resort) {
+            dimension.qDef = { ...dimension.qDef, qSortCriterias: timeSortCriteria(expression) };
         }
 
-        dimension.qAttributeExpressions = desired;
+        if (keep && !resort) return false;
         await model.setProperties(properties);
-        logger.debug('synced attribute expressions onto the message-id dimension');
+        logger.debug('synced attribute expressions and time order onto the message-id dimension');
         return true;
     } catch (err) {
         // A consumer without write access is an expected outcome, not a failure

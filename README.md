@@ -167,9 +167,13 @@ adds, makes no difference.
 
 **Timestamp (numeric)**, e.g. `Num(Min([SentAt]))`, places messages in time: which of a sender's
 messages share a header, where the **Date separators** (Appearance) start a new day, and which messages
-share a row side by side. It does not reorder messages: they follow the Message ID in numeric order, so
-ids should rise over time. **Timestamp (display)**, e.g. `Only(Time([SentAt]))`, is the time shown with
-each message.
+share a row side by side. It also sets their order: the Message ID is sorted by the timestamp, and by the
+id only where two messages share a timestamp, so ids need not rise over time. Without it, messages follow
+the Message ID in numeric order. **Timestamp (display)**, e.g. `Only(Time([SentAt]))`, is the time shown
+with each message.
+
+- The sort is saved with the object while the sheet is edited. Until then, and in an app nobody can edit,
+  each reader's session applies it without saving, so a new version sorts an existing chat at once.
 
 - A Qlik timestamp has no time zone, so a message stays under the date the data holds wherever the
   reader is: a message at 23:30 on 8 September is under 8 September in Stockholm and in New York alike,
