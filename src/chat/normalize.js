@@ -31,6 +31,7 @@ import {
     NULL_SENTINEL,
     attrText,
     isUnixTime,
+    ownMessageHint,
     parseMediaRefs,
     qlikTimeToEpochMs,
     safeColor,
@@ -170,7 +171,8 @@ function readRecord(row, i, ctx) {
             .filter((m) => m.ref),
         accent: safeColor(attrValue(idCell, ctx.attrMap, ATTR_IDS.ACCENT)),
         badge: attrText(attrValue(idCell, ctx.attrMap, ATTR_IDS.BADGE)),
-        sideHint: attrValue(idCell, ctx.attrMap, ATTR_IDS.SIDE)?.qNum ?? null,
+        // 1, 0 or null: taking Qlik's true (-1) as 1 here keeps rows of one message agreeing.
+        sideHint: ownMessageHint(attrValue(idCell, ctx.attrMap, ATTR_IDS.SIDE)),
         kpis: ctx.kpiCols.map((column) => ({
             key: column.cId || `msr-${column.col}`,
             label: column.label,

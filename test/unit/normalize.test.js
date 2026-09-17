@@ -221,6 +221,26 @@ describe('normalize', () => {
             expect(normalize({ layout, rows }).messages[0].side).toBe('right');
         });
 
+        it('takes Qlik’s true, -1, as an Own message, and false as not, in either layout', () => {
+            // Regression: a comparison such as Only([Direction]) = 'outbound' returns -1 where it
+            // matches. That was ignored, while its 0 still pinned every other message left.
+            const layout = makeLayout({ qcy: 2, attrIds: [ATTR_IDS.SIDE] });
+            const rows = [
+                row({ id: '1', author: 'Ada', text: 'a', attrs: [{ qText: '-1', qNum: -1 }] }),
+                row({
+                    id: '2',
+                    author: 'Bob',
+                    authorElem: 11,
+                    text: 'b',
+                    attrs: [{ qText: '0', qNum: 0 }],
+                }),
+            ];
+            for (const props of [{}, { layoutMode: 'sided', ownParticipant: 'bob' }]) {
+                const sides = normalize({ layout, rows, props }).messages.map((m) => m.side);
+                expect(sides).toEqual(['right', 'left']);
+            }
+        });
+
         it('keeps everything left with three or more participants in RAIL mode', () => {
             const rows = [
                 row({ id: '1', author: 'Ada', authorElem: 10, text: 'a' }),
@@ -678,6 +698,16 @@ describe('rows that belong to one message', () => {
             ],
         });
         expect(agree.messages[0].side).toBe('right');
+
+        // 1 and Qlik's true are the same answer, so rows giving one of each agree.
+        const oneAndTrue = normalize({
+            layout,
+            rows: [
+                wideRow({ id: '7', elemId: 7, extra: 'Bob', attrs: [{ qNum: 1 }] }),
+                wideRow({ id: '7', elemId: 7, extra: 'Cy', attrs: [{ qNum: -1 }] }),
+            ],
+        });
+        expect(oneAndTrue.messages[0].side).toBe('right');
 
         const disagree = normalize({
             layout,

@@ -3,6 +3,7 @@ import {
     argbToHex,
     attrText,
     isUnixTime,
+    ownMessageHint,
     parseMediaRefs,
     qlikTimeToEpochMs,
     safeColor,
@@ -121,6 +122,32 @@ describe('attrText', () => {
 
     it('passes real text through, trimmed', () => {
         expect(attrText({ qText: '  09:41  ' })).toBe('09:41');
+    });
+});
+
+describe('ownMessageHint', () => {
+    it('takes 1 and Qlik’s true, -1, as the right side', () => {
+        // Regression: `Only([Direction]) = 'outbound'` returns -1 where it matches. Only 1 counted, so
+        // each match was ignored while every 0 still pinned a message left.
+        expect(ownMessageHint({ qText: '1', qNum: 1 })).toBe(1);
+        expect(ownMessageHint({ qText: '-1', qNum: -1 })).toBe(1);
+    });
+
+    it('takes 0, which false is too, as the left side', () => {
+        expect(ownMessageHint({ qText: '0', qNum: 0 })).toBe(0);
+    });
+
+    it('leaves anything else to the layout', () => {
+        for (const value of [
+            null,
+            undefined,
+            {},
+            { qNum: 'NaN' },
+            { qText: '1', qNum: 'NaN' },
+            { qNum: 2 },
+        ]) {
+            expect(ownMessageHint(value)).toBeNull();
+        }
     });
 });
 

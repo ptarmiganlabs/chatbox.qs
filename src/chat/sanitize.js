@@ -146,6 +146,24 @@ export function attrText(value) {
 }
 
 /**
+ * Read the Own message value: the side a message is pinned to.
+ *
+ * Qlik's true is -1, not 1, so a comparison such as `Only([Direction]) = 'outbound'`
+ * returns -1 for every message it matches. Taking only 1 as the right side ignored
+ * each of those, while every 0 still pinned a message left.
+ *
+ * @param {?object} value - An NxSimpleValue ({ qText, qNum }), or null.
+ * @returns {?number} 1 for the right (1 or true), 0 for the left (0 or false), or
+ *     null to leave the side to the layout.
+ */
+export function ownMessageHint(value) {
+    const num = value?.qNum;
+    if (num === 1 || num === -1) return 1;
+    if (num === 0) return 0;
+    return null;
+}
+
+/**
  * The smallest timestamp taken as epoch milliseconds: no plausible Qlik day
  * serial reaches it (that would be year 275,000), so the two cannot be confused.
  */
