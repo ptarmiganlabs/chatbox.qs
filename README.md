@@ -160,6 +160,20 @@ selection, because toggling a set flips each value on its own.
 Per-message metadata is configured under **Message metadata** in the property panel. Each expression
 must aggregate — `Only([Field])`, not a bare field reference.
 
+### Timestamps and days
+
+**Timestamp (numeric)**, e.g. `Num(Min([SentAt]))`, places messages in time: which of a sender's
+messages share a header, where the **Date separators** (Appearance) start a new day, and which messages
+share a row side by side. **Timestamp (display)**, e.g. `Only(Time([SentAt]))`, is the time shown with
+each message.
+
+- A Qlik timestamp has no time zone, so a message stays under the date the data holds wherever the
+  reader is: a message at 23:30 on 8 September is under 8 September in Stockholm and in New York alike,
+  as the time shown with it says. A copied transcript's date lines are the same days.
+- **Today** and **Yesterday** are the reader's own, by the reader's clock.
+- A numeric timestamp in milliseconds since 1970 (epoch milliseconds) is taken as a real moment in time
+  instead, and dated by the reader's clock.
+
 ### Message kinds as chips
 
 Switch on **Show kinds as chips** under **Message kind** to show a message's kinds as chips above its
@@ -286,9 +300,9 @@ place, in the categories' colours; hover to count them, click to go there. **Sho
 Right-click the object for **Copy conversation as text** or **Copy conversation as JSON**. Both copy the
 messages the object shows under the current selections, in the order shown.
 
-- **Text** is a transcript: the date (YYYY-MM-DD) where a new day starts, then for each message a line
-  with the sender, every recipient and the time as the object shows it, then the message as it was
-  written.
+- **Text** is a transcript: the date (YYYY-MM-DD) where a new day starts, the day its separator shows,
+  then for each message a line with the sender, every recipient and the time as the object shows it,
+  then the message as it was written.
 - With **conversations side by side**, both copy the conversations shown one after another, each under
   a line naming it, rather than interleaved as linked lanes show them.
 - **JSON** starts with a summary of what was copied, under `conversation`: the number of `messages`; the
@@ -299,6 +313,11 @@ messages the object shows under the current selections, in the order shown.
   and, while highlighting is on, its highlights with their values, categories and offsets — into the
   body, or into `plainText`, the text a markdown message shows — after a summary of the highlight field
   and the counts per category. Search matches are not included.
+- A message's `time` is its **Timestamp (numeric)** in ISO 8601, e.g. `"2026-09-08T23:30:00.000Z"`. A
+  Qlik timestamp has no time zone, so `time` is the date and time the data holds, the same whoever
+  copies it, and the `Z` does not mean UTC: read it as a local time in whatever zone the data was
+  recorded in. Only a timestamp in epoch milliseconds (see [Timestamps and days](#timestamps-and-days))
+  is a real moment, written in UTC. `timeText` is the time as the object shows it.
 
 Message text can also be selected and copied with the mouse; a drag that selects text does not count
 as a click on the message.

@@ -27,7 +27,8 @@ Comparing serial deltas (~0.0009) against a millisecond threshold (120000) meant
 grouping could never fire. Nothing errored; the feature was simply inert.
 
 **Rule:** everything time-related goes through `qlikTimeToEpochMs()`. It passes values above 1e11
-through untouched, since no real day serial reaches that.
+through untouched, since no real day serial reaches that. What it returns for a serial is a wall-clock
+time, not an instant (entry 32).
 
 _See `src/chat/sanitize.js`._
 
@@ -369,3 +370,27 @@ banner and the line above the lanes say whether the oldest or the newest rows we
 sort last, so the newest rows would take in every phantom row: they are left out first (entry 13). _Guard:
 `test/unit/paging.test.js`, `test/unit/normalize.test.js`, `test/unit/message-limit.test.js`,
 `test/unit/scale.test.js`._
+
+## 32. A Qlik timestamp has no time zone, but a `Date` reads one
+
+`Num(Min([SentAt]))` for 23:30 on 8 September is **46273.979** wherever the data was recorded, and
+`qlikTimeToEpochMs` makes it the milliseconds of 23:30 on 8 September _as if it were UTC_. The day
+separators read those milliseconds with the local getters, so each reader saw the day it was in their own
+zone: in Stockholm the message went under 9 September, and in New York a message at 00:30 on 9 September
+went under the 8th. The copied transcript's date lines did the same. In UTC, where CI runs, local and UTC
+getters agree, so nothing failed.
+
+**Yesterday** was wrong on its own too: it was the day of the instant 24 hours before now, which is still
+today in the last hour of the day the clocks go back, and two days back in the first hour after they go
+forward.
+
+**Rule:** a timestamp from a day serial is a wall-clock time. Read it with the UTC getters, and write it
+with an `Intl.DateTimeFormat` that names `timeZone: 'UTC'` — one made without a time zone writes in the
+zone it was made in. `wallClockOf` in `src/chat/grouping.js` is the one place a message's timestamp
+becomes a day, for the separators, the rows side by side and the transcript alike; a timestamp that came
+as epoch milliseconds is a real instant, marked `tsInstant` by `normalize`, and becomes the reader's wall
+clock there. Today and Yesterday are the reader's wall clock and one wall-clock day before it. A test of
+dates runs in several zones (`inTimeZone` in `test/helpers/time-zones.js`), whatever zone the machine is
+in. The JSON's `time` keeps the wall-clock time, with a `Z` that does not mean UTC; the README says so.
+_Guard: `test/unit/time-zones.test.js`, `test/unit/grouping.test.js`,
+`test/guards/wall-clock-dates.test.js`._
