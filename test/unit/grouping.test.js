@@ -134,6 +134,21 @@ describe('dayLabel', () => {
         });
     });
 
+    // Regression: yesterday was the day of the instant 24 hours before now, which is still today in the
+    // last hour of the day the clocks go back, and two days back in the first hour after they go forward.
+    it.each([
+        ['Europe/Stockholm', 'after the clocks go forward', [2026, 3, 30, 0, 30], [2026, 3, 29]],
+        ['Europe/Stockholm', 'as the clocks go back', [2026, 10, 25, 23, 30], [2026, 10, 24]],
+        ['America/New_York', 'after the clocks go forward', [2026, 3, 9, 0, 30], [2026, 3, 8]],
+        ['America/New_York', 'as the clocks go back', [2026, 11, 1, 23, 30], [2026, 10, 31]],
+    ])('names yesterday in %s on the day %s', (zone, _when, clock, yesterday) => {
+        inTimeZone(zone, () => {
+            const reading = local(...clock);
+            expect(dayLabel(at(...clock), reading)).toBe('Today');
+            expect(dayLabel(at(...yesterday), reading)).toBe('Yesterday');
+        });
+    });
+
     it.each(ZONE_NAMES)('writes the date the data holds, not the reader’s, in %s', (zone) => {
         inTimeZone(zone, () => {
             const later = local(2026, 9, 17, 12);

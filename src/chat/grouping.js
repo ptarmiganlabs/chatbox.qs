@@ -16,6 +16,9 @@
 
 import { recipientsKey } from './recipients';
 
+/** One calendar day of wall-clock time, which never has a daylight-saving change. */
+const DAY_MS = 86400000;
+
 /**
  * Report whether a message starts a new author cluster.
  *
@@ -134,7 +137,9 @@ export function dayLabel(wallClock, now = Date.now()) {
     const key = dayKey(wallClock);
     const today = localWallClock(now);
     if (key === dayKey(today)) return 'Today';
-    if (key === dayKey(localWallClock(now - 86400000))) return 'Yesterday';
+    // A day back on the wall clock, not 24 hours back: an instant 24 hours ago is still today in the
+    // last hour of the day the clocks go back, and two days ago in the first hour after they go forward.
+    if (key === dayKey(today - DAY_MS)) return 'Yesterday';
 
     const d = new Date(wallClock);
     try {
