@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.5.0](https://github.com/ptarmiganlabs/chatbox.qs/compare/chatbox-qs-v0.4.0...chatbox-qs-v0.5.0) (2026-09-17)
+
+
+### Features
+
+* say in the JSON copy how many rows were read and which the limit kept ([2461181](https://github.com/ptarmiganlabs/chatbox.qs/commit/24611818496c129a280a0dba726d52db4f1da461)), closes [#45](https://github.com/ptarmiganlabs/chatbox.qs/issues/45)
+
+
+### Bug Fixes
+
+* keep each message under the day the data holds, in every time zone ([245a93f](https://github.com/ptarmiganlabs/chatbox.qs/commit/245a93f5227e4c91c4b2f1e9ad6a84a1d387d01c))
+* keep Today and Yesterday in an export or a story as the reader saw them ([d7c7ca6](https://github.com/ptarmiganlabs/chatbox.qs/commit/d7c7ca652e3b6312183a14652d55afbd7eb43c49))
+* read past the phantom rows at the end when reading the newest rows ([ba51892](https://github.com/ptarmiganlabs/chatbox.qs/commit/ba518922d206ff2ea20c4b1d25c0bd4900bb8ee1)), closes [#44](https://github.com/ptarmiganlabs/chatbox.qs/issues/44)
+* say Yesterday on the days the clocks change ([6388c45](https://github.com/ptarmiganlabs/chatbox.qs/commit/6388c455abb39ad8a192953c9908f424831d93fb))
+* write a Qlik timestamp's time in the JSON copy without a Z ([37f2e95](https://github.com/ptarmiganlabs/chatbox.qs/commit/37f2e9504bb61a165dc6146a89f6dab9a738eda8))
+
+
+### Documentation
+
+* describe the summary at the top of the JSON copy ([b96d342](https://github.com/ptarmiganlabs/chatbox.qs/commit/b96d34286ccce0791e0c85504a5426a1ce5dc50e))
+* say that exports and stories keep Today and Yesterday ([11d9c7b](https://github.com/ptarmiganlabs/chatbox.qs/commit/11d9c7b4f90e0121663b9ec663f26735d89b5485))
+* say that phantom rows no longer take the newest messages' places ([d20e801](https://github.com/ptarmiganlabs/chatbox.qs/commit/d20e8016184800bd4e2212c790e6d6fd9afba537))
+* say that the JSON copy's time has no zone in schema 2 ([d0ebb2e](https://github.com/ptarmiganlabs/chatbox.qs/commit/d0ebb2e3dcf4c89d7009e964188127b61a1212c5))
+* say which day a message is shown under, and what the JSON time means ([e822466](https://github.com/ptarmiganlabs/chatbox.qs/commit/e8224666379ca3ee585567fb5a84fa053f329bc5))
+
 ## [0.4.0](https://github.com/ptarmiganlabs/chatbox.qs/compare/chatbox-qs-v0.3.0...chatbox-qs-v0.4.0) (2026-09-16)
 
 
