@@ -393,6 +393,7 @@ clock there. Today and Yesterday are the reader's wall clock and one wall-clock 
 is drawn again on the server, on a clock and in a time zone of its own, so the day labels take the
 reader's wall clock rather than an instant, and a snapshot records it (`today`). A test of dates runs in
 several zones (`inTimeZone` in `test/helpers/time-zones.js`), whatever zone the machine is in. The
-JSON's `time` keeps the wall-clock time, with a `Z` that does not mean UTC; the README says so.
+JSON's `time` writes a wall-clock time with no zone and only an instant with a `Z` (schema 2; schema 1
+wrote a `Z` on both).
 _Guard: `test/unit/time-zones.test.js`, `test/unit/grouping.test.js`, `test/unit/snapshot.test.js`,
-`test/guards/wall-clock-dates.test.js`._
+`test/unit/conversation-export.test.js`, `test/guards/wall-clock-dates.test.js`._

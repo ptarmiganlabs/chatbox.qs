@@ -171,7 +171,7 @@ describe('conversationJson', () => {
             author: 'Ada',
             recipients: ['Bob', 'Cy', 'Dan', 'Eve'],
             thread: 't1',
-            time: '2026-09-14T10:32:00.000Z',
+            time: '2026-09-14T10:32:00.000',
             timeText: '2026-09-14 10:32',
             kind: 'chat',
             badge: null,
@@ -188,26 +188,50 @@ describe('conversationJson', () => {
         expect(JSON.parse(JSON.stringify(json))).toEqual(json);
     });
 
-    // The README says what `time` means; this holds it to that in every zone.
-    it.each(ZONE_NAMES)(
-        'writes a Qlik timestamp’s wall-clock time, and an instant in UTC, whatever the zone: %s',
-        (zone) => {
-            const late = { ...MESSAGES[0], ts: Date.UTC(2026, 8, 8, 23, 30), tsText: '23:30' };
-            const instant = { ...late, ts: Date.UTC(2026, 8, 8, 21, 30), tsInstant: true };
-            inTimeZone(zone, () => {
-                const json = conversationJson(
+    // The README says what `time` means; this holds it to that in every zone (GOTCHAS 32).
+    describe('time', () => {
+        const late = { ...MESSAGES[0], ts: Date.UTC(2026, 8, 8, 23, 30), tsText: '23:30' };
+        const instant = { ...late, ts: Date.UTC(2026, 8, 8, 21, 30), tsInstant: true };
+        const timesIn = (zone) =>
+            inTimeZone(zone, () =>
+                conversationJson(
                     { ...conversation, messages: [late, instant] },
                     options
-                );
-                expect(json.messages.map((message) => message.time)).toEqual([
-                    // 23:30 as the data holds it; the Z does not mean UTC.
-                    '2026-09-08T23:30:00.000Z',
-                    // A real instant, in UTC.
-                    '2026-09-08T21:30:00.000Z',
-                ]);
+                ).messages.map((message) => message.time)
+            );
+
+        it.each(ZONE_NAMES)('has no zone for a Qlik timestamp, Z for an instant: %s', (zone) => {
+            expect(timesIn(zone)).toEqual([
+                // 23:30 as the data holds it: a Qlik timestamp has no time zone.
+                '2026-09-08T23:30:00.000',
+                // A real moment, in UTC.
+                '2026-09-08T21:30:00.000Z',
+            ]);
+        });
+
+        it.each(ZONE_NAMES)('reads back as the time the data holds, in a program in %s', (zone) => {
+            const [wallClock] = timesIn('UTC');
+            inTimeZone(zone, () => {
+                // A date and time with no zone is a local time to a program reading it.
+                const read = new Date(wallClock);
+                expect([read.getDate(), read.getHours(), read.getMinutes()]).toEqual([8, 23, 30]);
             });
-        }
-    );
+        });
+
+        it('says it is schema 2, since schema 1 wrote Z on every time', () => {
+            expect(conversationJson(conversation, options).schemaVersion).toBe(2);
+            expect(EXPORT_SCHEMA_VERSION).toBe(2);
+        });
+
+        it('is null without a time', () => {
+            const undated = [
+                { ...late, ts: null },
+                { ...late, ts: Number.NaN, tsInstant: true },
+            ];
+            const { messages } = conversationJson({ ...conversation, messages: undated }, options);
+            expect(messages.map((message) => message.time)).toEqual([null, null]);
+        });
+    });
 
     describe('which rows the message limit kept', () => {
         /** A participant cube of `qcy` rows, with the given rows read from `qTop`, normalized. */
