@@ -33,6 +33,7 @@ import { ROLES, conversationModelOf, resolveRoles } from './qix/column-map';
 import { buildSelection } from './qix/selection';
 import { describeAssignments } from './qix/role-labels';
 import { syncAttributeExpressions } from './qix/sync-attrs';
+import { createTimeOrder } from './qix/time-order';
 import {
     isSnapshot,
     readLaneSnapshot,
@@ -267,6 +268,9 @@ export default function supernova(galaxy) {
             // the whole cancellation mechanism: a superseded run is detected
             // between pages and its rows are discarded rather than appended.
             const runIdRef = useRef(0);
+            // Sorts the messages by their timestamp for this session, where nobody saves it.
+            const timeOrderRef = useRef(null);
+            if (!timeOrderRef.current) timeOrderRef.current = createTimeOrder();
             useEffect(() => {
                 /**
                  * Invalidate any in-flight fetch when the object unmounts.
@@ -303,6 +307,16 @@ export default function supernova(galaxy) {
                 if (!model || !staleLayout?.qHyperCube) return null;
                 const runId = ++runIdRef.current;
                 setProgress(null);
+                // The messages are shown in the cube's order, so sort the cube by the timestamp
+                // before any row is read (src/qix/time-order.js). A patch changes the layout, and
+                // the run that brings reads the rows: this layout is still sorted the old way.
+                const resorted = await timeOrderRef.current.ensure({
+                    model,
+                    layout: staleLayout,
+                    edit: Boolean(interactions?.edit),
+                    snapshot: isSnapshot(staleLayout),
+                });
+                if (resorted || runIdRef.current !== runId) return null;
                 // Up to Maximum messages: the newest rows for Newest first and lanes, past
                 // any phantom rows at the end of the cube.
                 const result = await readConversationRows({

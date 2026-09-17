@@ -7,6 +7,7 @@ import {
     syncAttributeExpressions,
 } from '../../src/qix/sync-attrs';
 import { ATTR_ORDER } from '../../src/ext/metadata-section';
+import { timeSortCriteria } from '../../src/qix/time-order';
 
 /** A layout, which the roles are resolved from. */
 const layout = (dims = [{ cId: 'd_msgid' }, { cId: 'd_author' }], chatbox = {}) => ({
@@ -155,7 +156,7 @@ describe('syncAttributeExpressions', () => {
     it('does NOT write when already in sync — it must not loop', async () => {
         const dims = [
             {
-                qDef: { cId: 'd_msgid' },
+                qDef: { cId: 'd_msgid', qSortCriterias: timeSortCriteria('A') },
                 qAttributeExpressions: buildAttributeExpressions({ ts: 'A' }),
             },
         ];
@@ -200,6 +201,77 @@ describe('syncAttributeExpressions', () => {
     });
 });
 
+describe('syncAttributeExpressions — time order', () => {
+    /** The sort the first write saved on the message-id dimension. */
+    const savedSort = (model) =>
+        model.setProperties.mock.calls[0][0].qHyperCubeDef.qDimensions[0].qDef.qSortCriterias;
+
+    it('saves the sort by the timestamp with the expressions', async () => {
+        // Regression: the message id only ever sorted numerically, so ids that do not rise with time
+        // showed days out of order — Feb 3, Feb 5, Feb 3 — seen on a 0.4.0 server.
+        const model = mkModel(
+            [{ qDef: { cId: 'd_msgid', qSortCriterias: [{ qSortByNumeric: 1 }] } }],
+            {
+                ts: 'Num(Min(SentAt))',
+            }
+        );
+        expect(await syncAttributeExpressions({ model, layout: layout(), canEdit: true })).toBe(
+            true
+        );
+        expect(savedSort(model)).toEqual(timeSortCriteria('Num(Min(SentAt))'));
+    });
+
+    it('saves the sort when the expressions are already in sync', async () => {
+        const model = mkModel(
+            [
+                {
+                    qDef: { cId: 'd_msgid', qSortCriterias: [{ qSortByNumeric: 1 }] },
+                    qAttributeExpressions: buildAttributeExpressions({ ts: 'A' }),
+                },
+            ],
+            { ts: 'A' }
+        );
+        expect(
+            await syncAttributeExpressions({
+                model,
+                layout: layout([{ cId: 'd_msgid' }]),
+                canEdit: true,
+            })
+        ).toBe(true);
+        expect(savedSort(model)).toEqual(timeSortCriteria('A'));
+    });
+
+    it('sorts by a timestamp set outside the panel, leaving its expressions as they are', async () => {
+        const live = [
+            { id: 'ts', qExpression: 'Num(Min(SentAt))', qAttribute: true },
+            { id: 'badge', qExpression: 'Only(ThreadId)', qAttribute: true },
+        ];
+        const model = mkModel([{ qDef: { cId: 'd_msgid' }, qAttributeExpressions: live }]);
+        expect(
+            await syncAttributeExpressions({
+                model,
+                layout: layout([{ cId: 'd_msgid' }]),
+                canEdit: true,
+            })
+        ).toBe(true);
+        expect(written(model)).toEqual(live);
+        expect(savedSort(model)).toEqual(timeSortCriteria('Num(Min(SentAt))'));
+    });
+
+    it('leaves the sort as it is without a timestamp', async () => {
+        const model = mkModel(
+            [{ qDef: { cId: 'd_msgid', qSortCriterias: [{ qSortByNumeric: 1 }] } }],
+            {
+                badge: 'Only(ThreadId)',
+            }
+        );
+        expect(await syncAttributeExpressions({ model, layout: layout(), canEdit: true })).toBe(
+            true
+        );
+        expect(savedSort(model)).toEqual([{ qSortByNumeric: 1 }]);
+    });
+});
+
 describe('syncAttributeExpressions — clobber guard', () => {
     const live = () => [
         { id: 'ts', qExpression: 'Num(Min(SentAt))', qAttribute: true },
@@ -215,7 +287,15 @@ describe('syncAttributeExpressions — clobber guard', () => {
             // Regression: an object configured outside the panel (set via the API, or imported) must not
             // be blanked just because chatbox.attrs has never been filled in.
             const model = mkModel(
-                [{ qDef: { cId: 'd_msgid' }, qAttributeExpressions: live() }],
+                [
+                    {
+                        qDef: {
+                            cId: 'd_msgid',
+                            qSortCriterias: timeSortCriteria('Num(Min(SentAt))'),
+                        },
+                        qAttributeExpressions: live(),
+                    },
+                ],
                 attrs
             );
             const wrote = await syncAttributeExpressions({
