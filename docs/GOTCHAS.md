@@ -389,8 +389,10 @@ with an `Intl.DateTimeFormat` that names `timeZone: 'UTC'` — one made without 
 zone it was made in. `wallClockOf` in `src/chat/grouping.js` is the one place a message's timestamp
 becomes a day, for the separators, the rows side by side and the transcript alike; a timestamp that came
 as epoch milliseconds is a real instant, marked `tsInstant` by `normalize`, and becomes the reader's wall
-clock there. Today and Yesterday are the reader's wall clock and one wall-clock day before it. A test of
-dates runs in several zones (`inTimeZone` in `test/helpers/time-zones.js`), whatever zone the machine is
-in. The JSON's `time` keeps the wall-clock time, with a `Z` that does not mean UTC; the README says so.
-_Guard: `test/unit/time-zones.test.js`, `test/unit/grouping.test.js`,
+clock there. Today and Yesterday are the reader's wall clock and one wall-clock day before it. An export
+is drawn again on the server, on a clock and in a time zone of its own, so the day labels take the
+reader's wall clock rather than an instant, and a snapshot records it (`today`). A test of dates runs in
+several zones (`inTimeZone` in `test/helpers/time-zones.js`), whatever zone the machine is in. The
+JSON's `time` keeps the wall-clock time, with a `Z` that does not mean UTC; the README says so.
+_Guard: `test/unit/time-zones.test.js`, `test/unit/grouping.test.js`, `test/unit/snapshot.test.js`,
 `test/guards/wall-clock-dates.test.js`._

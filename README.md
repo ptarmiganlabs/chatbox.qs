@@ -170,7 +170,8 @@ each message.
 - A Qlik timestamp has no time zone, so a message stays under the date the data holds wherever the
   reader is: a message at 23:30 on 8 September is under 8 September in Stockholm and in New York alike,
   as the time shown with it says. A copied transcript's date lines are the same days.
-- **Today** and **Yesterday** are the reader's own, by the reader's clock.
+- **Today** and **Yesterday** are the reader's own, by the reader's clock. An image or PDF export, and a
+  snapshot in a story, keep them as they were when it was taken.
 - A numeric timestamp in milliseconds since 1970 (epoch milliseconds) is taken as a real moment in time
   instead, and dated by the reader's clock.
 
