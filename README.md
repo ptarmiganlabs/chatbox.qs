@@ -101,7 +101,9 @@ on its own:
   single two-person chat looks exactly as it always has.
 - A group message goes right only when its sender is on the right in each of its pairs. Three or more
   people with no Own participant among them stay left.
-- The **Own message (1/0)** metadata expression outranks all of this.
+- The **Own message (1/0)** metadata expression outranks all of this: 1 or true puts a message on the
+  right, 0 or false on the left, and null leaves it to these rules. `Only([Direction]) = 'outbound'`
+  works as it reads.
 
 Automatic sides are worked out from the messages currently loaded, so narrowing a selection to one
 conversation can move them. For sides that never move, set Own participant or the Own message
@@ -158,13 +160,15 @@ A single value toggles, as a click in Sense always has. A set of values replaces
 selection, because toggling a set flips each value on its own.
 
 Per-message metadata is configured under **Message metadata** in the property panel. Each expression
-must aggregate — `Only([Field])`, not a bare field reference.
+must aggregate — `Only([Field])`, not a bare field reference. A leading `=`, which the expression editor
+adds, makes no difference.
 
 ### Timestamps and days
 
 **Timestamp (numeric)**, e.g. `Num(Min([SentAt]))`, places messages in time: which of a sender's
 messages share a header, where the **Date separators** (Appearance) start a new day, and which messages
-share a row side by side. **Timestamp (display)**, e.g. `Only(Time([SentAt]))`, is the time shown with
+share a row side by side. It does not reorder messages: they follow the Message ID in numeric order, so
+ids should rise over time. **Timestamp (display)**, e.g. `Only(Time([SentAt]))`, is the time shown with
 each message.
 
 - A Qlik timestamp has no time zone, so a message stays under the date the data holds wherever the
@@ -172,7 +176,7 @@ each message.
   as the time shown with it says. A copied transcript's date lines are the same days.
 - **Today** and **Yesterday** are the reader's own, by the reader's clock. An image or PDF export, and a
   snapshot in a story, keep them as they were when it was taken.
-- A numeric timestamp in milliseconds since 1970 (epoch milliseconds) is taken as a real moment in time
+- A numeric timestamp in Unix time, seconds or milliseconds since 1970, is taken as a real moment in time
   instead, and dated by the reader's clock.
 
 ### Message kinds as chips
@@ -316,9 +320,9 @@ messages the object shows under the current selections, in the order shown.
   and the counts per category. Search matches are not included.
 - A message's `time` is its **Timestamp (numeric)** in ISO 8601. A Qlik timestamp has no time zone, and
   neither has `time`, e.g. `"2026-09-08T23:30:00.000"`: the date and time the data holds, the same
-  whoever copies it, a local time in whatever zone the data was recorded in. Only a timestamp in epoch
-  milliseconds (see [Timestamps and days](#timestamps-and-days)) is a real moment, written in UTC with a
-  `Z`, e.g. `"2026-09-08T21:30:00.000Z"`. `timeText` is the time as the object shows it.
+  whoever copies it, a local time in whatever zone the data was recorded in. Only a timestamp in Unix
+  time (see [Timestamps and days](#timestamps-and-days)) is a real moment, written in UTC with a `Z`,
+  e.g. `"2026-09-08T21:30:00.000Z"`. `timeText` is the time as the object shows it.
 - `schemaVersion` is 2. Version 1, in 0.4.0, wrote a `Z` on every `time`, UTC or not. `exportedAt`, when
   the copy was made, is always UTC.
 

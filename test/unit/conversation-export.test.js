@@ -231,6 +231,39 @@ describe('conversationJson', () => {
             const { messages } = conversationJson({ ...conversation, messages: undated }, options);
             expect(messages.map((message) => message.time)).toEqual([null, null]);
         });
+
+        it('writes a timestamp in Unix seconds as the instant it is, rather than throwing', () => {
+            // Regression: seconds were read as a day serial past what a Date can hold, so toISOString
+            // threw and the whole conversation failed to copy as JSON.
+            const { messages } = normalize({
+                layout: {
+                    qHyperCube: {
+                        qSize: { qcx: 4, qcy: 1 },
+                        qDimensionInfo: [
+                            { cId: 'd_msgid', qAttrExprInfo: [{ id: 'ts' }] },
+                            { cId: 'd_author' },
+                        ],
+                        qMeasureInfo: [{ cId: 'm_text' }, { cId: 'm_dupcheck' }],
+                    },
+                },
+                rows: [
+                    [
+                        {
+                            qText: '1',
+                            qElemNumber: 0,
+                            qAttrExps: { qValues: [{ qNum: Date.UTC(2026, 8, 8, 21, 30) / 1000 }] },
+                        },
+                        { qText: 'Ada', qElemNumber: 0, qState: 'O' },
+                        { qText: 'hello', qNum: 'NaN' },
+                        { qText: '1', qNum: 1 },
+                    ],
+                ],
+            });
+            const json = conversationJson({ ...conversation, messages }, options);
+            expect(json.messages.map((message) => message.time)).toEqual([
+                '2026-09-08T21:30:00.000Z',
+            ]);
+        });
     });
 
     describe('which rows the message limit kept', () => {

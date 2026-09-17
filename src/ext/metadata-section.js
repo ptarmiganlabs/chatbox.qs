@@ -162,7 +162,8 @@ export function metadataSection() {
             side: attrItem(
                 ATTR_IDS.SIDE,
                 'Own message (1/0)',
-                'Returns 1 for messages that align right. Applies in any layout.'
+                'Puts a message on the right for 1 or true and on the left for 0 or false, in any ' +
+                    "layout, e.g. Only([Direction]) = 'outbound'. Null leaves it to the layout."
             ),
             accent: attrItem(
                 ATTR_IDS.ACCENT,

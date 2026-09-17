@@ -27,8 +27,8 @@ Comparing serial deltas (~0.0009) against a millisecond threshold (120000) meant
 grouping could never fire. Nothing errored; the feature was simply inert.
 
 **Rule:** everything time-related goes through `qlikTimeToEpochMs()`. It passes values above 1e11
-through untouched, since no real day serial reaches that. What it returns for a serial is a wall-clock
-time, not an instant (entry 32).
+through untouched, since no real day serial reaches that, and reads a value past the last Qlik date as
+Unix seconds (entry 36). What it returns for a serial is a wall-clock time, not an instant (entry 32).
 
 _See `src/chat/sanitize.js`._
 
@@ -388,8 +388,8 @@ forward.
 with an `Intl.DateTimeFormat` that names `timeZone: 'UTC'` — one made without a time zone writes in the
 zone it was made in. `wallClockOf` in `src/chat/grouping.js` is the one place a message's timestamp
 becomes a day, for the separators, the rows side by side and the transcript alike; a timestamp that came
-as epoch milliseconds is a real instant, marked `tsInstant` by `normalize`, and becomes the reader's wall
-clock there. Today and Yesterday are the reader's wall clock and one wall-clock day before it. An export
+as Unix time is a real instant, marked `tsInstant` by `normalize`, and becomes the reader's wall clock
+there. Today and Yesterday are the reader's wall clock and one wall-clock day before it. An export
 is drawn again on the server, on a clock and in a time zone of its own, so the day labels take the
 reader's wall clock rather than an instant, and a snapshot records it (`today`). A test of dates runs in
 several zones (`inTimeZone` in `test/helpers/time-zones.js`), whatever zone the machine is in. The
@@ -397,3 +397,49 @@ JSON's `time` writes a wall-clock time with no zone and only an instant with a `
 wrote a `Z` on both).
 _Guard: `test/unit/time-zones.test.js`, `test/unit/grouping.test.js`, `test/unit/snapshot.test.js`,
 `test/unit/conversation-export.test.js`, `test/guards/wall-clock-dates.test.js`._
+
+## 33. A metadata value typed with `=` reaches the layout as its result
+
+The metadata items accept an expression, so Sense stores a value typed with a leading `=` — or built in the
+expression editor, which adds one — as `{ qStringExpression: { qExpr: 'Only(ThreadId)' } }`, and puts
+what it gives **for the whole object** in the layout. On Qlik Sense May 2026, `=Only(ThreadId)` in
+Badge text reached the layout as `'-'`. The sync read the layout and copied `'-'` into the cube, where it
+gives nothing for any message: no badge anywhere, and no error.
+
+**Rule:** the sync reads `chatbox.attrs` from the object properties, where the formula is still whole
+(`formulaOf` in `src/qix/sync-attrs.js`), never from the layout. The engine takes an attribute expression
+with or without a leading `=`. _Guard: `test/unit/sync-attrs.test.js`._
+
+## 34. Clearing a panel field leaves an empty string behind
+
+The sync never lets an empty panel wipe expressions set outside it, through the API or an import. It took
+a bag of blanks for such a panel, but on Qlik Sense May 2026 clearing a field stores `''` and keeps the
+key, so clearing the only field filled in left its expression in the cube, on every message.
+
+A panel that was never typed into has no `chatbox.attrs` at all: not when its section opens, and not when
+other settings are saved through the panel.
+
+**Rule:** only a bag with no value in it, not even `''`, is a panel never filled in (`isBagUnset` in
+`src/qix/sync-attrs.js`). A bag of blanks is a panel that was emptied, and its blanks are written.
+_Guard: `test/unit/sync-attrs.test.js`._
+
+## 35. Qlik's true is -1
+
+A comparison such as `Only([Direction]) = 'outbound'` gives **-1** where it holds and 0 where it does not.
+**Own message (1/0)** took only 1 as the right side, so every match was ignored while every 0 still
+pinned its message left.
+
+**Rule:** `ownMessageHint` in `src/chat/sanitize.js` reads 1 and -1 as the right side, 0 as the left and
+anything else as no hint, before a message's rows are collapsed, so the rows agree whichever way they say
+true. _Guard: `test/unit/sanitize.test.js`, `test/unit/normalize.test.js`._
+
+## 36. Unix time in seconds is not a Qlik date
+
+`qlikTimeToEpochMs` took any value below 1e11 for a day serial. Unix time in seconds, 1,788,855,124 for
+8 September 2026, then lands millions of years out, past what a `Date` can hold: every day separator read
+"NaN-NaN-NaN", and **Copy conversation as JSON** threw in `toISOString`.
+
+**Rule:** Qlik dates end on 31 December 9999, day serial 2,958,465, so a larger value is Unix time:
+seconds below 1e11, milliseconds from there (`isUnixTime`), and a real instant either way. A result no
+`Date` can hold is no timestamp. _Guard: `test/unit/sanitize.test.js`, `test/unit/time-zones.test.js`,
+`test/unit/conversation-export.test.js`._

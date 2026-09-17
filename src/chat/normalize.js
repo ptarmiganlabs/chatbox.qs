@@ -30,7 +30,8 @@ import * as cell from '../qix/read-cell';
 import {
     NULL_SENTINEL,
     attrText,
-    isEpochMs,
+    isUnixTime,
+    ownMessageHint,
     parseMediaRefs,
     qlikTimeToEpochMs,
     safeColor,
@@ -153,9 +154,9 @@ function readRecord(row, i, ctx) {
         authorElem: cell.elem(authorCell),
         avatar: safeUrl(attrValue(idCell, ctx.attrMap, ATTR_IDS.AVATAR)?.qText),
         ts: qlikTimeToEpochMs(tsValue?.qNum),
-        // A day serial is a wall-clock time with no time zone; epoch milliseconds are a real instant,
-        // dated by the reader's clock. Only grouping.js's wallClockOf reads the difference.
-        tsInstant: isEpochMs(tsValue?.qNum),
+        // A day serial is a wall-clock time with no time zone; Unix time is a real instant, dated by the
+        // reader's clock. Only grouping.js's wallClockOf reads the difference.
+        tsInstant: isUnixTime(tsValue?.qNum),
         tsText: attrText(attrValue(idCell, ctx.attrMap, ATTR_IDS.TS_TEXT)),
         threadId: threadCell ? cell.optionalText(threadCell) : null,
         threadElem: threadCell ? cell.elem(threadCell) : -1,
@@ -170,7 +171,8 @@ function readRecord(row, i, ctx) {
             .filter((m) => m.ref),
         accent: safeColor(attrValue(idCell, ctx.attrMap, ATTR_IDS.ACCENT)),
         badge: attrText(attrValue(idCell, ctx.attrMap, ATTR_IDS.BADGE)),
-        sideHint: attrValue(idCell, ctx.attrMap, ATTR_IDS.SIDE)?.qNum ?? null,
+        // 1, 0 or null: taking Qlik's true (-1) as 1 here keeps rows of one message agreeing.
+        sideHint: ownMessageHint(attrValue(idCell, ctx.attrMap, ATTR_IDS.SIDE)),
         kpis: ctx.kpiCols.map((column) => ({
             key: column.cId || `msr-${column.col}`,
             label: column.label,

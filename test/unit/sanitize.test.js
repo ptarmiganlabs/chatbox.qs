@@ -2,7 +2,8 @@ import { describe, it, expect } from 'vitest';
 import {
     argbToHex,
     attrText,
-    isEpochMs,
+    isUnixTime,
+    ownMessageHint,
     parseMediaRefs,
     qlikTimeToEpochMs,
     safeColor,
@@ -124,6 +125,32 @@ describe('attrText', () => {
     });
 });
 
+describe('ownMessageHint', () => {
+    it('takes 1 and Qlik’s true, -1, as the right side', () => {
+        // Regression: `Only([Direction]) = 'outbound'` returns -1 where it matches. Only 1 counted, so
+        // each match was ignored while every 0 still pinned a message left.
+        expect(ownMessageHint({ qText: '1', qNum: 1 })).toBe(1);
+        expect(ownMessageHint({ qText: '-1', qNum: -1 })).toBe(1);
+    });
+
+    it('takes 0, which false is too, as the left side', () => {
+        expect(ownMessageHint({ qText: '0', qNum: 0 })).toBe(0);
+    });
+
+    it('leaves anything else to the layout', () => {
+        for (const value of [
+            null,
+            undefined,
+            {},
+            { qNum: 'NaN' },
+            { qText: '1', qNum: 'NaN' },
+            { qNum: 2 },
+        ]) {
+            expect(ownMessageHint(value)).toBeNull();
+        }
+    });
+});
+
 describe('qlikTimeToEpochMs', () => {
     it('converts a Qlik DAY SERIAL to epoch milliseconds', () => {
         // Verified against the live engine: Num(Min(SentAt)) for 2026-09-08
@@ -168,24 +195,51 @@ describe('qlikTimeToEpochMs', () => {
     });
 });
 
-describe('isEpochMs', () => {
-    it('tells epoch milliseconds, a real instant, from a day serial', () => {
-        expect(isEpochMs(1788855124000)).toBe(true);
-        expect(isEpochMs(1e11)).toBe(true);
-        expect(isEpochMs(46273.341712963)).toBe(false);
-        expect(isEpochMs(0)).toBe(false);
+describe('qlikTimeToEpochMs — Unix time in seconds', () => {
+    it('reads a value too large for a Qlik date as seconds since 1970', () => {
+        // Regression: 1,788,855,124 was read as a day serial, millions of years out. The day
+        // separators read "NaN-NaN-NaN", and copying the conversation as JSON threw.
+        expect(new Date(qlikTimeToEpochMs(1788855124)).toISOString()).toBe(
+            '2026-09-08T08:12:04.000Z'
+        );
+        expect(qlikTimeToEpochMs(1788855124.5)).toBe(1788855124500);
     });
 
-    it('draws the line where qlikTimeToEpochMs stops converting', () => {
-        for (const value of [1e11, -1e11, 99999999999]) {
-            expect(isEpochMs(value)).toBe(qlikTimeToEpochMs(value) === value);
+    it('still reads the last day a Qlik date can hold as a day serial', () => {
+        // 31 December 9999 is day serial 2,958,465, and its last minute is still that day.
+        expect(qlikTimeToEpochMs(2958465)).toBe(Date.UTC(9999, 11, 31));
+        expect(new Date(qlikTimeToEpochMs(2958465.999)).getUTCFullYear()).toBe(9999);
+        expect(qlikTimeToEpochMs(2958466)).toBe(2958466000);
+    });
+
+    it('gives no timestamp for a value no Date can hold, rather than an invalid one', () => {
+        // Unix time in nanoseconds: a Date reaches 8.64e15 ms either side of 1970.
+        expect(qlikTimeToEpochMs(1788855124000000000)).toBeNull();
+        expect(qlikTimeToEpochMs(-1e16)).toBeNull();
+        expect(qlikTimeToEpochMs(8.64e15)).toBe(8.64e15);
+    });
+});
+
+describe('isUnixTime', () => {
+    it('tells Unix time, a real instant, from a day serial', () => {
+        expect(isUnixTime(1788855124000)).toBe(true);
+        expect(isUnixTime(1788855124)).toBe(true);
+        expect(isUnixTime(1e11)).toBe(true);
+        expect(isUnixTime(46273.341712963)).toBe(false);
+        expect(isUnixTime(2958465.999)).toBe(false);
+        expect(isUnixTime(0)).toBe(false);
+    });
+
+    it('draws the line where qlikTimeToEpochMs stops reading a day serial', () => {
+        const asSerial = (value) => Math.round((value - 25569) * 86400000);
+        for (const value of [46273.34, 2958465, 2958465.999, 2958466, -2958466, 1788855124, 1e11]) {
+            expect(isUnixTime(value)).toBe(qlikTimeToEpochMs(value) !== asSerial(value));
         }
-        expect(isEpochMs(99999999999)).toBe(false);
     });
 
     it('is false for anything that is not a finite number', () => {
         for (const value of [null, undefined, Number.NaN, Infinity, '1788855124000']) {
-            expect(isEpochMs(value)).toBe(false);
+            expect(isUnixTime(value)).toBe(false);
         }
     });
 });

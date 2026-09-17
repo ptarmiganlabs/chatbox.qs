@@ -177,11 +177,15 @@ describe('a Qlik timestamp keeps the date the data holds in every time zone', ()
     });
 });
 
-describe('epoch milliseconds are a real instant, dated by the reader’s clock', () => {
-    // 21:30 and 22:30 UTC on 8 September.
+describe.each([
+    ['milliseconds', 1],
+    ['seconds', 1000],
+])('Unix time in %s is a real instant, dated by the reader’s clock', (_, perUnit) => {
+    // 21:30 and 22:30 UTC on 8 September. In seconds, it was once read as a day serial millions of
+    // years out, and every separator read "NaN-NaN-NaN".
     const INSTANT_ROWS = [
-        row('1', 'A', Date.UTC(2026, 8, 8, 21, 30), '21:30'),
-        row('2', 'A', Date.UTC(2026, 8, 8, 22, 30), '22:30'),
+        row('1', 'A', Date.UTC(2026, 8, 8, 21, 30) / perUnit, '21:30'),
+        row('2', 'A', Date.UTC(2026, 8, 8, 22, 30) / perUnit, '22:30'),
     ];
 
     it.each([

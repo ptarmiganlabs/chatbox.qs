@@ -19,8 +19,9 @@ export function behaviourSection() {
                 component: 'dropdown',
                 label: 'Message order',
                 description:
-                    'Chronological order drives grouping and date separators, so it is set here ' +
-                    'rather than through the generic sorting panel.',
+                    'Messages follow the Message ID in numeric order, so ids should rise over time; ' +
+                    'the timestamp does not reorder them. Newest first starts at the other end, and ' +
+                    'keeps the newest rows when Maximum messages cuts them short.',
                 defaultValue: 'oldest',
                 options: [
                     { value: 'oldest', label: 'Oldest first' },
