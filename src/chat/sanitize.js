@@ -152,16 +152,33 @@ export function attrText(value) {
 const EPOCH_MS_FLOOR = 1e11;
 
 /**
- * Report whether a timestamp value is already epoch milliseconds.
+ * The smallest timestamp taken as Unix time. Qlik dates end on 31 December 9999,
+ * day serial 2,958,465, so nothing from the day after is a Qlik date.
  *
- * Epoch milliseconds count from an instant, so they are a real moment in time,
- * the same in every time zone. A Qlik day serial is not: see qlikTimeToEpochMs.
+ * Below EPOCH_MS_FLOOR such a value is Unix time in seconds: 1,788,855,124 is
+ * 8 September 2026. Read as a day serial, it lands millions of years out, past
+ * what a Date can hold: the day separators read "NaN-NaN-NaN", and copying the
+ * conversation as JSON threw.
+ */
+const UNIX_TIME_FLOOR = 2958466;
+
+/** The furthest a Date reaches from 1970, either way: 100,000,000 days. */
+const MAX_DATE_MS = 8.64e15;
+
+/**
+ * Report whether a timestamp value is Unix time rather than a Qlik day serial.
+ *
+ * Unix time, in seconds or milliseconds since 1970, counts from an instant, so it
+ * is a real moment in time, the same in every time zone. A Qlik day serial is
+ * not: see qlikTimeToEpochMs.
  *
  * @param {?number} value - The numeric value from the timestamp attribute expression.
- * @returns {boolean} True for a finite value in the epoch-millisecond range.
+ * @returns {boolean} True for a finite value too large to be a Qlik date.
  */
-export function isEpochMs(value) {
-    return typeof value === 'number' && Number.isFinite(value) && Math.abs(value) >= EPOCH_MS_FLOOR;
+export function isUnixTime(value) {
+    return (
+        typeof value === 'number' && Number.isFinite(value) && Math.abs(value) >= UNIX_TIME_FLOOR
+    );
 }
 
 /**
@@ -179,22 +196,32 @@ export function isEpochMs(value) {
  * UTC getters. Local getters shift it by the reader's zone, onto the wrong day
  * near midnight; `wallClockOf` in grouping.js is the one place that reads it back.
  *
- * A value already in epoch milliseconds (see isEpochMs) is passed through. It is
- * a real instant, not a wall-clock time, which is why normalize marks it.
+ * Unix time (see isUnixTime) is a real instant, not a wall-clock time, which is
+ * why normalize marks it. Milliseconds are passed through, and seconds become
+ * milliseconds.
  *
  * @param {?number} value - The numeric value from the timestamp attribute expression.
- * @returns {?number} Milliseconds: a serial's wall-clock time read as UTC, or the
- *     epoch milliseconds passed through; null when there is no usable value.
+ * @returns {?number} Milliseconds: a serial's wall-clock time read as UTC, or Unix
+ *     time in milliseconds; null when there is no usable value, or none a Date can hold.
  */
 export function qlikTimeToEpochMs(value) {
     if (typeof value !== 'number' || !Number.isFinite(value)) return null;
-    if (isEpochMs(value)) return value;
-    // 25569 is the Qlik/Excel day serial for 1970-01-01.
-    //
-    // Rounded, because the multiplication does not land on a whole millisecond:
-    // a serial for midnight came back as ...999.9995, which Date truncates to
-    // one millisecond BEFORE midnight — putting the message under the previous
-    // day's separator. Sub-millisecond error is invisible until something groups
-    // by day, and then it is wrong only for messages exactly on the boundary.
-    return Math.round((value - 25569) * 86400000);
+    let ms;
+    if (Math.abs(value) >= EPOCH_MS_FLOOR) {
+        ms = value;
+    } else if (isUnixTime(value)) {
+        ms = Math.round(value * 1000);
+    } else {
+        // 25569 is the Qlik/Excel day serial for 1970-01-01.
+        //
+        // Rounded, because the multiplication does not land on a whole millisecond:
+        // a serial for midnight came back as ...999.9995, which Date truncates to
+        // one millisecond BEFORE midnight — putting the message under the previous
+        // day's separator. Sub-millisecond error is invisible until something groups
+        // by day, and then it is wrong only for messages exactly on the boundary.
+        ms = Math.round((value - 25569) * 86400000);
+    }
+    // Further out, a Date is invalid: its day is NaN and toISOString throws. Unix
+    // time in nanoseconds gets there, so it is no usable value rather than a crash.
+    return Math.abs(ms) <= MAX_DATE_MS ? ms : null;
 }

@@ -122,18 +122,20 @@ describe('normalize', () => {
             expect(m.media[0]).toMatchObject({ kind: 'image', ref: '/content/Default/pic.png' });
         });
 
-        it('marks a timestamp that came as epoch milliseconds as an instant, and a day serial as not', () => {
-            // A day serial is a wall-clock time with no time zone; epoch milliseconds are a real instant.
-            // The day separators read the two differently (GOTCHAS 32).
-            const layout = makeLayout({ qcy: 3, attrIds: [ATTR_IDS.TS] });
+        it('marks a timestamp that came as Unix time as an instant, and a day serial as not', () => {
+            // A day serial is a wall-clock time with no time zone; Unix time, in milliseconds or
+            // seconds, is a real instant. The day separators read the two differently (GOTCHAS 32).
+            const layout = makeLayout({ qcy: 4, attrIds: [ATTR_IDS.TS] });
             const rows = [
                 row({ id: '1', author: 'Ada', text: 'a', attrs: [{ qNum: 46273.97916666667 }] }),
                 row({ id: '2', author: 'Ada', text: 'b', attrs: [{ qNum: 1788909000000 }] }),
-                row({ id: '3', author: 'Ada', text: 'c', attrs: [{ qNum: 'NaN' }] }),
+                row({ id: '3', author: 'Ada', text: 'c', attrs: [{ qNum: 1788909000 }] }),
+                row({ id: '4', author: 'Ada', text: 'd', attrs: [{ qNum: 'NaN' }] }),
             ];
-            const [serial, instant, none] = normalize({ layout, rows }).messages;
+            const [serial, milliseconds, seconds, none] = normalize({ layout, rows }).messages;
             expect(serial).toMatchObject({ ts: Date.UTC(2026, 8, 8, 23, 30), tsInstant: false });
-            expect(instant).toMatchObject({ ts: 1788909000000, tsInstant: true });
+            expect(milliseconds).toMatchObject({ ts: 1788909000000, tsInstant: true });
+            expect(seconds).toMatchObject({ ts: 1788909000000, tsInstant: true });
             expect(none).toMatchObject({ ts: null, tsInstant: false });
         });
 
