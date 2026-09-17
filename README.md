@@ -314,11 +314,13 @@ messages the object shows under the current selections, in the order shown.
   and, while highlighting is on, its highlights with their values, categories and offsets — into the
   body, or into `plainText`, the text a markdown message shows — after a summary of the highlight field
   and the counts per category. Search matches are not included.
-- A message's `time` is its **Timestamp (numeric)** in ISO 8601, e.g. `"2026-09-08T23:30:00.000Z"`. A
-  Qlik timestamp has no time zone, so `time` is the date and time the data holds, the same whoever
-  copies it, and the `Z` does not mean UTC: read it as a local time in whatever zone the data was
-  recorded in. Only a timestamp in epoch milliseconds (see [Timestamps and days](#timestamps-and-days))
-  is a real moment, written in UTC. `timeText` is the time as the object shows it.
+- A message's `time` is its **Timestamp (numeric)** in ISO 8601. A Qlik timestamp has no time zone, and
+  neither has `time`, e.g. `"2026-09-08T23:30:00.000"`: the date and time the data holds, the same
+  whoever copies it, a local time in whatever zone the data was recorded in. Only a timestamp in epoch
+  milliseconds (see [Timestamps and days](#timestamps-and-days)) is a real moment, written in UTC with a
+  `Z`, e.g. `"2026-09-08T21:30:00.000Z"`. `timeText` is the time as the object shows it.
+- `schemaVersion` is 2. Version 1, in 0.4.0, wrote a `Z` on every `time`, UTC or not. `exportedAt`, when
+  the copy was made, is always UTC.
 
 Message text can also be selected and copied with the mouse; a drag that selects text does not count
 as a click on the message.
