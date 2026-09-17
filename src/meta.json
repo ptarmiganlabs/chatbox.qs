@@ -2,7 +2,7 @@
     "name": "Chatbox.qs",
     "description": "Render chat-style conversations from the Qlik Sense data model",
     "type": "visualization",
-    "version": "0.5.0",
+    "version": "0.5.1",
     "icon": "chat",
     "preview": "preview.png",
     "author": "Göran Sander, Ptarmigan Labs",
