@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.5.1](https://github.com/ptarmiganlabs/chatbox.qs/compare/chatbox-qs-v0.5.0...chatbox-qs-v0.5.1) (2026-09-17)
+
+
+### Bug Fixes
+
+* clear a metadata expression when its last field is cleared ([a225dd6](https://github.com/ptarmiganlabs/chatbox.qs/commit/a225dd6b0c67771d72809cc283f03b1bc6b72a7a))
+* copy a metadata formula typed with = instead of its result ([4754bda](https://github.com/ptarmiganlabs/chatbox.qs/commit/4754bda322753967470c3502c39d917337cd592e))
+* put a message on the right when Own message is Qlik's true ([a9ea674](https://github.com/ptarmiganlabs/chatbox.qs/commit/a9ea674a1b9d5c328f5684b90c6d9695fd535547))
+* put messages in time order when Timestamp (numeric) is set ([3c6464a](https://github.com/ptarmiganlabs/chatbox.qs/commit/3c6464ae8418bd472cd663bdc1266342d0a1ed7f))
+* read a timestamp in Unix seconds as the moment it is ([6536283](https://github.com/ptarmiganlabs/chatbox.qs/commit/653628386dd73dbd4cb2c85224e1b70dcaca3116))
+* say in the panel that messages follow the Message ID, not the timestamp ([0c631a6](https://github.com/ptarmiganlabs/chatbox.qs/commit/0c631a6bb3ad0d26bc3cc5d78218a819eeba4ab3))
+
+
+### Documentation
+
+* describe Unix seconds, Qlik's true, = in metadata and message order ([c375097](https://github.com/ptarmiganlabs/chatbox.qs/commit/c375097dd9a04677cf150c7612d42f812cc7acb1))
+* say that messages follow the timestamp, and how the sort is applied ([332367c](https://github.com/ptarmiganlabs/chatbox.qs/commit/332367c01181e786f40395722d1c493077756032))
+
 ## [0.5.0](https://github.com/ptarmiganlabs/chatbox.qs/compare/chatbox-qs-v0.4.0...chatbox-qs-v0.5.0) (2026-09-17)
 
 
