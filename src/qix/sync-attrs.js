@@ -7,8 +7,15 @@
  * So the panel writes to `chatbox.attrs.*` and this module reconciles that into
  * the cube, where the engine can actually evaluate it per row.
  *
- * Two rules keep this safe:
- *  - It only writes when something genuinely differs, so it cannot loop.
+ * Three rules keep this safe:
+ *  - It only writes when something genuinely differs, so it cannot loop. The guard
+ *    compares what the engine holds against what was built for it, and GetProperties
+ *    leaves out a q-property whose value is the default (docs/GOTCHAS.md entry 38):
+ *    an empty slot comes back with no `qExpression` at all where the build has ''.
+ *    Both sides are normalised, or the guard never holds for a real object and every
+ *    layout change in edit mode writes again.
+ *  - It writes the two paths it owns as patches, never the whole properties object
+ *    read moments earlier, so a panel edit made in between survives.
  *  - It only runs in edit mode. A consumer of a published app may have no write
  *    access, and a render that patches properties is hostile to export anyway.
  */
@@ -54,7 +61,24 @@ export function buildAttributeExpressions(attrs = {}) {
 }
 
 /**
+ * Read one attribute expression's formula, however the engine chose to store it.
+ *
+ * GetProperties leaves out a q-property whose value is the default, so an unset slot comes back as
+ * `{ id, qAttribute: true }` with no `qExpression` key, while {@link buildAttributeExpressions}
+ * always writes one. Comparing the two raw makes `undefined === ''` fail for every empty slot.
+ *
+ * @param {object} [entry] - One entry of a qAttributeExpressions array.
+ * @returns {string} Its expression, or '' when it has none.
+ */
+function expressionOf(entry) {
+    return typeof entry?.qExpression === 'string' ? entry.qExpression : '';
+}
+
+/**
  * Report whether a dimension's attribute expressions already match the bag.
+ *
+ * Both sides are normalised through {@link expressionOf}: a missing `qExpression` and an empty one
+ * are the same state, and the engine returns the first where the build emits the second.
  *
  * @param {object[]} [current] - The dimension's current qAttributeExpressions.
  * @param {object[]} desired - The array {@link buildAttributeExpressions} produced.
@@ -63,7 +87,7 @@ export function buildAttributeExpressions(attrs = {}) {
 export function isInSync(current, desired) {
     if (!Array.isArray(current) || current.length !== desired.length) return false;
     return desired.every(
-        (want, i) => current[i]?.id === want.id && current[i]?.qExpression === want.qExpression
+        (want, i) => current[i]?.id === want.id && expressionOf(current[i]) === expressionOf(want)
     );
 }
 
@@ -101,11 +125,30 @@ export function isBagUnset(attrs) {
 }
 
 /**
+ * Build a patch that replaces the value at one property path.
+ *
+ * A hard patch, not the soft one `createTimeOrder` applies: this is an edit-mode change, and it
+ * belongs in the saved object like any other property-panel edit.
+ *
+ * @param {string} qPath - The property path to replace.
+ * @param {*} value - The value to put there; the engine takes it as JSON text.
+ * @returns {object} One patch, as applyPatches wants it.
+ */
+function replacePatch(qPath, value) {
+    return { qOp: 'replace', qPath, qValue: JSON.stringify(value) };
+}
+
+/**
  * Reconcile `chatbox.attrs` into the message-id dimension's attribute expressions, and save the sort that
  * puts the messages in time order.
  *
  * The sort follows the timestamp the dimension ends up with, whether the panel set it or it was set
  * outside the panel (src/qix/time-order.js). Without a timestamp the sort is left as it is.
+ *
+ * Both go in as patches on the two paths this owns. Writing back the whole properties object would
+ * make every render in edit mode an authority on every property, and send one read moments earlier —
+ * so a panel edit made between the read and the write would be undone by it, the more easily the
+ * further away the server is.
  *
  * @param {object} options - Inputs.
  * @param {object} options.model - The enigma GenericObject model.
@@ -139,16 +182,25 @@ export async function syncAttributeExpressions({ model, layout, canEdit }) {
         const keep =
             inSync ||
             (isBagUnset(attrs) && hasConfiguredExpressions(dimension.qAttributeExpressions));
-        if (!keep) dimension.qAttributeExpressions = desired;
 
-        const expression = timestampExpressionOf(dimension);
+        // The sort follows the expressions this run leaves behind, so a timestamp typed into the
+        // panel and the sort by it are one write rather than two renders.
+        const expression = timestampExpressionOf({
+            qAttributeExpressions: keep ? dimension.qAttributeExpressions : desired,
+        });
         const resort = Boolean(expression) && !isSortedBy(dimension, expression);
-        if (resort) {
-            dimension.qDef = { ...dimension.qDef, qSortCriterias: timeSortCriteria(expression) };
-        }
 
-        if (keep && !resort) return false;
-        await model.setProperties(properties);
+        const dimensionPath = `/qHyperCubeDef/qDimensions/${idColumn.col}`;
+        const patches = [];
+        if (!keep) patches.push(replacePatch(`${dimensionPath}/qAttributeExpressions`, desired));
+        if (resort) {
+            patches.push(
+                replacePatch(`${dimensionPath}/qDef/qSortCriterias`, timeSortCriteria(expression))
+            );
+        }
+        if (!patches.length) return false;
+
+        await model.applyPatches(patches, false);
         logger.debug('synced attribute expressions and time order onto the message-id dimension');
         return true;
     } catch (err) {
