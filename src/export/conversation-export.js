@@ -22,8 +22,12 @@ import { conversationsShownText } from '../chat/lanes';
 import { HIGHLIGHT_KINDS } from '../qix/highlight-source';
 import { BLOCK_SEPARATOR } from '../highlight/markdown-projection';
 
-/** The version of the JSON's shape; raised when a field changes meaning or goes away. */
-export const EXPORT_SCHEMA_VERSION = 1;
+/**
+ * The version of the JSON's shape; raised when a field changes meaning or goes away.
+ *
+ * 2: a Qlik timestamp's `time` has no `Z`, which version 1 wrote on every `time`, UTC or not.
+ */
+export const EXPORT_SCHEMA_VERSION = 2;
 
 /** The rows the message limit can keep, as `normalize` records them in `meta.truncatedTo`. */
 const KEPT_ROWS = new Set(['oldest', 'newest']);
@@ -126,6 +130,23 @@ function highlightsJson(highlights) {
 }
 
 /**
+ * Write a message's time for the JSON, in ISO 8601.
+ *
+ * A Qlik timestamp has no time zone, so neither has its time: the date and time the data holds, the same
+ * whoever copies it, and read by a program as a local time. A timestamp that came as epoch milliseconds
+ * (`tsInstant`) is a real moment, and is written in UTC with a `Z`.
+ *
+ * @param {object} message - The message.
+ * @returns {?string} For example "2026-09-08T23:30:00.000", or "2026-09-08T21:30:00.000Z" for an instant;
+ *     null when the message has no time.
+ */
+function timeJson(message) {
+    if (!Number.isFinite(message.ts)) return null;
+    const utc = new Date(message.ts).toISOString();
+    return message.tsInstant === true ? utc : utc.slice(0, -1);
+}
+
+/**
  * Write one message for the JSON.
  *
  * @param {object} message - The message.
@@ -143,9 +164,7 @@ function messageJson(message, entry, projectionOf) {
             ? message.recipients.map((recipient) => recipient.label)
             : null,
         thread: message.threadId ?? null,
-        // A Qlik timestamp has no time zone: this is its wall-clock time, and the Z does not mean UTC.
-        // Only a timestamp that came as epoch milliseconds (`tsInstant`) is a real instant, in UTC.
-        time: Number.isFinite(message.ts) ? new Date(message.ts).toISOString() : null,
+        time: timeJson(message),
         timeText: message.tsText ?? null,
         kind: message.kind ?? null,
         badge: message.badge ?? null,
