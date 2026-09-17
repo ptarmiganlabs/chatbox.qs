@@ -460,3 +460,22 @@ highest ids; a sort in the browser could only reorder rows the limit had already
 it as a soft patch — session only, and allowed without edit rights, so a published app is sorted for every
 reader — once per object, before any row is read, and never in a snapshot. _Guard:
 `test/unit/time-order.test.js`, `test/unit/sync-attrs.test.js`._
+
+## 38. GetProperties leaves out a q-property whose value is the default
+
+An attribute expression with nothing in it comes back from the engine as `{ "qAttribute": true, "id":
+"avatar" }` — no `qExpression` key at all. On the lab, object `AaesP` in the Claude scratch app returns all
+six empty metadata slots that way, while `"subtitle": ""` in the very same properties survives. So it is
+the engine dropping a default-valued **q**-property, not the transport dropping empty strings.
+
+`buildAttributeExpressions` emits `qExpression: ''` for an unset slot, so the sync's no-op guard compared
+`undefined === ''` and never held for a real object. It wrote on every layout change in edit mode instead of
+once: each write a full properties object read moments earlier, which undoes a panel edit made in between —
+the wider the latency to the server, the wider that window. And if the engine answers a write that changed
+nothing with a change notification, the write brings the next layout, which brings the next write, with a
+data re-fetch each time round.
+
+**Rule:** an equality check against a definition built in the browser normalises both sides — a missing
+q-property and its default value are one state (`expressionOf` in `src/qix/sync-attrs.js`). And the sync
+patches the two paths it owns rather than writing the whole properties object back, so what it does not own
+cannot be clobbered by it. _Guard: `test/unit/sync-attrs.test.js`._
