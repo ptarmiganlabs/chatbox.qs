@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import {
     buildAttributeExpressions,
     formulaOf,
+    isBagUnset,
     isInSync,
     syncAttributeExpressions,
 } from '../../src/qix/sync-attrs';
@@ -83,6 +84,23 @@ describe('isInSync', () => {
         expect(isInSync(undefined, desired)).toBe(false);
         const reordered = [...desired].reverse();
         expect(isInSync(reordered, desired)).toBe(false);
+    });
+});
+
+describe('isBagUnset', () => {
+    it('is unset when no field has held a value', () => {
+        for (const attrs of [undefined, null, {}]) {
+            expect(isBagUnset(attrs)).toBe(true);
+        }
+    });
+
+    it('is set once a field has held a value, even after it was cleared', () => {
+        // Clearing a field on Qlik Sense May 2026 left its key behind as ''.
+        expect(isBagUnset({ badge: '' })).toBe(false);
+        expect(isBagUnset({ badge: 'Only(ThreadId)' })).toBe(false);
+        expect(isBagUnset({ badge: { qStringExpression: { qExpr: 'Only(ThreadId)' } } })).toBe(
+            false
+        );
     });
 });
 
@@ -226,5 +244,27 @@ describe('syncAttributeExpressions — clobber guard', () => {
             canEdit: true,
         });
         expect(wrote).toBe(true);
+    });
+
+    it('clears the expressions when the last field is cleared in the panel', async () => {
+        // Regression, seen on Qlik Sense May 2026: clearing Badge text, the only field filled in, left
+        // `badge: ''` in the bag. Taken for a panel never filled in, it kept the badge on every message.
+        const cleared = Object.fromEntries(ATTR_ORDER.map((id) => [id, '']));
+        const model = mkModel(
+            [
+                {
+                    qDef: { cId: 'd_msgid' },
+                    qAttributeExpressions: buildAttributeExpressions({ badge: 'Only(ThreadId)' }),
+                },
+            ],
+            cleared
+        );
+        const wrote = await syncAttributeExpressions({
+            model,
+            layout: layout([{ cId: 'd_msgid' }]),
+            canEdit: true,
+        });
+        expect(wrote).toBe(true);
+        expect(written(model).every((e) => e.qExpression === '')).toBe(true);
     });
 });

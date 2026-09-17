@@ -80,14 +80,23 @@ export function hasConfiguredExpressions(current) {
 }
 
 /**
- * Report whether the panel's metadata bag is entirely empty.
+ * Report whether the panel has never held a metadata value.
+ *
+ * On Qlik Sense May 2026, an object whose metadata fields were never typed into
+ * has no `chatbox.attrs` at all — not when the section is opened, and not when
+ * other settings are saved through the panel — while clearing a field leaves its
+ * key behind as ''. So a bag of blanks is a panel that was emptied, and its blanks
+ * are meant. Taking it for an unset panel kept the last expression cleared from
+ * the panel on every message.
  *
  * @param {object} [attrs] - The `chatbox.attrs` bag from the object properties.
- * @returns {boolean} True when nothing has been configured in the panel.
+ * @returns {boolean} True when no field has ever held a value.
  */
-export function isBagEmpty(attrs) {
+export function isBagUnset(attrs) {
     if (!attrs || typeof attrs !== 'object') return true;
-    return !Object.values(attrs).some((value) => formulaOf(value).trim());
+    return !Object.values(attrs).some(
+        (value) => typeof value === 'string' || (value !== null && typeof value === 'object')
+    );
 }
 
 /**
@@ -119,11 +128,11 @@ export async function syncAttributeExpressions({ model, layout, canEdit }) {
 
         if (isInSync(dimension.qAttributeExpressions, desired)) return false;
 
-        // Never let an empty panel wipe expressions that are already working.
-        // An object configured outside the panel — set by an API call, or
-        // imported — must not be blanked just because the bag it syncs from has
-        // not been filled in.
-        if (isBagEmpty(attrs) && hasConfiguredExpressions(dimension.qAttributeExpressions)) {
+        // Never let a panel that was never filled in wipe expressions that are
+        // already working. An object configured outside the panel — set by an API
+        // call, or imported — must not be blanked just because it has no bag to
+        // sync from. A panel whose fields were all cleared has one.
+        if (isBagUnset(attrs) && hasConfiguredExpressions(dimension.qAttributeExpressions)) {
             return false;
         }
 

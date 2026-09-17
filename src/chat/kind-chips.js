@@ -7,8 +7,8 @@
  *
  * The settings have one definition, used by the object properties, the panel's defaults and the render
  * code, as `src/highlight/settings.js` does for highlighting. They live under `chatbox.kindChips`, never
- * under `chatbox.attrs`: that bag is copied into the cube's attribute expressions, and a non-empty string
- * there would stop an empty panel from being told apart from one that was filled in (src/qix/sync-attrs.js).
+ * under `chatbox.attrs`: that bag is copied into the cube's attribute expressions, and any value there, even
+ * an empty one, would make a panel never filled in look like one that was (src/qix/sync-attrs.js).
  */
 
 /** The most chips a message can be set to show. */
