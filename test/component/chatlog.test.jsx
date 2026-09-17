@@ -109,6 +109,29 @@ describe('ChatLog date separators', () => {
         });
     });
 
+    it.each(ZONE_NAMES)(
+        'says Today and Yesterday by the clock a snapshot recorded, drawn in %s',
+        (zone) => {
+            // An export is drawn again on the server, on a clock of its own; a story is viewed later.
+            const messages = [
+                message({ id: '1', body: 'late', ts: at(2020, 2, 28, 23, 30) }),
+                message({ id: '2', body: 'early', ts: at(2020, 2, 29, 0, 30) }),
+            ];
+            // Taken at 00:40 on 29 February 2020 on the reader's clock.
+            const today = Date.UTC(2020, 1, 29, 0, 40);
+            const layout = {
+                snapshotData: { chatbox: { firstVisibleIndex: 0, openId: null, today } },
+            };
+            inTimeZone(zone, () => {
+                const { container } = renderList(
+                    <ChatLog conversation={conversation(messages)} settings={{}} layout={layout} />
+                );
+                const separators = [...container.querySelectorAll('[class*="separator"]')];
+                expect(separators.map((node) => node.textContent)).toEqual(['Yesterday', 'Today']);
+            });
+        }
+    );
+
     it('shows every message even when grouped', () => {
         // A groupCounts array that does not sum to the message count silently
         // drops messages off the end of the list.

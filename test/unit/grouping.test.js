@@ -9,12 +9,12 @@ import {
     wallClockOf,
 } from '../../src/chat/grouping';
 import { resolveDensity, DENSITIES } from '../../src/ui/density';
-import { ZONE_NAMES, inTimeZone } from '../helpers/time-zones';
+import { ZONE_NAMES, atClock, inTimeZone } from '../helpers/time-zones';
 
 /** A timestamp as a Qlik timestamp gives it: the milliseconds of a wall-clock time, read as UTC. */
 const at = (y, m, d, h = 12, min = 0) => Date.UTC(y, m - 1, d, h, min);
 
-/** The instant the reader's clock shows as a given time, in the zone the test runs in: a `now`. */
+/** The instant the machine's clock shows as a given time, in the zone the test runs in. */
 const local = (y, m, d, h = 12, min = 0) => new Date(y, m - 1, d, h, min).getTime();
 
 /** A day of this year as a day label writes it, in the test machine's locale. */
@@ -119,18 +119,31 @@ describe('localWallClock', () => {
 });
 
 describe('dayLabel', () => {
-    const now = local(2026, 9, 10, 9, 0);
+    // The reader's wall clock: 09:00 on 10 September.
+    const today = at(2026, 9, 10, 9, 0);
 
     it.each(ZONE_NAMES)('names today and yesterday by the reader’s clock in %s', (zone) => {
         inTimeZone(zone, () => {
-            // 09:00 on 10 September on the reader's clock, wherever the reader is.
-            const nine = local(2026, 9, 10, 9, 0);
-            expect(dayLabel(at(2026, 9, 10, 0, 30), nine)).toBe('Today');
-            expect(dayLabel(at(2026, 9, 10, 23, 30), nine)).toBe('Today');
-            expect(dayLabel(at(2026, 9, 9, 0, 30), nine)).toBe('Yesterday');
-            expect(dayLabel(at(2026, 9, 9, 23, 30), nine)).toBe('Yesterday');
-            expect(dayLabel(at(2026, 9, 8, 23, 30), nine)).toBe(written(2026, 9, 8));
-            expect(dayLabel(at(2026, 9, 11, 0, 30), nine)).toBe(written(2026, 9, 11));
+            // 09:00 on 10 September on the machine's clock, wherever the machine is.
+            atClock(local(2026, 9, 10, 9, 0), () => {
+                expect(dayLabel(at(2026, 9, 10, 0, 30))).toBe('Today');
+                expect(dayLabel(at(2026, 9, 10, 23, 30))).toBe('Today');
+                expect(dayLabel(at(2026, 9, 9, 0, 30))).toBe('Yesterday');
+                expect(dayLabel(at(2026, 9, 9, 23, 30))).toBe('Yesterday');
+                expect(dayLabel(at(2026, 9, 8, 23, 30))).toBe(written(2026, 9, 8));
+                expect(dayLabel(at(2026, 9, 11, 0, 30))).toBe(written(2026, 9, 11));
+            });
+        });
+    });
+
+    // A snapshot records the reader's wall clock, and an export draws it again on a server that may be
+    // in another zone, on another day.
+    it.each(ZONE_NAMES)('takes today as a wall clock, whatever the machine’s zone: %s', (zone) => {
+        inTimeZone(zone, () => {
+            const taken = at(2026, 9, 10, 0, 30);
+            expect(dayLabel(at(2026, 9, 10, 23, 30), taken)).toBe('Today');
+            expect(dayLabel(at(2026, 9, 9, 0, 30), taken)).toBe('Yesterday');
+            expect(dayLabel(at(2026, 9, 11, 0, 30), taken)).toBe(written(2026, 9, 11));
         });
     });
 
@@ -143,34 +156,35 @@ describe('dayLabel', () => {
         ['America/New_York', 'as the clocks go back', [2026, 11, 1, 23, 30], [2026, 10, 31]],
     ])('names yesterday in %s on the day %s', (zone, _when, clock, yesterday) => {
         inTimeZone(zone, () => {
-            const reading = local(...clock);
-            expect(dayLabel(at(...clock), reading)).toBe('Today');
-            expect(dayLabel(at(...yesterday), reading)).toBe('Yesterday');
+            atClock(local(...clock), () => {
+                expect(dayLabel(at(...clock))).toBe('Today');
+                expect(dayLabel(at(...yesterday))).toBe('Yesterday');
+            });
         });
     });
 
     it.each(ZONE_NAMES)('writes the date the data holds, not the reader’s, in %s', (zone) => {
         inTimeZone(zone, () => {
-            const later = local(2026, 9, 17, 12);
+            const later = at(2026, 9, 17, 12);
             expect(dayLabel(at(2026, 9, 8, 23, 30), later)).toBe(written(2026, 9, 8));
             expect(dayLabel(at(2026, 9, 9, 0, 30), later)).toBe(written(2026, 9, 9));
         });
     });
 
     it('formats an older day in the same year without the year', () => {
-        const label = dayLabel(at(2026, 3, 12), now);
+        const label = dayLabel(at(2026, 3, 12), today);
         expect(label).not.toBe('Today');
         expect(label).not.toContain('2026');
     });
 
     it('includes the year for a different year', () => {
-        expect(dayLabel(at(2024, 3, 12), now)).toContain('2024');
+        expect(dayLabel(at(2024, 3, 12), today)).toContain('2024');
     });
 
     it.each(ZONE_NAMES)('names a past year by the day the data holds, in %s', (zone) => {
         inTimeZone(zone, () => {
             // New Year's Eve at 23:30 is last year's, and a minute past midnight is this year's.
-            const january = local(2027, 1, 5, 12);
+            const january = at(2027, 1, 5, 12);
             expect(dayLabel(at(2026, 12, 31, 23, 30), january)).toContain('2026');
             expect(dayLabel(at(2027, 1, 1, 0, 1), january)).not.toContain('2027');
         });
@@ -178,20 +192,20 @@ describe('dayLabel', () => {
 });
 
 describe('buildDayGroups', () => {
-    const now = local(2026, 9, 10, 9, 0);
+    const today = at(2026, 9, 10, 9, 0);
     const m = (ts) => ({ ts });
 
     it('returns null when nothing can be dated', () => {
-        expect(buildDayGroups([], now)).toBeNull();
-        expect(buildDayGroups([m(null), m(null)], now)).toBeNull();
-        expect(buildDayGroups([m(Number.NaN)], now)).toBeNull();
+        expect(buildDayGroups([], today)).toBeNull();
+        expect(buildDayGroups([m(null), m(null)], today)).toBeNull();
+        expect(buildDayGroups([m(Number.NaN)], today)).toBeNull();
     });
 
     it.each(ZONE_NAMES)('keeps 23:30 and 00:30 on the days the data holds in %s', (zone) => {
         inTimeZone(zone, () => {
             const late = m(at(2026, 9, 8, 23, 30));
             const early = m(at(2026, 9, 9, 0, 30));
-            const out = buildDayGroups([late, early], local(2026, 9, 17, 12));
+            const out = buildDayGroups([late, early], at(2026, 9, 17, 12));
             expect(out).toEqual({
                 groupCounts: [1, 1],
                 labels: [written(2026, 9, 8), written(2026, 9, 9)],
@@ -207,7 +221,7 @@ describe('buildDayGroups', () => {
             // 21:30 and 22:30 UTC: 23:30 and 00:30 in Stockholm, the same evening in New York.
             const instants = [Date.UTC(2026, 8, 8, 21, 30), Date.UTC(2026, 8, 8, 22, 30)];
             const messages = instants.map((ts) => ({ ts, tsInstant: true }));
-            expect(buildDayGroups(messages, now).groupCounts).toEqual(groupCounts);
+            expect(buildDayGroups(messages, today).groupCounts).toEqual(groupCounts);
         });
     });
 
@@ -219,7 +233,7 @@ describe('buildDayGroups', () => {
                 m(at(2026, 9, 9, 9, 0)),
                 m(at(2026, 9, 10, 8, 0)),
             ],
-            now
+            today
         );
         expect(out.groupCounts).toEqual([2, 1, 1]);
         expect(out.labels[2]).toBe('Today');
@@ -228,19 +242,22 @@ describe('buildDayGroups', () => {
 
     it('group counts always sum to the message count', () => {
         const messages = [m(at(2026, 9, 8)), m(null), m(at(2026, 9, 9)), m(null)];
-        const out = buildDayGroups(messages, now);
+        const out = buildDayGroups(messages, today);
         // GroupedVirtuoso renders exactly sum(groupCounts) items; a mismatch
         // silently drops messages off the end of the list.
         expect(out.groupCounts.reduce((a, b) => a + b, 0)).toBe(messages.length);
     });
 
     it('folds an undated leading message into the first group', () => {
-        const out = buildDayGroups([m(null), m(at(2026, 9, 8))], now);
+        const out = buildDayGroups([m(null), m(at(2026, 9, 8))], today);
         expect(out.groupCounts.reduce((a, b) => a + b, 0)).toBe(2);
     });
 
     it('starts a new group when the day changes back and forth', () => {
-        const out = buildDayGroups([m(at(2026, 9, 8)), m(at(2026, 9, 9)), m(at(2026, 9, 8))], now);
+        const out = buildDayGroups(
+            [m(at(2026, 9, 8)), m(at(2026, 9, 9)), m(at(2026, 9, 8))],
+            today
+        );
         expect(out.groupCounts).toEqual([1, 1, 1]);
     });
 });
@@ -310,10 +327,10 @@ describe('startsCluster across sides', () => {
 describe('day label formatters', () => {
     it('labels days with a formatter made once, not once a label', () => {
         const made = vi.spyOn(Intl, 'DateTimeFormat');
-        const now = local(2026, 9, 16);
+        const today = at(2026, 9, 16);
         const labels = [];
-        for (let day = 1; day <= 40; day += 1) labels.push(dayLabel(at(2026, 3, day), now));
-        for (let day = 1; day <= 5; day += 1) labels.push(dayLabel(at(2024, 3, day), now));
+        for (let day = 1; day <= 40; day += 1) labels.push(dayLabel(at(2026, 3, day), today));
+        for (let day = 1; day <= 5; day += 1) labels.push(dayLabel(at(2024, 3, day), today));
         // One formatter for this year's days and one naming the year, at most, and none if earlier
         // labels in this file already made them.
         expect(made.mock.calls.length).toBeLessThanOrEqual(2);

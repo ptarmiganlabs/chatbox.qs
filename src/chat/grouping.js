@@ -125,17 +125,18 @@ function dayFormatter(withYear) {
 /**
  * Human label for a day separator.
  *
- * `now` is a parameter rather than read from the clock so the relative labels
+ * `today` is a parameter rather than read from the clock so the relative labels
  * are testable and so a snapshot renders the same way it did when taken. It is
- * an instant, so Today is the day the reader's clock shows.
+ * the reader's wall clock, not an instant: an export is drawn again on the
+ * server, whose clock may be in another time zone and on another day.
  *
  * @param {number} wallClock - Wall-clock milliseconds for the day, as `wallClockOf` gives them.
- * @param {number} [now] - Reference instant, in epoch milliseconds; defaults to the current clock.
+ * @param {number} [today] - The reader's wall clock, as `localWallClock` gives it; defaults to the
+ *     reader's clock now.
  * @returns {string} 'Today', 'Yesterday', or a formatted date.
  */
-export function dayLabel(wallClock, now = Date.now()) {
+export function dayLabel(wallClock, today = localWallClock(Date.now())) {
     const key = dayKey(wallClock);
-    const today = localWallClock(now);
     if (key === dayKey(today)) return 'Today';
     // A day back on the wall clock, not 24 hours back: an instant 24 hours ago is still today in the
     // last hour of the day the clocks go back, and two days ago in the first hour after they go forward.
@@ -200,10 +201,11 @@ export function dayStarts(messages) {
  * heading nobody asked for.
  *
  * @param {object[]} messages - The conversation, in display order.
- * @param {number} [now] - Reference time for relative labels.
+ * @param {number} [today] - The reader's wall clock, for Today and Yesterday; defaults to the reader's clock
+ *     now.
  * @returns {?object} { groupCounts, labels }, or null when nothing can be dated.
  */
-export function buildDayGroups(messages, now = Date.now()) {
+export function buildDayGroups(messages, today = localWallClock(Date.now())) {
     if (!Array.isArray(messages) || messages.length === 0) return null;
     if (!messages.some((m) => wallClockOf(m) !== null)) return null;
 
@@ -214,7 +216,7 @@ export function buildDayGroups(messages, now = Date.now()) {
         if (starts[index] === 1) {
             groupCounts.push(0);
             const wallClock = wallClockOf(message);
-            labels.push(wallClock === null ? '' : dayLabel(wallClock, now));
+            labels.push(wallClock === null ? '' : dayLabel(wallClock, today));
         }
         groupCounts[groupCounts.length - 1] += 1;
     });

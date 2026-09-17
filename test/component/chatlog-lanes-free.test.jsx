@@ -119,6 +119,28 @@ beforeEach(() => {
 });
 
 describe('ChatLog with conversations side by side, scrolling freely', () => {
+    it('says Today and Yesterday in each lane by the clock a snapshot recorded', () => {
+        const day = (d, h) => Date.UTC(2026, 8, d, h);
+        const dated = [
+            { ...message('1', 'T1', 'one opens'), ts: day(7, 9) },
+            { ...message('2', 'T2', 'two opens'), ts: day(7, 10) },
+            { ...message('3', 'T1', 'one again'), ts: day(8, 9) },
+        ];
+        // Taken at 10:00 on 8 September on the reader's clock, and drawn again long after.
+        const chatbox = { firstVisibleIndex: 0, openId: null, today: day(8, 10) };
+        renderLanes({
+            messages: dated,
+            settings: { ...settings, dateSeparators: true },
+            layout: { snapshotData: { chatbox } },
+        });
+        const headers = (name) =>
+            [...laneList(name).querySelectorAll('[class*="separator"]')].map(
+                (node) => node.textContent
+            );
+        expect(headers('T1')).toEqual(['Yesterday', 'Today']);
+        expect(headers('T2')).toEqual(['Yesterday']);
+    });
+
     it('shows a lane per conversation, the latest activity first, each with its name and count', () => {
         const { container } = renderLanes();
         const headers = [...container.querySelectorAll('section')].map((section) =>

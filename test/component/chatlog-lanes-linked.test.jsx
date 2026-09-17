@@ -197,6 +197,24 @@ describe('ChatLog with conversations side by side, scrolling linked', () => {
         expect(virtuoso.props.groupCounts).toBe(first);
     });
 
+    it('says Today and Yesterday over the rows by the clock a snapshot recorded', () => {
+        const day = (d, h, m = 0) => Date.UTC(2026, 8, d, h, m);
+        const dated = [
+            message('1', 'T1', 'a', { ts: day(7, 9) }),
+            message('2', 'T2', 'b', { ts: day(7, 9, 1) }),
+            message('3', 'T1', 'c', { ts: day(8, 9) }),
+        ];
+        // Taken at 10:00 on 8 September on the reader's clock, and drawn again long after.
+        const chatbox = { firstVisibleIndex: 0, openId: null, today: day(8, 10) };
+        const { container } = renderLanes({
+            messages: dated,
+            settings: { ...settings, dateSeparators: true },
+            layout: { snapshotData: { chatbox } },
+        });
+        const headers = [...container.querySelectorAll('[class*="separator"]')];
+        expect(headers.map((node) => node.textContent)).toEqual(['Yesterday', 'Today']);
+    });
+
     it('puts every day heading before its first row when every message is rendered', () => {
         const day = (d, h, m = 0) => Date.UTC(2026, 8, d, h, m);
         const dated = [

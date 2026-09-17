@@ -162,10 +162,14 @@ export function ChatLog({
         settings.density
     );
 
+    // A snapshot says Today and Yesterday by the reader's clock when it was taken; otherwise by now.
+    const today = snapshot?.today ?? undefined;
     // Null when nothing can be dated — also the signal to fall back to the
     // ungrouped list rather than show a heading that means nothing.
     const dayGroups =
-        settings.dateSeparators === false || board ? null : buildDayGroups(conversation.messages);
+        settings.dateSeparators === false || board
+            ? null
+            : buildDayGroups(conversation.messages, today);
     const detailsOnClick = settings.onBubbleClick === 'showDetails';
 
     /**
@@ -885,6 +889,7 @@ export function ChatLog({
                         board={board}
                         renderRow={renderRow}
                         dateSeparators={settings.dateSeparators !== false}
+                        today={today}
                         renderAll={renderAll}
                         live={live}
                         busy={Boolean(reloading)}

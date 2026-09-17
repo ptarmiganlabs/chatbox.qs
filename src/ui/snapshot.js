@@ -9,12 +9,16 @@
  *
  * Pure functions, so the round trip is testable without a Sense client.
  */
+import { localWallClock } from '../chat/grouping';
 
 /** Where our state lives inside the layout copy. */
 const KEY = 'snapshotData';
 
 /** Where the lanes shown live, beside the view state rather than inside it. */
 const LANES_KEY = 'chatboxLanes';
+
+/** The furthest from 1970 a Date can be, either way, in milliseconds. */
+const DATE_RANGE_MS = 8.64e15;
 
 /**
  * Report whether this layout is a snapshot being re-rendered.
@@ -29,11 +33,16 @@ export function isSnapshot(layout) {
 /**
  * Write the view state into a layout copy, for a snapshot.
  *
+ * The reader's wall clock goes with it, so the day separators say Today and
+ * Yesterday as they did when the snapshot was taken: an export is drawn again on
+ * the server, whose clock may be in another time zone, and a story is viewed later.
+ *
  * @param {object} layout - The layout copy handed to onTakeSnapshot.
  * @param {object} [state] - { firstVisibleIndex, openId }.
+ * @param {number} [now] - When the snapshot is taken, in epoch milliseconds; defaults to the current clock.
  * @returns {object} The same layout, mutated.
  */
-export function writeSnapshot(layout, state = {}) {
+export function writeSnapshot(layout, state = {}, now = Date.now()) {
     if (!layout || typeof layout !== 'object') return layout;
     const existing = layout[KEY] && typeof layout[KEY] === 'object' ? layout[KEY] : {};
     layout[KEY] = {
@@ -44,6 +53,7 @@ export function writeSnapshot(layout, state = {}) {
                     ? state.firstVisibleIndex
                     : 0,
             openId: typeof state.openId === 'string' ? state.openId : null,
+            today: localWallClock(now),
         },
     };
     return layout;
@@ -53,14 +63,17 @@ export function writeSnapshot(layout, state = {}) {
  * Read back the view state a snapshot captured.
  *
  * @param {object} [layout] - The object layout.
- * @returns {?object} { firstVisibleIndex, openId }, or null when not a snapshot.
+ * @returns {?object} { firstVisibleIndex, openId, today }, or null when not a snapshot. `today` is the
+ *     reader's wall clock when the snapshot was taken; null for a snapshot taken before it was recorded.
  */
 export function readSnapshot(layout) {
     const state = layout?.[KEY]?.chatbox;
     if (!state) return null;
+    const today = state.today;
     return {
         firstVisibleIndex: Number.isInteger(state.firstVisibleIndex) ? state.firstVisibleIndex : 0,
         openId: typeof state.openId === 'string' ? state.openId : null,
+        today: Number.isFinite(today) && Math.abs(today) <= DATE_RANGE_MS ? today : null,
     };
 }
 

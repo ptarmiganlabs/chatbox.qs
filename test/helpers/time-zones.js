@@ -1,11 +1,12 @@
 /**
- * Run a test as if the machine were in another time zone.
+ * Run a test as if the machine were in another time zone, or its clock at another time.
  *
  * CI runs in UTC, where a local getter and a UTC getter give the same date, so a test of dates that stays
  * in the machine's zone cannot see a date read by the wrong clock there. Node takes a new `process.env.TZ`
  * at once, for `Date` and for `Intl` alike; each switch is checked, so a runtime that ignored it would fail
  * the test rather than leave it green.
  */
+import { vi } from 'vitest';
 
 /**
  * The zones tests run in, with each one's offset from UTC in January as `getTimezoneOffset` gives it: in
@@ -49,5 +50,24 @@ export function inTimeZone(zone, run) {
     } finally {
         if (before === undefined) delete process.env.TZ;
         else process.env.TZ = before;
+    }
+}
+
+/**
+ * Run some code with the machine's clock at an instant, then give the real clock back.
+ *
+ * Only `Date` is faked, so timers still run, and the time zone still applies to it.
+ *
+ * @param {number} instant - The time to set, in epoch milliseconds.
+ * @param {Function} run - The code to run, synchronously: the real clock is back as soon as it returns.
+ * @returns {*} What `run` returns.
+ */
+export function atClock(instant, run) {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+        vi.setSystemTime(instant);
+        return run();
+    } finally {
+        vi.useRealTimers();
     }
 }

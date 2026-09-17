@@ -47,6 +47,8 @@ export function laneCaption(board, meta = {}) {
  * @param {object} props.board - The board, from `buildBoard`.
  * @param {function(number): object} props.renderRow - Renders the message at a board index.
  * @param {boolean} [props.dateSeparators] - Whether lanes have day headers.
+ * @param {number} [props.today] - The reader's wall clock for Today and Yesterday, as a snapshot recorded it;
+ *   the reader's clock now by default.
  * @param {boolean} [props.renderAll] - Render every message rather than virtualizing.
  * @param {boolean} [props.live] - Whether this is a live object, not an export render.
  * @param {boolean} [props.busy] - Whether newer messages are loading.
@@ -63,6 +65,7 @@ export function LaneBoard({
     board,
     renderRow,
     dateSeparators = true,
+    today,
     renderAll = false,
     live = true,
     busy = false,
@@ -133,9 +136,9 @@ export function LaneBoard({
     // for every step of a resize, and the board stays the same while the lanes do.
     const dayGroups = useMemo(() => {
         if (!dateSeparators) return null;
-        if (board.rows) return rowDayGroups(board);
-        return board.lanes.map((lane) => buildDayGroups(lane.messages));
-    }, [board, dateSeparators]);
+        if (board.rows) return rowDayGroups(board, today);
+        return board.lanes.map((lane) => buildDayGroups(lane.messages, today));
+    }, [board, dateSeparators, today]);
 
     useImperativeHandle(
         ref,

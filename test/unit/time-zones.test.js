@@ -4,7 +4,8 @@ import { buildBoard, rowDayGroups } from '../../src/chat/lanes';
 import { normalize } from '../../src/chat/normalize';
 import { conversationText } from '../../src/export/conversation-export';
 import { ATTR_IDS } from '../../src/qix/attr-map';
-import { ZONE_NAMES, inTimeZone } from '../helpers/time-zones';
+import { readSnapshot, writeSnapshot } from '../../src/ui/snapshot';
+import { ZONE_NAMES, atClock, inTimeZone } from '../helpers/time-zones';
 
 /*
  * Days in every time zone, from the value the engine returns to what the reader sees and copies
@@ -58,8 +59,11 @@ const DAY_OF = { 1: '2026-09-08', 2: '2026-09-09', 3: '2026-09-09', 4: '2026-09-
 /** The conversation, normalized in the zone the test runs in. */
 const conversationOf = (rows = ROWS) => normalize({ layout: layout(rows.length), rows });
 
-/** An instant the reader's clock shows as the given time, in the zone the test runs in. */
+/** An instant the machine's clock shows as the given time, in the zone the test runs in. */
 const local = (y, m, d, h = 12, min = 0) => new Date(y, m - 1, d, h, min).getTime();
+
+/** The reader's wall clock a week later, at noon on 17 September: no day in the data is Today. */
+const LATER = Date.UTC(2026, 8, 17, 12);
 
 /**
  * Write a day of 2026 as a separator does, in the test machine's locale.
@@ -114,7 +118,7 @@ describe('a Qlik timestamp keeps the date the data holds in every time zone', ()
     it.each(ZONE_NAMES)('on the separators and in the transcript, in %s', (zone) => {
         inTimeZone(zone, () => {
             const { messages } = conversationOf();
-            const groups = buildDayGroups(messages, local(2026, 9, 17));
+            const groups = buildDayGroups(messages, LATER);
             expect(groups.groupCounts).toEqual([1, 2, 1]);
             expect(spread(groups)).toEqual(messages.map((m) => written(DAY_OF[m.id])));
 
@@ -133,7 +137,7 @@ describe('a Qlik timestamp keeps the date the data holds in every time zone', ()
         inTimeZone(zone, () => {
             const { messages } = conversationOf();
             const board = buildBoard(messages, { max: 2, scroll: 'linked' });
-            const rows = spread(rowDayGroups(board, local(2026, 9, 17)));
+            const rows = spread(rowDayGroups(board, LATER));
             const overEach = board.messages.map((_, index) => rows[board.rows.of[index]]);
             expect(overEach).toEqual(board.messages.map((m) => written(DAY_OF[m.id])));
 
@@ -151,7 +155,7 @@ describe('a Qlik timestamp keeps the date the data holds in every time zone', ()
         inTimeZone(zone, () => {
             const board = buildBoard(conversationOf().messages, { max: 2, scroll: 'free' });
             for (const lane of board.lanes) {
-                expect(spread(buildDayGroups(lane.messages, local(2026, 9, 17)))).toEqual(
+                expect(spread(buildDayGroups(lane.messages, LATER))).toEqual(
                     lane.messages.map((m) => written(DAY_OF[m.id]))
                 );
             }
@@ -162,7 +166,7 @@ describe('a Qlik timestamp keeps the date the data holds in every time zone', ()
         inTimeZone(zone, () => {
             const { messages } = conversationOf();
             // 09:00 on 10 September on the reader's own clock.
-            const groups = buildDayGroups(messages, local(2026, 9, 10, 9));
+            const groups = atClock(local(2026, 9, 10, 9), () => buildDayGroups(messages));
             expect(spread(groups)).toEqual([
                 written('2026-09-08'),
                 'Yesterday',
@@ -191,9 +195,36 @@ describe('epoch milliseconds are a real instant, dated by the reader’s clock',
         inTimeZone(zone, () => {
             const { messages } = conversationOf(INSTANT_ROWS);
             expect(messages.map((m) => m.tsInstant)).toEqual([true, true]);
-            expect(spread(buildDayGroups(messages, local(2026, 9, 17)))).toEqual(days.map(written));
+            expect(spread(buildDayGroups(messages, LATER))).toEqual(days.map(written));
             const copied = transcriptDays(conversationText({ messages, diagnostics: [] }));
             expect(copied.map(({ day }) => day)).toEqual(days);
         });
     });
+});
+
+describe('a snapshot keeps the reader’s Today and Yesterday wherever it is drawn again', () => {
+    it.each(ZONE_NAMES)(
+        'taken in Stockholm just after midnight, drawn a week later in %s',
+        (zone) => {
+            const { messages } = conversationOf();
+            // The reader takes it at 00:30 on 10 September, when UTC is still on the 9th.
+            const layout = inTimeZone('Europe/Stockholm', () =>
+                atClock(local(2026, 9, 10, 0, 30), () =>
+                    writeSnapshot({}, { firstVisibleIndex: 0 })
+                )
+            );
+            // A server, or a story viewed later, draws it again on a clock of its own.
+            inTimeZone(zone, () =>
+                atClock(Date.UTC(2026, 8, 17, 12), () => {
+                    const { today } = readSnapshot(layout);
+                    expect(spread(buildDayGroups(messages, today))).toEqual([
+                        written('2026-09-08'),
+                        'Yesterday',
+                        'Yesterday',
+                        'Today',
+                    ]);
+                })
+            );
+        }
+    );
 });
