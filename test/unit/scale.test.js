@@ -14,9 +14,9 @@ import { fastestTime } from '../helpers/timing';
  */
 const COUNT = 12_000;
 const COLS = 5;
-const START = new Date(2026, 0, 1).getTime();
+const START = Date.UTC(2026, 0, 1);
 
-/** Qlik day serial for an epoch ms value — what the engine actually returns. */
+/** The Qlik day serial for a wall-clock time — what the engine actually returns. */
 const toSerial = (ms) => ms / 86400000 + 25569;
 
 function bigRows(n = COUNT) {
@@ -92,7 +92,7 @@ describe('scale: 12,000 messages', () => {
 
     it('converts the engine day serial back to a real timestamp', () => {
         const c = normalize({ layout: bigLayout(), rows: bigRows(3) });
-        expect(new Date(c.messages[0].ts).getFullYear()).toBe(2026);
+        expect(new Date(c.messages[0].ts).getUTCFullYear()).toBe(2026);
         expect(c.messages[1].ts - c.messages[0].ts).toBeCloseTo(300_000, -2);
     });
 });

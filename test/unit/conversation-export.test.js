@@ -9,6 +9,7 @@ import {
     conversationJson,
     conversationText,
 } from '../../src/export/conversation-export';
+import { ZONE_NAMES, inTimeZone } from '../helpers/time-zones';
 
 const person = (label) => ({ key: label, label });
 const MESSAGES = [
@@ -98,7 +99,8 @@ describe('conversationText', () => {
     // conversation over two days could not say which day a message was from. On screen the day
     // separators say it.
     it('starts each day with its date, since the time as shown may not say which day', () => {
-        const at = (day, hour) => new Date(2026, 8, day, hour, 5).getTime();
+        // Timestamps as Qlik timestamps give them: wall-clock times, read as UTC.
+        const at = (day, hour) => Date.UTC(2026, 8, day, hour, 5);
         const message = (id, ts, tsText) => ({
             id,
             key: `k${id}`,
@@ -185,6 +187,27 @@ describe('conversationJson', () => {
         });
         expect(JSON.parse(JSON.stringify(json))).toEqual(json);
     });
+
+    // The README says what `time` means; this holds it to that in every zone.
+    it.each(ZONE_NAMES)(
+        'writes a Qlik timestamp’s wall-clock time, and an instant in UTC, whatever the zone: %s',
+        (zone) => {
+            const late = { ...MESSAGES[0], ts: Date.UTC(2026, 8, 8, 23, 30), tsText: '23:30' };
+            const instant = { ...late, ts: Date.UTC(2026, 8, 8, 21, 30), tsInstant: true };
+            inTimeZone(zone, () => {
+                const json = conversationJson(
+                    { ...conversation, messages: [late, instant] },
+                    options
+                );
+                expect(json.messages.map((message) => message.time)).toEqual([
+                    // 23:30 as the data holds it; the Z does not mean UTC.
+                    '2026-09-08T23:30:00.000Z',
+                    // A real instant, in UTC.
+                    '2026-09-08T21:30:00.000Z',
+                ]);
+            });
+        }
+    );
 
     describe('which rows the message limit kept', () => {
         /** A participant cube of `qcy` rows, with the given rows read from `qTop`, normalized. */
@@ -320,7 +343,7 @@ describe('conversationJson', () => {
 });
 
 describe('conversations side by side', () => {
-    const at = (day, hour) => new Date(2026, 8, day, hour, 5).getTime();
+    const at = (day, hour) => Date.UTC(2026, 8, day, hour, 5);
     const message = (id, thread, ts, body = `message ${id}`) => ({
         id,
         key: `k${id}`,

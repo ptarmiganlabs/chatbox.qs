@@ -21,7 +21,7 @@
  * highlighting, used by the object properties, the panel's defaults and the render code.
  */
 import { counted } from '../util/format';
-import { dayLabel, dayStarts } from './grouping';
+import { dayLabel, dayStarts, localWallClock, wallClockOf } from './grouping';
 
 /** The most conversations side by side. Also keeps a row's lanes within a bitmask. */
 export const LANE_MAX = 10;
@@ -404,11 +404,12 @@ export function createBoardCache() {
  * Group a linked board's rows by day, for sticky day headers over rows.
  *
  * @param {?object} board - A linked board, from {@link buildBoard}.
- * @param {number} [now] - Reference time for relative labels.
+ * @param {number} [today] - The reader's wall clock, for Today and Yesterday; defaults to the reader's clock
+ *     now.
  * @returns {?{groupCounts: number[], labels: string[]}} Rows per day, which add up to the row count; null
  *     for a free board, or when nothing can be dated.
  */
-export function rowDayGroups(board, now = Date.now()) {
+export function rowDayGroups(board, today = localWallClock(Date.now())) {
     const { messages, rows, dayStarts: starts } = board ?? {};
     // No day starts at all means no message has a date: no day headers, as for a single conversation.
     if (!rows || !starts?.includes(1)) return null;
@@ -418,8 +419,8 @@ export function rowDayGroups(board, now = Date.now()) {
         const first = rows.start[row];
         if (groupCounts.length === 0 || starts[first] === 1) {
             groupCounts.push(0);
-            const ts = messages[first].ts;
-            labels.push(typeof ts === 'number' ? dayLabel(ts, now) : '');
+            const wallClock = wallClockOf(messages[first]);
+            labels.push(wallClock === null ? '' : dayLabel(wallClock, today));
         }
         groupCounts[groupCounts.length - 1] += 1;
     }

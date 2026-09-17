@@ -2,11 +2,13 @@ import { describe, it, expect } from 'vitest';
 import {
     argbToHex,
     attrText,
+    isEpochMs,
     parseMediaRefs,
     qlikTimeToEpochMs,
     safeColor,
     safeUrl,
 } from '../../src/chat/sanitize';
+import { ZONE_NAMES, inTimeZone } from '../helpers/time-zones';
 
 describe('safeUrl', () => {
     it('accepts https and Qlik same-origin content paths', () => {
@@ -146,6 +148,16 @@ describe('qlikTimeToEpochMs', () => {
         expect(qlikTimeToEpochMs(Number.NaN)).toBeNull();
     });
 
+    it.each(ZONE_NAMES)('gives the wall-clock time the serial holds, as UTC, in %s', (zone) => {
+        // A serial has no time zone. The conversion must not read the machine's zone, or the same data
+        // would give each reader different milliseconds.
+        inTimeZone(zone, () => {
+            // 2026-09-08 23:30 and 2026-09-09 00:30, as Num() returns them.
+            expect(qlikTimeToEpochMs(46273.97916666667)).toBe(Date.UTC(2026, 8, 8, 23, 30));
+            expect(qlikTimeToEpochMs(46274.02083333333)).toBe(Date.UTC(2026, 8, 9, 0, 30));
+        });
+    });
+
     it('makes a two-minute gap actually measure two minutes', () => {
         // Regression: the grouping threshold is gapSec * 1000. With raw day
         // serials the delta was ~0.0014 against 120000, so time-based
@@ -156,13 +168,36 @@ describe('qlikTimeToEpochMs', () => {
     });
 });
 
+describe('isEpochMs', () => {
+    it('tells epoch milliseconds, a real instant, from a day serial', () => {
+        expect(isEpochMs(1788855124000)).toBe(true);
+        expect(isEpochMs(1e11)).toBe(true);
+        expect(isEpochMs(46273.341712963)).toBe(false);
+        expect(isEpochMs(0)).toBe(false);
+    });
+
+    it('draws the line where qlikTimeToEpochMs stops converting', () => {
+        for (const value of [1e11, -1e11, 99999999999]) {
+            expect(isEpochMs(value)).toBe(qlikTimeToEpochMs(value) === value);
+        }
+        expect(isEpochMs(99999999999)).toBe(false);
+    });
+
+    it('is false for anything that is not a finite number', () => {
+        for (const value of [null, undefined, Number.NaN, Infinity, '1788855124000']) {
+            expect(isEpochMs(value)).toBe(false);
+        }
+    });
+});
+
 describe('qlikTimeToEpochMs — day-boundary precision', () => {
     it('lands exactly on midnight rather than one millisecond before it', () => {
         // Regression: (serial - 25569) * 86400000 does not produce a whole
         // millisecond. Midnight came back as ...999.9995, which Date truncates
         // to 23:59:59.999 of the previous day — so a message sent at midnight
-        // appeared under the previous day's separator.
-        const midnight = new Date(2026, 0, 1).getTime();
+        // appeared under the previous day's separator. Midnight in the data is
+        // midnight UTC in milliseconds: a serial has no time zone.
+        const midnight = Date.UTC(2026, 0, 1);
         const serial = midnight / 86400000 + 25569;
         expect(qlikTimeToEpochMs(serial)).toBe(midnight);
     });

@@ -94,8 +94,9 @@ export function metadataSection() {
             ts: attrItem(
                 ATTR_IDS.TS,
                 'Timestamp (numeric)',
-                'Groups messages by time, e.g. Num(Min([SentAt])). Qlik returns a day serial; ' +
-                    'the extension converts it to a real time.'
+                'Groups messages by time and by day, e.g. Num(Min([SentAt])). A Qlik timestamp has ' +
+                    'no time zone, so each message stays under the date the data holds, wherever ' +
+                    'the reader is.'
             ),
             tsText: attrItem(
                 ATTR_IDS.TS_TEXT,
