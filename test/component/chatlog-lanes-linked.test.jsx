@@ -151,7 +151,7 @@ describe('ChatLog with conversations side by side, scrolling linked', () => {
     });
 
     it('groups the rows by day, the counts adding up to the rows', () => {
-        const day = (d, h, m = 0) => new Date(2026, 8, d, h, m).getTime();
+        const day = (d, h, m = 0) => Date.UTC(2026, 8, d, h, m);
         const dated = [
             message('1', 'T1', 'a', { ts: day(7, 9) }),
             message('2', 'T2', 'b', { ts: day(7, 9, 1) }),
@@ -163,7 +163,7 @@ describe('ChatLog with conversations side by side, scrolling linked', () => {
     });
 
     it('works out the day headers once for a board, not again on every render', () => {
-        const day = (d, h, m = 0) => new Date(2026, 8, d, h, m).getTime();
+        const day = (d, h, m = 0) => Date.UTC(2026, 8, d, h, m);
         const board = buildBoard(
             [
                 message('1', 'T1', 'a', { ts: day(7, 9) }),
@@ -198,7 +198,7 @@ describe('ChatLog with conversations side by side, scrolling linked', () => {
     });
 
     it('puts every day heading before its first row when every message is rendered', () => {
-        const day = (d, h, m = 0) => new Date(2026, 8, d, h, m).getTime();
+        const day = (d, h, m = 0) => Date.UTC(2026, 8, d, h, m);
         const dated = [
             message('1', 'T1', 'a', { ts: day(7, 9) }),
             message('2', 'T2', 'b', { ts: day(7, 9, 1) }),
@@ -217,7 +217,7 @@ describe('ChatLog with conversations side by side, scrolling linked', () => {
     });
 
     it('puts a message sent after a pause below the row before it, not beside it', () => {
-        const at = (h, m) => new Date(2026, 8, 16, h, m).getTime();
+        const at = (h, m) => Date.UTC(2026, 8, 16, h, m);
         const { container } = renderLanes({
             messages: [
                 message('1', 'T1', 'a1', { ts: at(10, 0) }),

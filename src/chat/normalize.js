@@ -30,6 +30,7 @@ import * as cell from '../qix/read-cell';
 import {
     NULL_SENTINEL,
     attrText,
+    isEpochMs,
     parseMediaRefs,
     qlikTimeToEpochMs,
     safeColor,
@@ -152,6 +153,9 @@ function readRecord(row, i, ctx) {
         authorElem: cell.elem(authorCell),
         avatar: safeUrl(attrValue(idCell, ctx.attrMap, ATTR_IDS.AVATAR)?.qText),
         ts: qlikTimeToEpochMs(tsValue?.qNum),
+        // A day serial is a wall-clock time with no time zone; epoch milliseconds are a real instant,
+        // dated by the reader's clock. Only grouping.js's wallClockOf reads the difference.
+        tsInstant: isEpochMs(tsValue?.qNum),
         tsText: attrText(attrValue(idCell, ctx.attrMap, ATTR_IDS.TS_TEXT)),
         threadId: threadCell ? cell.optionalText(threadCell) : null,
         threadElem: threadCell ? cell.elem(threadCell) : -1,

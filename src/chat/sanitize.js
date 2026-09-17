@@ -146,6 +146,25 @@ export function attrText(value) {
 }
 
 /**
+ * The smallest timestamp taken as epoch milliseconds: no plausible Qlik day
+ * serial reaches it (that would be year 275,000), so the two cannot be confused.
+ */
+const EPOCH_MS_FLOOR = 1e11;
+
+/**
+ * Report whether a timestamp value is already epoch milliseconds.
+ *
+ * Epoch milliseconds count from an instant, so they are a real moment in time,
+ * the same in every time zone. A Qlik day serial is not: see qlikTimeToEpochMs.
+ *
+ * @param {?number} value - The numeric value from the timestamp attribute expression.
+ * @returns {boolean} True for a finite value in the epoch-millisecond range.
+ */
+export function isEpochMs(value) {
+    return typeof value === 'number' && Number.isFinite(value) && Math.abs(value) >= EPOCH_MS_FLOOR;
+}
+
+/**
  * Convert a Qlik numeric timestamp to epoch milliseconds.
  *
  * Qlik dates are DAY SERIALS — days since 1899-12-30, so a 2026 timestamp is
@@ -154,16 +173,22 @@ export function attrText(value) {
  * Comparing serials against a millisecond threshold silently disables every
  * time-based behaviour rather than erroring.
  *
- * A value already in epoch milliseconds is passed through: no plausible Qlik
- * day serial reaches 1e11 (that would be year 275,000), so the two ranges
- * cannot be confused.
+ * A serial has no time zone: it is the date and time the data holds, a wall
+ * clock. Converted, it is the milliseconds of that wall-clock time as if it were
+ * UTC — 23:30 on 8 September comes back as 23:30 on 8 September only through the
+ * UTC getters. Local getters shift it by the reader's zone, onto the wrong day
+ * near midnight; `wallClockOf` in grouping.js is the one place that reads it back.
+ *
+ * A value already in epoch milliseconds (see isEpochMs) is passed through. It is
+ * a real instant, not a wall-clock time, which is why normalize marks it.
  *
  * @param {?number} value - The numeric value from the timestamp attribute expression.
- * @returns {?number} Epoch milliseconds, or null when there is no usable value.
+ * @returns {?number} Milliseconds: a serial's wall-clock time read as UTC, or the
+ *     epoch milliseconds passed through; null when there is no usable value.
  */
 export function qlikTimeToEpochMs(value) {
     if (typeof value !== 'number' || !Number.isFinite(value)) return null;
-    if (Math.abs(value) >= 1e11) return value;
+    if (isEpochMs(value)) return value;
     // 25569 is the Qlik/Excel day serial for 1970-01-01.
     //
     // Rounded, because the multiplication does not land on a whole millisecond:

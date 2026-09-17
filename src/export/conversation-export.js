@@ -17,7 +17,7 @@
  *
  * Pure: it builds strings and objects, and copies nothing.
  */
-import { dayKey } from '../chat/grouping';
+import { dayKey, wallClockOf } from '../chat/grouping';
 import { conversationsShownText } from '../chat/lanes';
 import { HIGHLIGHT_KINDS } from '../qix/highlight-source';
 import { BLOCK_SEPARATOR } from '../highlight/markdown-projection';
@@ -65,9 +65,10 @@ function runsOf(messages, board) {
  * @param {object} conversation - The normalized conversation.
  * @param {object} [options] - Options.
  * @param {?object} [options.board] - The board the messages are shown in, with conversations side by side.
- * @returns {string} The transcript. A dated message on a new day is preceded by the day, as YYYY-MM-DD
- *     in the reader's time zone, the day its separator shows; a message without a time is not. Side by
- *     side, each conversation starts with a line naming it, and its first dated message with its day.
+ * @returns {string} The transcript. A dated message on a new day is preceded by the day, as YYYY-MM-DD:
+ *     the day its separator shows, read the same way (`wallClockOf`), so a Qlik timestamp keeps the date
+ *     the data holds in every time zone; a message without a time is not. Side by side, each
+ *     conversation starts with a line naming it, and its first dated message with its day.
  */
 export function conversationText(conversation, { board = null } = {}) {
     const messages = conversation?.messages ?? [];
@@ -80,8 +81,9 @@ export function conversationText(conversation, { board = null } = {}) {
         let day = null;
         for (const index of run.indices) {
             const message = messages[index];
-            if (Number.isFinite(message.ts) && dayKey(message.ts) !== day) {
-                day = dayKey(message.ts);
+            const wallClock = wallClockOf(message);
+            if (wallClock !== null && dayKey(wallClock) !== day) {
+                day = dayKey(wallClock);
                 parts.push(`${day}\n`);
             }
             parts.push(`${headerLine(message)}\n${message.body ? message.body : '(no text)'}\n`);
@@ -141,6 +143,8 @@ function messageJson(message, entry, projectionOf) {
             ? message.recipients.map((recipient) => recipient.label)
             : null,
         thread: message.threadId ?? null,
+        // A Qlik timestamp has no time zone: this is its wall-clock time, and the Z does not mean UTC.
+        // Only a timestamp that came as epoch milliseconds (`tsInstant`) is a real instant, in UTC.
         time: Number.isFinite(message.ts) ? new Date(message.ts).toISOString() : null,
         timeText: message.tsText ?? null,
         kind: message.kind ?? null,

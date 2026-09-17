@@ -21,7 +21,7 @@
  * highlighting, used by the object properties, the panel's defaults and the render code.
  */
 import { counted } from '../util/format';
-import { dayLabel, dayStarts } from './grouping';
+import { dayLabel, dayStarts, wallClockOf } from './grouping';
 
 /** The most conversations side by side. Also keeps a row's lanes within a bitmask. */
 export const LANE_MAX = 10;
@@ -418,8 +418,8 @@ export function rowDayGroups(board, now = Date.now()) {
         const first = rows.start[row];
         if (groupCounts.length === 0 || starts[first] === 1) {
             groupCounts.push(0);
-            const ts = messages[first].ts;
-            labels.push(typeof ts === 'number' ? dayLabel(ts, now) : '');
+            const wallClock = wallClockOf(messages[first]);
+            labels.push(wallClock === null ? '' : dayLabel(wallClock, now));
         }
         groupCounts[groupCounts.length - 1] += 1;
     }

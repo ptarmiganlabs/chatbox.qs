@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { VirtuosoMockContext } from 'react-virtuoso';
 import ChatLog, { isSelectable } from '../../src/ui/ChatLog';
+import { ZONE_NAMES, inTimeZone } from '../helpers/time-zones';
 
 /** Virtuoso measures with the real DOM; jsdom has no layout, so mock the viewport. */
 function renderList(ui) {
@@ -14,7 +15,8 @@ function renderList(ui) {
     });
 }
 
-const at = (y, m, d, h = 12) => new Date(y, m - 1, d, h).getTime();
+/** A timestamp as a Qlik timestamp gives it: a wall-clock time, read as UTC. */
+const at = (y, m, d, h = 12, min = 0) => Date.UTC(y, m - 1, d, h, min);
 
 const message = (over = {}) => ({
     id: 'm1',
@@ -75,6 +77,36 @@ describe('ChatLog date separators', () => {
             />
         );
         expect(container.innerHTML).not.toMatch(/separator/);
+    });
+
+    it.each(ZONE_NAMES)('shows each message under the day the data holds in %s', (zone) => {
+        // Regression (GOTCHAS 32): read by the reader's clock, the message at 23:30 went under the next
+        // day east of UTC, and the one at 00:30 under the day before west of it.
+        const day = (y, m, d) =>
+            new Intl.DateTimeFormat(undefined, {
+                weekday: 'short',
+                day: 'numeric',
+                month: 'short',
+                year: 'numeric',
+                timeZone: 'UTC',
+            }).format(Date.UTC(y, m - 1, d));
+        const messages = [
+            message({ id: '1', body: 'late', ts: at(2020, 2, 28, 23, 30) }),
+            message({ id: '2', body: 'early', ts: at(2020, 2, 29, 0, 30) }),
+        ];
+        inTimeZone(zone, () => {
+            const { container } = renderList(
+                <ChatLog conversation={conversation(messages)} settings={{ virtualize: false }} />
+            );
+            // Separators and messages in the order they are drawn: each day, then its message.
+            const drawn = [...container.querySelectorAll('[class*="separator"], [data-row]')].map(
+                (node) =>
+                    node.hasAttribute('data-row')
+                        ? messages[node.dataset.row].body
+                        : node.textContent
+            );
+            expect(drawn).toEqual([day(2020, 2, 28), 'late', day(2020, 2, 29), 'early']);
+        });
     });
 
     it('shows every message even when grouped', () => {

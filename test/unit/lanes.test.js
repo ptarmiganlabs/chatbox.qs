@@ -23,7 +23,8 @@ import {
 } from '../../src/chat/lanes';
 
 const DAY = 86_400_000;
-const T0 = new Date(2026, 8, 7, 9).getTime();
+// Timestamps as Qlik timestamps give them: wall-clock times, read as UTC.
+const T0 = Date.UTC(2026, 8, 7, 9);
 
 /** A message in a thread, at a cube row, optionally dated. */
 const msg = (id, thread, { row = Number(id), ts = null, elem } = {}) => ({
@@ -274,7 +275,7 @@ describe('buildBoard, linked scrolling', () => {
 });
 
 describe('linked rows and pauses', () => {
-    const at = (h, m) => new Date(2026, 8, 16, h, m).getTime();
+    const at = (h, m) => Date.UTC(2026, 8, 16, h, m);
     // Three lanes: a few messages in A, a pause, one in B, then A again; C spoke an hour before.
     const scenario = [
         msg('1', 'C', { ts: at(9, 0) }),

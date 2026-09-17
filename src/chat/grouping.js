@@ -1,9 +1,17 @@
 /**
  * Clustering messages for display: author runs, and day boundaries.
  *
- * Both operate on `Message.ts`, which is epoch milliseconds by the time it gets
+ * Both operate on `Message.ts`, which is milliseconds by the time it gets
  * here — `qlikTimeToEpochMs` converts the day serial the engine actually
  * returns. Anything comparing raw engine values here would silently never fire.
+ *
+ * A timestamp from a day serial is a WALL-CLOCK time: the date and time the data
+ * holds, with no time zone, stored as the milliseconds of that time in UTC. Read
+ * with local getters it moves by the reader's zone, and near midnight onto
+ * another day. Days are therefore read from wall-clock milliseconds with the UTC
+ * getters only, and `wallClockOf` is the one place a message's timestamp is
+ * turned into them: a timestamp that came as epoch milliseconds (`tsInstant`) is
+ * a real instant, and reads as the reader's clock shows it. See GOTCHAS 32.
  */
 
 import { recipientsKey } from './recipients';
@@ -35,17 +43,41 @@ export function startsCluster(message, previous, gapSec) {
 }
 
 /**
- * Local calendar day for an epoch timestamp.
+ * Read an instant as the time the reader's clock shows for it.
  *
- * Local rather than UTC on purpose: a conversation reads by the viewer's clock,
- * so a message at 23:30 local should sit under that day's heading even when UTC
- * has already rolled over.
- *
- * @param {number} ts - Epoch milliseconds.
- * @returns {string} A `YYYY-MM-DD` key in local time.
+ * @param {number} instant - Epoch milliseconds: a real moment, such as `Date.now()`.
+ * @returns {number} Wall-clock milliseconds, whose UTC date and time are the reader's local ones.
  */
-export function dayKey(ts) {
-    const d = new Date(ts);
+export function localWallClock(instant) {
+    return instant - new Date(instant).getTimezoneOffset() * 60000;
+}
+
+/**
+ * Read a message's timestamp as a wall-clock time, the only form a day is read from.
+ *
+ * @param {?object} message - A message, with `ts` and, for epoch milliseconds, `tsInstant`.
+ * @returns {?number} Wall-clock milliseconds: the timestamp itself for a day serial, which has no time
+ *     zone, and the reader's clock for an instant; null when the message has no usable timestamp.
+ */
+export function wallClockOf(message) {
+    const ts = message?.ts;
+    if (typeof ts !== 'number' || !Number.isFinite(ts)) return null;
+    return message.tsInstant === true ? localWallClock(ts) : ts;
+}
+
+/**
+ * Calendar day of a wall-clock time.
+ *
+ * Read with the UTC getters, because wall-clock milliseconds hold their date and
+ * time as UTC. The reader's time zone plays no part: 23:30 on 8 September in the
+ * data is on 8 September in Stockholm and in New York alike, and a message sent
+ * at 00:30 stays on the day after.
+ *
+ * @param {number} wallClock - Wall-clock milliseconds, as `wallClockOf` gives them.
+ * @returns {string} A `YYYY-MM-DD` key.
+ */
+export function dayKey(wallClock) {
+    const d = new Date(wallClock);
     /**
      * Zero-pad a number to two digits.
      *
@@ -53,14 +85,16 @@ export function dayKey(ts) {
      * @returns {string} The padded string.
      */
     const pad = (n) => String(n).padStart(2, '0');
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
 }
 
 /**
  * Day label formatters, by whether they name the year.
  *
  * Making an Intl.DateTimeFormat costs far more than formatting with one, and a conversation over many days
- * labels a day header for every one of them, so each formatter is made once.
+ * labels a day header for every one of them, so each formatter is made once. They format in UTC, as
+ * dayKey reads: a formatter made without a time zone keeps the zone it was made in, and would name the
+ * reader's day instead of the one in the data.
  */
 const dayFormatters = new Map();
 
@@ -78,6 +112,7 @@ function dayFormatter(withYear) {
             day: 'numeric',
             month: 'short',
             year: withYear ? 'numeric' : undefined,
+            timeZone: 'UTC',
         });
         dayFormatters.set(withYear, formatter);
     }
@@ -88,22 +123,24 @@ function dayFormatter(withYear) {
  * Human label for a day separator.
  *
  * `now` is a parameter rather than read from the clock so the relative labels
- * are testable and so a snapshot renders the same way it did when taken.
+ * are testable and so a snapshot renders the same way it did when taken. It is
+ * an instant, so Today is the day the reader's clock shows.
  *
- * @param {number} ts - Epoch milliseconds for the day.
- * @param {number} [now] - Reference time; defaults to the current clock.
+ * @param {number} wallClock - Wall-clock milliseconds for the day, as `wallClockOf` gives them.
+ * @param {number} [now] - Reference instant, in epoch milliseconds; defaults to the current clock.
  * @returns {string} 'Today', 'Yesterday', or a formatted date.
  */
-export function dayLabel(ts, now = Date.now()) {
-    const key = dayKey(ts);
-    if (key === dayKey(now)) return 'Today';
-    if (key === dayKey(now - 86400000)) return 'Yesterday';
+export function dayLabel(wallClock, now = Date.now()) {
+    const key = dayKey(wallClock);
+    const today = localWallClock(now);
+    if (key === dayKey(today)) return 'Today';
+    if (key === dayKey(localWallClock(now - 86400000))) return 'Yesterday';
 
-    const d = new Date(ts);
+    const d = new Date(wallClock);
     try {
         // Only name the year when it is not the current one — "12 Mar" reads
         // better than "12 Mar 2026" for a conversation from this year.
-        return dayFormatter(d.getFullYear() !== new Date(now).getFullYear()).format(d);
+        return dayFormatter(d.getUTCFullYear() !== new Date(today).getUTCFullYear()).format(d);
     } catch {
         return key;
     }
@@ -124,12 +161,14 @@ export function dayLabel(ts, now = Date.now()) {
 export function dayStarts(messages) {
     const list = Array.isArray(messages) ? messages : [];
     const starts = new Uint8Array(list.length);
-    if (!list.some((m) => typeof m.ts === 'number')) return starts;
+    const wallClocks = list.map(wallClockOf);
+    if (!wallClocks.some((wallClock) => wallClock !== null)) return starts;
 
     let currentKey = null;
     let open = false;
-    list.forEach((message, index) => {
-        if (typeof message.ts !== 'number') {
+    list.forEach((_, index) => {
+        const wallClock = wallClocks[index];
+        if (wallClock === null) {
             // Undated: fold into whatever group is open, or start one if this is the very first message.
             if (!open) {
                 starts[index] = 1;
@@ -137,7 +176,7 @@ export function dayStarts(messages) {
             }
             return;
         }
-        const key = dayKey(message.ts);
+        const key = dayKey(wallClock);
         if (key !== currentKey) {
             currentKey = key;
             starts[index] = 1;
@@ -161,7 +200,7 @@ export function dayStarts(messages) {
  */
 export function buildDayGroups(messages, now = Date.now()) {
     if (!Array.isArray(messages) || messages.length === 0) return null;
-    if (!messages.some((m) => typeof m.ts === 'number')) return null;
+    if (!messages.some((m) => wallClockOf(m) !== null)) return null;
 
     const starts = dayStarts(messages);
     const groupCounts = [];
@@ -169,7 +208,8 @@ export function buildDayGroups(messages, now = Date.now()) {
     messages.forEach((message, index) => {
         if (starts[index] === 1) {
             groupCounts.push(0);
-            labels.push(typeof message.ts === 'number' ? dayLabel(message.ts, now) : '');
+            const wallClock = wallClockOf(message);
+            labels.push(wallClock === null ? '' : dayLabel(wallClock, now));
         }
         groupCounts[groupCounts.length - 1] += 1;
     });
