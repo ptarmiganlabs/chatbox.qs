@@ -77,3 +77,23 @@ describe('highlight colours', () => {
         expect(dark['--cqs-current']).toBe('#f0f0f0');
     });
 });
+
+describe('the font family and the font size are separate properties', () => {
+    it('names the family --cqs-font-family, and never --cqs-font', () => {
+        // One name for both meant `font-family: 13px`, which is invalid at computed-value time, so
+        // the themed family was silently dropped and the client's own was inherited (GOTCHAS 38).
+        const vars = themeVars(theme({ fontFamily: 'Comic Sans MS' }));
+        expect(vars['--cqs-font-family']).toBe('Comic Sans MS');
+        expect(vars['--cqs-font']).toBeUndefined();
+        expect(vars['--cqs-font-size']).toBeUndefined();
+    });
+
+    it('tints a pressed toolbar button away from the bar it sits in, on either theme', () => {
+        const light = themeVars(theme({ backgroundColor: '#ffffff' }));
+        const dark = themeVars(theme({ backgroundColor: '#1e1e1e' }));
+        expect(light['--cqs-pressed']).toMatch(/rgba\(0, 0, 0/);
+        expect(dark['--cqs-pressed']).toMatch(/rgba\(255, 255, 255/);
+        expect(light['--cqs-groupbg']).toMatch(/rgba\(0, 0, 0/);
+        expect(dark['--cqs-groupbg']).toMatch(/rgba\(255, 255, 255/);
+    });
+});

@@ -460,3 +460,34 @@ highest ids; a sort in the browser could only reorder rows the limit had already
 it as a soft patch — session only, and allowed without edit rights, so a published app is sorted for every
 reader — once per object, before any row is read, and never in a snapshot. _Guard:
 `test/unit/time-order.test.js`, `test/unit/sync-attrs.test.js`._
+
+## 38. One custom property was the font family and the font size at once
+
+`themeVars` set `--cqs-font` to the theme's font family, and each density class set it to a font size.
+`.root` read it as both, so `font-family: 13px` was invalid at computed-value time and the themed
+family had never applied — silently, because the declaration is simply dropped and the family then
+inherits from the Sense client, which looks right.
+
+**Rule:** `--cqs-font-family` and `--cqs-font-size` are separate, with `--cqs-read-size` over the
+second for the reader's own pick. _Guard: `test/unit/theme-vars.test.js`,
+`test/component/chatlog-toolbar.test.jsx`._
+
+## 39. A key that steps one thing while something is typed and another thing otherwise
+
+The step buttons, F3 and Ctrl+G used to go through the search matches while a query was typed and the
+highlights otherwise. One key, two meanings, decided by a box the reader may not have been looking at —
+and a single current stop, so stepping the highlights lost the reader's place among the matches.
+
+**Rule:** two groups, each with its own buttons, counter and place, and keys that never cross: F3 and
+Ctrl+G for the find box, Alt with an arrow for the keywords. A place is dropped by comparing the stops
+it was found among **by identity**, which both finders already keep stable while nothing has changed,
+so no path has to invalidate anything by hand. Only the group stepped to last is outlined.
+_Guard: `test/component/chatlog-stepping.test.jsx`, `test/component/chatlog-search.test.jsx`._
+
+## 40. Alt and an arrow is still an arrow to the list
+
+The list moves focus on a plain arrow. Adding Alt+Arrow for the keywords meant one press both stepped
+to a keyword and moved focus to the next message, which then scrolled away from the keyword.
+
+**Rule:** the list's key handler returns at once for a press the root will read as a keyword step.
+_Guard: `test/component/chatlog-stepping.test.jsx`._

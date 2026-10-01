@@ -128,6 +128,13 @@ many messages it has.
 - **Free scrolling** gives each lane its own list and scrollbar, packed without gaps, and each keeps its
   place when a selection changes the others.
 - Messages without a thread share a **(no conversation)** lane.
+- **A click on a lane's header selects that conversation**, in the field the _Conversation / thread_
+  dimension is on, the way a click on a legend chip selects its category: at once, like a filter pane.
+  Ctrl or Cmd adds and removes. The **(no conversation)** lane has no value behind it and is not
+  clickable, and nor is any header while the dimension is an expression rather than a field.
+- **When there are more conversations than fit**, the bar steps through them: **◂ 1–4 of 12 ▸**, a
+  windowful at a time, down the same ranking. A selection that leaves fewer conversations pulls the
+  window back on its own; otherwise it stays where you put it.
 - Needs a _Conversation / thread_ dimension; without one, a banner says so and the conversation shows as
   one.
 
@@ -286,10 +293,36 @@ searched. Nothing is selected.
   current. The query stays when a selection changes the conversation.
 - **Show search box** under **Appearance** hides it.
 
+## The bar above the conversation
+
+The controls sit in groups, each a tinted pill, so one is never mistaken for another:
+
+- **The find box** — what is typed, how many matches there are, and **▲ ▼** to step them.
+- **Keywords** — a swatch drawn as this conversation's highlights are drawn, how many there are, and
+  **◂ ▸** to step them. It appears once a highlight field is set.
+- **Conversations** — **◂ 1–4 of 12 ▸**, with conversations side by side and more of them than fit.
+- **Text size**, and whatever else the view offers.
+
+On a narrow object the groups move below the highlight summary rather than squeezing it.
+
+### Text size
+
+**Text size** sets how large the conversation is drawn: the message bodies, the names, the times, the
+badges and the kind chips. The bar keeps its own size, so the controls never move under the pointer as
+you try sizes, and **Density** goes on deciding spacing, padding and avatars.
+
+- **Follow density** is the default and is what the object has always done: 13, 12 or 11 px as the
+  density resolves.
+- **Text size** under **Appearance** sets what a reader starts with; the control in the bar is their
+  own, for as long as the object is open, and gives way the moment the setting itself changes.
+- **Show text size control** under **Appearance** takes it out of the bar.
+
 ## Stepping and the overview ruler
 
-The step buttons, F3 and Ctrl+G go through the search matches while a query is typed, and through the
-highlights otherwise, across the whole conversation. Steps wrap around at either end.
+The find box and the keywords are stepped separately, each keeping its own place and its own counter.
+The find box's buttons, F3 and Ctrl+G go through the search matches; the keyword buttons and Alt with
+an arrow go through the highlights. Steps wrap around at either end, and the one you stepped to last is
+the one outlined.
 
 The **overview ruler** beside the conversation shows where the matches or highlights are, a tick per
 place, in the categories' colours; hover to count them, click to go there. **Show overview ruler** under
@@ -299,15 +332,26 @@ place, in the categories' colours; hover to count them, click to go there. **Sho
 | ------------------------------------------------------------------- | ---------------------------------------------------------------------- |
 | **Ctrl+F** (**Cmd+F**)                                              | Goes to the search box, from inside the object.                        |
 | **Enter** / **Shift+Enter** in the search box                       | The next or the previous match.                                        |
-| **F3** / **Shift+F3**, **Ctrl+G** / **Ctrl+Shift+G** (Cmd on a Mac) | The next or the previous match, or highlight when nothing is typed.    |
+| **F3** / **Shift+F3**, **Ctrl+G** / **Ctrl+Shift+G** (Cmd on a Mac) | The next or the previous search match.                                 |
+| **Alt+↓** / **Alt+↑**                                               | The next or the previous highlight.                                    |
 | **Enter** on a message                                              | Selects the value of the highlight stepped to; otherwise, details.     |
 | **←** / **→** on a message, with conversations side by side         | The neighbouring lane's message: in the same row, or where it is read. |
 | **Escape**                                                          | Clears the search, lets go of the highlight, then leaves the object.   |
+
+Before 0.6.0 one pair of buttons stepped both, and F3 meant the search matches while something was
+typed and the highlights otherwise — one key with two meanings, depending on a box you may not have
+been looking at. F3 and Ctrl+G now mean the find box and nothing else.
 
 ## Copying a conversation
 
 Right-click the object for **Copy conversation as text** or **Copy conversation as JSON**. Both copy the
 messages the object shows under the current selections, in the order shown.
+
+**One message on its own** is copied from the button that appears on it under the pointer, or under the
+keyboard. It copies the two lines a whole transcript gives that message — the sender, every recipient
+and the time, then the message as it was written — so a message copied alone reads like a message
+copied among the rest. **Show copy button on messages** under **Appearance** takes it away, and an
+image or PDF export never has it.
 
 - **Text** is a transcript: the date (YYYY-MM-DD) where a new day starts, the day its separator shows,
   then for each message a line with the sender, every recipient and the time as the object shows it,

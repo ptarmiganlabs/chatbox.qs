@@ -76,3 +76,22 @@ describe('highlights in the stylesheet', () => {
         expect(css.replace(/\/\*[\s\S]*?\*\//g, '')).not.toMatch(/color-mix\(/);
     });
 });
+
+describe('the stylesheet keeps the font family and the font size apart', () => {
+    it('reads a different custom property for each on the root', () => {
+        // GOTCHAS 38: one name for both made font-family invalid, and it was dropped without a word.
+        const root = declarationsOf('.root');
+        expect(root).not.toBeNull();
+        expect(root).toMatch(/font-family:\s*var\(--cqs-font-family/);
+        expect(root).toMatch(/font-size:\s*var\(--cqs-read-size,\s*var\(--cqs-font-size/);
+        expect(root).not.toMatch(/var\(--cqs-font[,)]/);
+    });
+
+    it('lets the density classes own the size, and nothing else', () => {
+        for (const density of ['.densityComfortable', '.densityCompact', '.densityUltra']) {
+            const rule = declarationsOf(density);
+            expect(rule, density).toMatch(/--cqs-font-size:\s*\d+px/);
+            expect(rule, density).not.toMatch(/--cqs-font:/);
+        }
+    });
+});
