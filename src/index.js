@@ -61,6 +61,7 @@ import { themeVars } from './ui/theme-vars';
 import { extensionState } from './util/extension-state';
 import logger, { PACKAGE_VERSION } from './util/logger';
 import { copyConversation } from './export/copy-conversation';
+import { copyMessage } from './export/copy-message';
 
 /** How long a notice stays in the corner, in milliseconds. */
 const NOTICE_MS = 5000;
@@ -667,6 +668,16 @@ export default function supernova(galaxy) {
                     board,
                     lanePicking,
                     laneSteps,
+                    /**
+                     * Copy one message, and say how it went.
+                     *
+                     * @param {object} message - The message under the pointer.
+                     * @returns {Promise<void>} Resolves once the notice is set.
+                     */
+                    onCopyMessage: async (message) => {
+                        const result = await copyMessage({ message });
+                        if (result) setNotice({ ...result, id: ++noticeIdRef.current });
+                    },
                     // Lanes switched on without a thread to put in them: said in a banner, since the
                     // conversation then shows as one.
                     laneNotice:

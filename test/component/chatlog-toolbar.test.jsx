@@ -136,3 +136,28 @@ describe('ChatLog toolbar groups', () => {
         expect(screen.getByRole('combobox', { name: 'Text size' })).toBeTruthy();
     });
 });
+
+describe('ChatLog copy button on a message', () => {
+    it('hands a message to the copy handler, and leaves the button out when switched off', () => {
+        const onCopyMessage = vi.fn();
+        const { unmount } = renderLog({}, { onCopyMessage });
+        fireEvent.click(screen.getAllByRole('button', { name: 'Copy this message' })[0]);
+        expect(onCopyMessage).toHaveBeenCalledWith(expect.objectContaining({ id: '1' }));
+        unmount();
+
+        renderLog({ showMessageCopy: false }, { onCopyMessage });
+        expect(screen.queryByRole('button', { name: 'Copy this message' })).toBeNull();
+    });
+
+    it('leaves it out of a snapshot, which has no clipboard to copy to', () => {
+        render(
+            <ChatLog
+                conversation={conversation}
+                settings={{ dateSeparators: false }}
+                onCopyMessage={vi.fn()}
+                layout={{ snapshotData: { chatbox: { firstVisibleIndex: 0, openId: null } } }}
+            />
+        );
+        expect(screen.queryByRole('button', { name: 'Copy this message' })).toBeNull();
+    });
+});

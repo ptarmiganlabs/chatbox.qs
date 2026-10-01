@@ -59,6 +59,8 @@ export const TEXT_TOOL_DEFAULTS = Object.freeze({
     fontSize: AUTO_FONT_SIZE,
     // The reader's own text size control, in the bar above the conversation.
     showTextSize: true,
+    // A button on a message, under the pointer, that copies that message alone.
+    showMessageCopy: true,
     highlight: Object.freeze({
         field: '',
         possibleWhenNoneSelected: true,
@@ -134,6 +136,7 @@ export function normalizeColorExpression(value) {
  * @returns {{showSearch: boolean, showRuler: boolean,
  *     highlight: {field: string, possibleWhenNoneSelected: boolean, limit: number,
  *     clickToSelect: boolean, showSummary: boolean}, fontSize: number, showTextSize: boolean,
+ *     showMessageCopy: boolean,
  *     match: {caseSensitive: boolean, wholeValues: boolean, flexibleWhitespace: boolean},
  *     category: {field: string, colorExpression: string, showLegend: boolean,
  *     showLabels: boolean}}} The settings.
@@ -148,6 +151,7 @@ export function readTextToolSettings(bag) {
         showRuler: booleanOr(bag?.showRuler, defaults.showRuler),
         fontSize: readFontSize(bag?.fontSize),
         showTextSize: booleanOr(bag?.showTextSize, defaults.showTextSize),
+        showMessageCopy: booleanOr(bag?.showMessageCopy, defaults.showMessageCopy),
         highlight: {
             field: normalizeFieldName(highlight.field),
             possibleWhenNoneSelected: booleanOr(

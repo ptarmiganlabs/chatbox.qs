@@ -273,10 +273,64 @@
 }
 
 .bubbleWrap {
+    position: relative;
     display: flex;
     flex-direction: column;
     min-width: 0;
     max-width: 78%;
+}
+
+/* Copy one message. It sits over the bubble's outer top corner rather than in the text, so a drag
+   that selects the message still selects the message (GOTCHAS 24), and it is drawn only while the
+   pointer or the keyboard is on this bubble: a button on every message at once is a wall of them. */
+.copyMessage {
+    position: absolute;
+    top: -2px;
+    inset-inline-end: -4px;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2px;
+    border: 1px solid var(--cqs-border, #d9d9d9);
+    border-radius: 3px;
+    background: var(--cqs-bg, #ffffff);
+    color: var(--cqs-muted, #6c6c6c);
+    font: inherit;
+    cursor: pointer;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.bubbleWrap:hover .copyMessage,
+.bubbleWrap:focus-within .copyMessage {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+/* A pointer that never hovers — a touch screen — would never see it otherwise. */
+@media (hover: none) {
+    .copyMessage {
+        opacity: 1;
+        pointer-events: auto;
+    }
+}
+
+.copyMessage:hover,
+.copyMessage:focus-visible {
+    color: var(--cqs-text, #404040);
+}
+
+.copyMessage:focus-visible {
+    opacity: 1;
+    pointer-events: auto;
+    outline: 2px solid var(--cqs-focus, #3f8ab3);
+    outline-offset: 1px;
+}
+
+.copyMessage svg {
+    width: 1em;
+    height: 1em;
 }
 
 .bubble {

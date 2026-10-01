@@ -130,6 +130,12 @@ export function appearanceSection() {
                 label: 'Show text size control',
                 defaultValue: TEXT_TOOL_DEFAULTS.showTextSize,
             }),
+            // A button that appears on a message under the pointer and copies that message alone.
+            showMessageCopy: switchItem({
+                ref: 'chatbox.showMessageCopy',
+                label: 'Show copy button on messages',
+                defaultValue: TEXT_TOOL_DEFAULTS.showMessageCopy,
+            }),
         },
     };
 }

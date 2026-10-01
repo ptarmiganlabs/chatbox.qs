@@ -41,7 +41,7 @@ const NAME_ORDER = new Intl.Collator('en', { sensitivity: 'base', numeric: true 
  * @param {object} message - The message.
  * @returns {string} The sender, every recipient and the time as shown, e.g. "Ada → Bob, Cy · 10:32".
  */
-function headerLine(message) {
+export function headerLine(message) {
     const author = message.author?.label ?? '';
     const recipients = message.recipients?.length
         ? message.recipients.map((recipient) => recipient.label).join(', ')
@@ -242,4 +242,20 @@ export function conversationJson(
             )
         ),
     };
+}
+
+/**
+ * Write one message as a transcript of its own.
+ *
+ * The same two lines a whole transcript gives it, so a message copied on its own and a message copied
+ * among the rest read alike. The body is what was written, markdown source and all: it is the text the
+ * reader would select with the mouse, and the only form that pastes back as the message it was.
+ *
+ * @param {object} message - The message.
+ * @returns {string} The header line, then the body.
+ */
+export function messageText(message) {
+    const header = headerLine(message);
+    const body = message?.body ?? '';
+    return [header, body].filter((part) => part !== '').join('\n');
 }

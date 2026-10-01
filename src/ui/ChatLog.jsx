@@ -128,6 +128,7 @@ function ReloadingLine({ reloading }) {
  *   null to leave it out.
  * @param {?object} [props.board] - Conversations side by side, from src/chat/lanes.js; the conversation's
  *   messages are then the board's, in its order. Null for one conversation.
+ * @param {?Function} [props.onCopyMessage] - Copies one message; null while the copy button is off.
  * @param {?object} [props.lanePicking] - How a lane header selects its conversation: `locked`,
  *     `hint` and `onPick(lane, toggle)`; null while headers do not select.
  * @param {?object} [props.laneSteps] - Stepping the window of conversations: `first`, `shown`,
@@ -153,6 +154,7 @@ export function ChatLog({
     laneNotice = null,
     lanePicking = null,
     laneSteps = null,
+    onCopyMessage = null,
 }) {
     // State captured when a snapshot was taken. Null for a normal render.
     const snapshot = readSnapshot(layout);
@@ -422,6 +424,8 @@ export function ChatLog({
     const fontSize = snapshot?.fontSize ?? sizePicked ?? sizeSetting;
 
     const sizeShown = live && settings.showTextSize !== false;
+    // Never in an export, which draws the object again without a clipboard to copy to.
+    const copyShown = live && Boolean(onCopyMessage) && settings.showMessageCopy !== false;
 
     const showRuler = settings.showRuler !== false;
     // One ruler for the conversation; with free scrolling one per lane, over the lane's messages; with
@@ -832,6 +836,7 @@ export function ChatLog({
                     current={currentMarkIn(index)}
                     finds={finds ? finds.byMessage[index] : null}
                     kindChips={kindChips}
+                    onCopy={copyShown ? onCopyMessage : null}
                 />
                 {isOpen && revealMode === 'inline' ? (
                     <DetailReveal

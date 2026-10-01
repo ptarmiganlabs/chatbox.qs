@@ -18,6 +18,7 @@ import { routeClick } from './click-route';
 import HighlightedText from './HighlightedText';
 import KindChips from './KindChips';
 import styles from './chat.module.css';
+import { ICONS, Icon } from './controls';
 
 /**
  * Initials for an avatar fallback.
@@ -61,6 +62,8 @@ function initials(label) {
  * @param {?object} [props.finds] - This message's search matches: `author`, `recipients` and `body`.
  * @param {?{max: number}} [props.kindChips] - How many of the message's kinds to show as chips above its
  *   text; null to show none.
+ * @param {?Function} [props.onCopy] - Copies this message, from a button that appears on hover;
+ *     null while the copy button is off, in an export, or in edit mode.
  * @returns {object} The rendered row.
  */
 export function MessageRow({
@@ -82,6 +85,7 @@ export function MessageRow({
     current = null,
     finds = null,
     kindChips = null,
+    onCopy = null,
 }) {
     /**
      * Find the current mark within one part of the message.
@@ -183,6 +187,24 @@ export function MessageRow({
         >
             {avatar}
             <div className={styles.bubbleWrap}>
+                {onCopy ? (
+                    <button
+                        type="button"
+                        className={styles.copyMessage}
+                        title="Copy this message"
+                        aria-label="Copy this message"
+                        // One tab stop for the whole conversation: a button per message would put
+                        // hundreds in the sheet. The focused row's is reachable, the rest are not.
+                        tabIndex={tabbable ? 0 : -1}
+                        onClick={(event) => {
+                            // A click on it is never a click on the message.
+                            event.stopPropagation();
+                            onCopy(message);
+                        }}
+                    >
+                        <Icon paths={ICONS.copy} />
+                    </button>
+                ) : null}
                 {showAuthor ? (
                     <div className={styles.author}>
                         <span>

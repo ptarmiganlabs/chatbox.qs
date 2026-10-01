@@ -506,3 +506,55 @@ describe('MessageRow — kind chips', () => {
         expect(hiddenKindsTitle(['a', 'b'], false)).toBe('a, b');
     });
 });
+
+describe('MessageRow — the copy button', () => {
+    it('is left out until a copy handler is given', () => {
+        render(<MessageRow message={message()} showAuthor showAvatar selectable={false} />);
+        expect(screen.queryByRole('button', { name: 'Copy this message' })).toBeNull();
+    });
+
+    it('copies its own message, and the click is never a click on the message', () => {
+        const onCopy = vi.fn();
+        const onSelect = vi.fn();
+        const one = message({ body: 'the reload failed' });
+        render(
+            <MessageRow
+                message={one}
+                showAuthor
+                showAvatar
+                selectable
+                onSelect={onSelect}
+                onCopy={onCopy}
+            />
+        );
+        fireEvent.click(screen.getByRole('button', { name: 'Copy this message' }));
+        expect(onCopy).toHaveBeenCalledWith(one);
+        expect(onSelect).not.toHaveBeenCalled();
+    });
+
+    it('takes a tab stop only on the row that has one', () => {
+        // The conversation keeps a single tab stop; a button per message would put hundreds in the
+        // sheet, and tabbing past a long chat would take hundreds of presses.
+        const { rerender } = render(
+            <MessageRow message={message()} showAuthor selectable={false} onCopy={vi.fn()} />
+        );
+        expect(screen.getByRole('button', { name: 'Copy this message' })).toHaveAttribute(
+            'tabindex',
+            '-1'
+        );
+
+        rerender(
+            <MessageRow
+                message={message()}
+                showAuthor
+                selectable={false}
+                tabbable
+                onCopy={vi.fn()}
+            />
+        );
+        expect(screen.getByRole('button', { name: 'Copy this message' })).toHaveAttribute(
+            'tabindex',
+            '0'
+        );
+    });
+});

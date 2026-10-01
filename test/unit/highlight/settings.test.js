@@ -21,6 +21,7 @@ describe('readTextToolSettings', () => {
             showRuler: false,
             fontSize: 16,
             showTextSize: false,
+            showMessageCopy: false,
             highlight: {
                 field: 'match',
                 possibleWhenNoneSelected: false,
