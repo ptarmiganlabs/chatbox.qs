@@ -113,6 +113,9 @@ export function MessageRow({
         // Native Sense charts grey both; dimming only 'X' left alternative-state
         // values looking fully selectable.
         message.state === 'X' || message.state === 'A' ? styles.dimmed : '',
+        // A message the conversation was widened to reach: it is there to give the ones that match
+        // their context, and reads as context rather than as an answer.
+        message.context ? styles.dimmed : '',
     ]
         .filter(Boolean)
         .join(' ');
@@ -238,6 +241,7 @@ export function MessageRow({
                     onClick={handleClick}
                     onKeyDown={handleKeyDown}
                     data-message-index={index}
+                    data-context={message.context ? 'true' : undefined}
                     role={selectable ? 'button' : undefined}
                     // Roving tabindex: only one row in the whole conversation is
                     // reachable by Tab; the rest are reachable by arrow key.

@@ -161,3 +161,88 @@ describe('ChatLog copy button on a message', () => {
         expect(screen.queryByRole('button', { name: 'Copy this message' })).toBeNull();
     });
 });
+
+describe('ChatLog with the conversation widened', () => {
+    const widened = [
+        { ...message('1'), context: true },
+        { ...message('2'), context: false },
+        { ...message('3'), context: true },
+    ];
+    const whole = (over = {}) => ({
+        on: true,
+        disabled: false,
+        reason: '',
+        onToggle: vi.fn(),
+        ...over,
+    });
+
+    /** Render the widened conversation. */
+    const renderWide = (props = {}) =>
+        render(
+            <ChatLog
+                conversation={{
+                    messages: widened,
+                    participants: new Map(),
+                    meta: {},
+                    diagnostics: [],
+                }}
+                settings={{ dateSeparators: false }}
+                rect={{ width: 900, height: 600 }}
+                keyboard={keyboard}
+                whole={whole()}
+                {...props}
+            />,
+            { wrapper: Viewport }
+        );
+
+    it('draws the messages it was widened to reach as context, and the rest as answers', () => {
+        const { container } = renderWide();
+        const bubbles = [...container.querySelectorAll('[data-message-index]')];
+        expect(bubbles.map((b) => b.getAttribute('data-context'))).toEqual(['true', null, 'true']);
+        expect(bubbles[0].className).toMatch(/dimmed/);
+        expect(bubbles[1].className).not.toMatch(/dimmed/);
+    });
+
+    it('says what is on screen, so nobody wonders why unselected messages are there', () => {
+        renderWide();
+        expect(screen.getByText('3 messages · 1 match the selection')).toBeInTheDocument();
+    });
+
+    it('offers the toggle pressed, and says why when the cube cannot be widened', () => {
+        const { unmount } = renderWide();
+        expect(screen.getByRole('button', { name: 'Show whole conversations' })).toHaveAttribute(
+            'aria-pressed',
+            'true'
+        );
+        unmount();
+
+        renderWide({
+            whole: whole({
+                on: false,
+                disabled: true,
+                reason: 'Whole conversations need Participant on a field, not an expression.',
+            }),
+        });
+        const off = screen.getByRole('button', {
+            name: 'Whole conversations need Participant on a field, not an expression.',
+        });
+        expect(off).toBeDisabled();
+    });
+
+    it('leaves the toggle out of a snapshot, which has no engine to widen with', () => {
+        render(
+            <ChatLog
+                conversation={{
+                    messages: widened,
+                    participants: new Map(),
+                    meta: {},
+                    diagnostics: [],
+                }}
+                settings={{ dateSeparators: false }}
+                whole={null}
+                layout={{ snapshotData: { chatbox: { firstVisibleIndex: 0, openId: null } } }}
+            />
+        );
+        expect(screen.queryByRole('button', { name: /whole conversations/i })).toBeNull();
+    });
+});

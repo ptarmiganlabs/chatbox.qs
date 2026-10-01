@@ -9,6 +9,7 @@
  */
 import { LANE_DEFAULTS, LANE_MAX } from '../chat/lanes';
 import { CONVERSATION_MODELS } from '../qix/column-map';
+import { TEXT_TOOL_DEFAULTS } from '../highlight/settings';
 import { switchItem } from './items';
 
 /**
@@ -31,6 +32,14 @@ export function conversationSection() {
         type: 'items',
         label: 'Conversation',
         items: {
+            // Selecting a participant narrows the conversation to their own lines, which is what
+            // Qlik was asked for and rarely what the reader meant. On, the object reads the whole
+            // exchange back and draws the lines that match as answers, the rest as context.
+            wholeConversations: switchItem({
+                ref: 'chatbox.wholeConversations',
+                label: 'Show whole conversations',
+                defaultValue: TEXT_TOOL_DEFAULTS.wholeConversations,
+            }),
             conversationModel: {
                 ref: 'chatbox.conversationModel',
                 type: 'string',

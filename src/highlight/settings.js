@@ -61,6 +61,8 @@ export const TEXT_TOOL_DEFAULTS = Object.freeze({
     showTextSize: true,
     // A button on a message, under the pointer, that copies that message alone.
     showMessageCopy: true,
+    // Widen a selection to the whole conversations it touches, rather than the lines that match.
+    wholeConversations: false,
     highlight: Object.freeze({
         field: '',
         possibleWhenNoneSelected: true,
@@ -136,7 +138,7 @@ export function normalizeColorExpression(value) {
  * @returns {{showSearch: boolean, showRuler: boolean,
  *     highlight: {field: string, possibleWhenNoneSelected: boolean, limit: number,
  *     clickToSelect: boolean, showSummary: boolean}, fontSize: number, showTextSize: boolean,
- *     showMessageCopy: boolean,
+ *     showMessageCopy: boolean, wholeConversations: boolean,
  *     match: {caseSensitive: boolean, wholeValues: boolean, flexibleWhitespace: boolean},
  *     category: {field: string, colorExpression: string, showLegend: boolean,
  *     showLabels: boolean}}} The settings.
@@ -152,6 +154,7 @@ export function readTextToolSettings(bag) {
         fontSize: readFontSize(bag?.fontSize),
         showTextSize: booleanOr(bag?.showTextSize, defaults.showTextSize),
         showMessageCopy: booleanOr(bag?.showMessageCopy, defaults.showMessageCopy),
+        wholeConversations: booleanOr(bag?.wholeConversations, defaults.wholeConversations),
         highlight: {
             field: normalizeFieldName(highlight.field),
             possibleWhenNoneSelected: booleanOr(

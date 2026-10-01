@@ -15,6 +15,14 @@
 /** Role identifiers, used as the keys of a resolved role map. */
 import { normalizeFieldName } from './field-ref';
 
+/**
+ * The cId of the dimension a widened cube is bounded by.
+ *
+ * Defined here rather than imported from context-gate.js, which imports this module: the name is a
+ * contract between the two and belongs with the other cIds.
+ */
+export const CONTEXT_GATE_CID = 'd_cqs_scope';
+
 export const ROLES = {
     MESSAGE_ID: 'messageId',
     AUTHOR: 'author',
@@ -262,7 +270,19 @@ export function unassignedDimensions(columns, byRole) {
             .filter(Boolean)
             .map((c) => c.col)
     );
-    return columns.filter((c) => c.kind === 'dim' && !claimed.has(c.col));
+    return columns.filter(
+        (c) => c.kind === 'dim' && !claimed.has(c.col) && c.cId !== CONTEXT_GATE_CID
+    );
+}
+
+/**
+ * Find the column the whole-conversations gate answers in, by its cId and never by position.
+ *
+ * @param {object[]} columns - Column descriptors from {@link buildColumns}.
+ * @returns {?object} The gate's column, or null while the conversation is not widened.
+ */
+export function gateColumn(columns) {
+    return (columns ?? []).find((c) => c.kind === 'dim' && c.cId === CONTEXT_GATE_CID) ?? null;
 }
 
 /**

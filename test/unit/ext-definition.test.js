@@ -203,7 +203,11 @@ describe('conversations side by side', () => {
     const laneItems = ['lanesShow', 'lanesHelp', 'lanesMax', 'lanesScroll'];
 
     it('follows the conversation model, in the Conversation section', () => {
-        expect(Object.keys(items)).toEqual(['conversationModel', ...laneItems]);
+        expect(Object.keys(items)).toEqual([
+            'wholeConversations',
+            'conversationModel',
+            ...laneItems,
+        ]);
     });
 
     it('binds under chatbox.lanes, with the defaults from src/chat/lanes.js, covering them all', () => {
@@ -291,7 +295,7 @@ describe('highlights and categories sections', () => {
     const highlights = definition.items.highlights;
     const categories = definition.items.categories;
     const TEXT_TOOL_REF =
-        /^chatbox\.((highlight|match|category)\.|showRuler$|showSearch$|showTextSize$|showMessageCopy$|fontSize$)/;
+        /^chatbox\.((highlight|match|category)\.|showRuler$|showSearch$|showTextSize$|showMessageCopy$|wholeConversations$|fontSize$)/;
     const SECTION_REF = /^chatbox\.(highlight|match|category)\./;
 
     it('sit after the message metadata and before the details', () => {

@@ -152,6 +152,38 @@ and the line above the lanes always says so, e.g.
 **3 conversations among the newest 5,000 of 9,000 rows** when every conversation read has a lane — an
 older one that was not read may be missing a lane.
 
+## Whole conversations
+
+Select `Author = Ada` and Qlik answers the question it was asked: the lines Ada wrote. The question
+the reader usually meant is _which chats is Ada in_ — and for that, **Show whole conversations** under
+**Conversation** reads the exchange back.
+
+- A conversation is in scope when **any** of its messages survives the selection. Inside those
+  conversations the selections on **Participant**, **From** and **To** stop narrowing, so the replies
+  Ada answered and the answers she got come back with her own messages.
+- **Every other selection still narrows.** Pick a date as well and you see that day's messages of
+  Ada's chats, not the whole history.
+- The messages that match the selection are drawn as they always are; the rest are dimmed, because
+  they are there to give the others their context. The bar says which is which, e.g. **24 messages in
+  3 conversations · 8 match the selection**.
+- A message belonging to no conversation is governed by the people rule alone: there is no
+  conversation of its own for it to be in scope of.
+- The button in the bar flips it for one reader, for as long as the object is open; the setting is
+  what everyone else starts with, and a change to it drops the reader's own choice.
+
+**It needs the people and conversation dimensions to be fields**, not expressions: freeing a field
+from a selection means naming it. Where one of them is an expression the button is disabled and says
+so, rather than widening some conversations and not others.
+
+Under the hood the object asks the engine to read its cube in a **session alternate state** — the only
+way to re-read an expression as it is written, since the message body is your measure and nothing can
+be injected into it. Nothing is written to the app: the state is never persisted, never appears among
+the app's alternate states, never shows in the selection bar, and nothing is ever selected in it. An
+image or PDF export is drawn without an engine, so it shows the strict conversation.
+
+A widened conversation holds more messages than a narrow one, so **Maximum messages** is reached
+sooner; the banner says when it was.
+
 ## Clicking a message
 
 Set under **Behaviour → Clicking a message**:

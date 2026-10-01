@@ -42,7 +42,7 @@ import { legendEntries } from '../highlight/legend';
 import { swatchStyle } from '../highlight/category-styles';
 import { AUTO_FONT_SIZE, FONT_SIZES, readFontSize } from '../highlight/settings';
 import { HIGHLIGHT_KINDS } from '../qix/highlight-source';
-import { formatCount } from '../util/format';
+import { counted, formatCount } from '../util/format';
 import { readKindChipSettings } from '../chat/kind-chips';
 import { Empty } from './states';
 import ConversationList from './ConversationList';
@@ -128,6 +128,8 @@ function ReloadingLine({ reloading }) {
  *   null to leave it out.
  * @param {?object} [props.board] - Conversations side by side, from src/chat/lanes.js; the conversation's
  *   messages are then the board's, in its order. Null for one conversation.
+ * @param {?object} [props.whole] - The whole-conversations toggle: `on`, `disabled`, `reason` and
+ *     `onToggle()`; null in an export, where there is no engine to widen with.
  * @param {?Function} [props.onCopyMessage] - Copies one message; null while the copy button is off.
  * @param {?object} [props.lanePicking] - How a lane header selects its conversation: `locked`,
  *     `hint` and `onPick(lane, toggle)`; null while headers do not select.
@@ -155,6 +157,7 @@ export function ChatLog({
     lanePicking = null,
     laneSteps = null,
     onCopyMessage = null,
+    whole = null,
 }) {
     // State captured when a snapshot was taken. Null for a normal render.
     const snapshot = readSnapshot(layout);
@@ -424,6 +427,20 @@ export function ChatLog({
     const fontSize = snapshot?.fontSize ?? sizePicked ?? sizeSetting;
 
     const sizeShown = live && settings.showTextSize !== false;
+    // While the conversation is widened, the bar says what is on screen rather than leaving the
+    // reader to wonder why messages they did not select are there.
+    const contextCount = whole?.on ? messages.filter((message) => message.context).length : 0;
+    const wholeInfo =
+        whole?.on && messages.length > 0
+            ? {
+                  text: `${counted(messages.length, 'message', 'messages')}${
+                      board
+                          ? ` in ${counted(board.lanes.length, 'conversation', 'conversations')}`
+                          : ''
+                  } · ${formatCount(messages.length - contextCount)} match the selection`,
+                  level: 'info',
+              }
+            : null;
     // Never in an export, which draws the object again without a clipboard to copy to.
     const copyShown = live && Boolean(onCopyMessage) && settings.showMessageCopy !== false;
 
@@ -890,7 +907,7 @@ export function ChatLog({
         ) : null;
 
     // The bar is there when it has something to put in it; it takes no room otherwise.
-    const barShown = Boolean(highlights || searchable || sizeShown || laneSteps);
+    const barShown = Boolean(highlights || searchable || sizeShown || laneSteps || whole);
 
     const rootClass = [
         styles.root,
@@ -922,7 +939,7 @@ export function ChatLog({
             ))}
             {barShown ? (
                 <ConversationBar
-                    info={highlights?.placement?.bar ?? null}
+                    info={wholeInfo ?? highlights?.placement?.bar ?? null}
                     entries={legend}
                     picking={picking}
                     find={
@@ -980,8 +997,10 @@ export function ChatLog({
                             : null
                     }
                     view={
-                        sizeShown
+                        sizeShown || whole
                             ? {
+                                  showSize: sizeShown,
+                                  whole,
                                   fontSize,
                                   sizes: [AUTO_FONT_SIZE, ...FONT_SIZES],
                                   tabbable,

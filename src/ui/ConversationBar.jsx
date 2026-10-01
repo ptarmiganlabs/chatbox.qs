@@ -143,8 +143,8 @@ function Steps({
  *     and `onStep(direction)`; null to leave it out.
  * @param {?object} [props.lanes] - The conversation stepper: `label`, `canPrevious`, `canNext`,
  *     `tabbable` and `onStep(direction)`; null to leave it out.
- * @param {?object} [props.view] - The view group: `fontSize`, `sizes`, `tabbable`,
- *     `onPickFontSize(size)`, and optionally `whole` for the whole-conversations toggle.
+ * @param {?object} [props.view] - The view group: `showSize`, `fontSize`, `sizes`, `tabbable`,
+ *     `onPickFontSize(size)`, and `whole` for the whole-conversations toggle when there is one.
  * @returns {?object} The rendered bar, or null when it has nothing to show.
  */
 export function ConversationBar({
@@ -256,26 +256,14 @@ export function ConversationBar({
                             ) : null}
                             {view ? (
                                 <div className={styles.group}>
-                                    <select
-                                        className={styles.fontSize}
-                                        title="Text size"
-                                        aria-label="Text size"
-                                        value={String(view.fontSize)}
-                                        tabIndex={view.tabbable ? 0 : -1}
-                                        onChange={(event) =>
-                                            view.onPickFontSize(Number(event.target.value))
-                                        }
-                                    >
-                                        {view.sizes.map((size) => (
-                                            <option key={size} value={String(size)}>
-                                                {fontSizeLabel(size)}
-                                            </option>
-                                        ))}
-                                    </select>
                                     {view.whole ? (
                                         <ToolButton
                                             className={styles.toggle}
-                                            label="Show whole conversations"
+                                            label={
+                                                view.whole.disabled
+                                                    ? view.whole.reason
+                                                    : 'Show whole conversations'
+                                            }
                                             paths={ICONS.whole}
                                             pressed={view.whole.on}
                                             disabled={view.whole.disabled}
@@ -283,6 +271,24 @@ export function ConversationBar({
                                             onClick={view.whole.onToggle}
                                         />
                                     ) : null}
+                                    {view.showSize === false ? null : (
+                                        <select
+                                            className={styles.fontSize}
+                                            title="Text size"
+                                            aria-label="Text size"
+                                            value={String(view.fontSize)}
+                                            tabIndex={view.tabbable ? 0 : -1}
+                                            onChange={(event) =>
+                                                view.onPickFontSize(Number(event.target.value))
+                                            }
+                                        >
+                                            {view.sizes.map((size) => (
+                                                <option key={size} value={String(size)}>
+                                                    {fontSizeLabel(size)}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    )}
                                 </div>
                             ) : null}
                         </div>

@@ -30,6 +30,8 @@ import ext from './ext/index';
 import { normalize } from './chat/normalize';
 import { readConversationRows } from './qix/conversation-rows';
 import { ROLES, conversationModelOf, fieldOfColumn, resolveRoles } from './qix/column-map';
+import { buildContextGate, gateDimensionExpression, gateProblemText } from './qix/context-gate';
+import { ensureState, gateIndexOf, narrow, widen } from './qix/whole-conversations';
 import { buildSelection } from './qix/selection';
 import { describeAssignments } from './qix/role-labels';
 import { syncAttributeExpressions } from './qix/sync-attrs';
@@ -209,6 +211,12 @@ export default function supernova(galaxy) {
                     projections: highlightViewRef.current.projections,
                 });
             }
+            // Whole conversations: the reader's own choice, null while they follow the setting,
+            // and what the cube was last patched with. The patch changes the layout, which renders
+            // again and finds the signature unchanged, so it settles after one pass.
+            const [wholePicked, setWholePicked] = useState(null);
+            const wholeRef = useRef({ signature: '', stateName: null, from: null });
+
             // How far down the ranking the lanes shown start. The reader steps it; it is never
             // reset on a selection, because buildBoard clamps it to what there is, and a reader who
             // stepped to older conversations has said where they want to be.
@@ -521,6 +529,46 @@ export default function supernova(galaxy) {
                     return undefined;
                 }
 
+                // Whole conversations. The setting is what a developer chose; the reader's own
+                // choice sits over it and is dropped the moment the setting itself changes, the way
+                // the text size resolves. Never in an export: a snapshot is drawn on a server with
+                // no engine to make a state on.
+                const toolSettings = readTextToolSettings(settings);
+                if (wholeRef.current.from !== toolSettings.wholeConversations) {
+                    wholeRef.current.from = toolSettings.wholeConversations;
+                    if (wholePicked !== null) setWholePicked(null);
+                }
+                const gate = buildContextGate(byRole);
+                const wholeWanted =
+                    (wholePicked ?? toolSettings.wholeConversations) && !isSnapshot(staleLayout);
+                const signature = wholeWanted && !gate.problem ? gateDimensionExpression(gate) : '';
+                if (signature !== wholeRef.current.signature) {
+                    wholeRef.current.signature = signature;
+                    const gateAt = gateIndexOf(staleLayout);
+                    const stored = (hc.qDimensionInfo ?? []).length - (gateAt >= 0 ? 1 : 0);
+                    // Fire and forget: the patch changes the layout, which renders again.
+                    (async () => {
+                        if (gateAt >= 0) await narrow({ model, gateIndex: gateAt, logger });
+                        if (signature === '') return;
+                        wholeRef.current.stateName =
+                            wholeRef.current.stateName ??
+                            (await ensureState({
+                                app,
+                                objectId: staleLayout?.qInfo?.qId,
+                                logger,
+                            }));
+                        if (!wholeRef.current.stateName) return;
+                        await widen({
+                            model,
+                            stateName: wholeRef.current.stateName,
+                            gate,
+                            dimensionCount: stored,
+                            logger,
+                        });
+                    })();
+                }
+                const wholeOn = gateIndexOf(staleLayout) >= 0;
+
                 // Conversations side by side: a board of lanes, whose order of messages everything below
                 // follows — the highlights, search, stepping and copying count messages by their index in
                 // it. An export shows the lanes a snapshot recorded, not the ones its size would fit.
@@ -663,11 +711,29 @@ export default function supernova(galaxy) {
                           }
                         : null;
 
+                // The toggle in the bar. Disabled rather than hidden where the cube cannot be
+                // widened: a control that vanishes teaches nobody why.
+                const wholeControl = isSnapshot(staleLayout)
+                    ? null
+                    : {
+                          on: wholeOn,
+                          disabled: Boolean(gate.problem),
+                          reason: gateProblemText(gate.problem, conversationModel),
+                          /**
+                           * Flip the mode for this reader, for as long as the object is open.
+                           *
+                           * @returns {void}
+                           */
+                          onToggle: () =>
+                              setWholePicked(!(wholePicked ?? toolSettings.wholeConversations)),
+                      };
+
                 const view = {
                     conversation: shown,
                     board,
                     lanePicking,
                     laneSteps,
+                    whole: wholeControl,
                     /**
                      * Copy one message, and say how it went.
                      *

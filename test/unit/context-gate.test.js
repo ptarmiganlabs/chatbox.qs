@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { GATE_PROBLEMS, buildContextGate, freedSet } from '../../src/qix/context-gate';
+import {
+    GATE_PROBLEMS,
+    buildContextGate,
+    freedSet,
+    gateDimensionExpression,
+} from '../../src/qix/context-gate';
 import { ROLES } from '../../src/qix/column-map';
 
 /** A dimension column on a field, as resolveRoles hands it over. */
@@ -81,5 +86,39 @@ describe('buildContextGate', () => {
     it('answers for no roles at all without throwing', () => {
         expect(buildContextGate({}).problem.kind).toBe(GATE_PROBLEMS.NO_MESSAGE_ID);
         expect(buildContextGate(undefined).problem.kind).toBe(GATE_PROBLEMS.NO_MESSAGE_ID);
+    });
+});
+
+describe('gateDimensionExpression', () => {
+    const roles = {
+        [ROLES.MESSAGE_ID]: onField('MsgId', 0),
+        [ROLES.AUTHOR]: onField('Author', 1),
+        [ROLES.THREAD]: onField('ThreadId', 2),
+    };
+
+    it('answers null to drop a row, 0 for context and 1 for a message that matches', () => {
+        // Verified against Qlik Sense May 2026: with Author = Priya, who writes only in T2, this
+        // answers the whole of T2 and nothing else (GOTCHAS 42).
+        expect(gateDimensionExpression(buildContextGate(roles))).toBe(
+            '=Aggr(If(Count({$<[Author]=>} [MsgId]) > 0 and ' +
+                '(IsNull(Only([ThreadId])) or ' +
+                'Count({1<[ThreadId] = P({$} [ThreadId])>} [MsgId]) > 0), ' +
+                'If(Count({$} [MsgId]) > 0, 1, 0)), [MsgId])'
+        );
+    });
+
+    it('drops the conversation clause when there is no conversation dimension', () => {
+        // Without one the whole cube is a single conversation, and freeing the people fields is all
+        // there is to do.
+        const { [ROLES.THREAD]: _thread, ...noThread } = roles;
+        expect(gateDimensionExpression(buildContextGate(noThread))).toBe(
+            '=Aggr(If(Count({$<[Author]=>} [MsgId]) > 0, ' +
+                'If(Count({$} [MsgId]) > 0, 1, 0)), [MsgId])'
+        );
+    });
+
+    it('writes nothing for a gate that cannot be built', () => {
+        expect(gateDimensionExpression(buildContextGate({}))).toBe('');
+        expect(gateDimensionExpression(null)).toBe('');
     });
 });

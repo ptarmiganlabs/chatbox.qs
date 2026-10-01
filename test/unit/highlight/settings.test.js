@@ -22,6 +22,7 @@ describe('readTextToolSettings', () => {
             fontSize: 16,
             showTextSize: false,
             showMessageCopy: false,
+            wholeConversations: true,
             highlight: {
                 field: 'match',
                 possibleWhenNoneSelected: false,

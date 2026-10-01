@@ -21,8 +21,11 @@
  * field to free and nothing to put in the set. Saying so is the point — a gate that quietly left such
  * a dimension narrowing would widen some conversations and not others, with nothing to see.
  */
-import { ROLES, fieldOfColumn } from './column-map';
+import { CONTEXT_GATE_CID, ROLES, fieldOfColumn } from './column-map';
 import { fieldRef } from './field-ref';
+import { roleLabel } from './role-labels';
+
+export { CONTEXT_GATE_CID };
 
 /** Why a conversation cannot be widened. */
 export const GATE_PROBLEMS = Object.freeze({
@@ -86,6 +89,55 @@ export function buildContextGate(byRole) {
         threadField: empty.threadField,
         problem: null,
     };
+}
+
+/**
+ * Write the dimension that bounds a widened cube to the rows that still belong.
+ *
+ * The engine drops the rest, so nothing out of scope is ever paged. Two conditions, and a message
+ * must meet both: it passes every selection but the people one, and its conversation is one the real
+ * selection leaves possible. A message with no conversation at all meets the second by default —
+ * there is no conversation of its own to be in scope — so it is governed by the first alone.
+ *
+ * It answers three things at once, so no second column is needed: null for a row that does not
+ * belong, which the engine then drops; 0 for a message that belongs only because the people fields
+ * were freed, which is context; and 1 for one that matches the selection as it stands.
+ *
+ * It is **appended** to the cube rather than put in place of the message id. A calculated dimension's
+ * element numbers are the `Aggr`'s own, not the field's, and every selection by element number — a
+ * click on a message, on a lane header, on a highlight — would then be wrong.
+ *
+ * Nothing is selected in the alternate state to do this job, deliberately: a selection there pushes an
+ * undo step, and Sense's back button would undo the object's own bookkeeping (GOTCHAS 42).
+ *
+ * @param {object} gate - From {@link buildContextGate}, with no problem.
+ * @returns {string} The calculated dimension, or '' when the gate has a problem.
+ */
+export function gateDimensionExpression(gate) {
+    if (!gate || gate.problem) return '';
+    const id = fieldRef(gate.messageIdField);
+    const passes = `Count(${freedSet(gate.freed)} ${id}) > 0`;
+    const mark = `If(Count({$} ${id}) > 0, 1, 0)`;
+    if (!gate.threadField) return `=Aggr(If(${passes}, ${mark}), ${id})`;
+    const thread = fieldRef(gate.threadField);
+    const inScope = `IsNull(Only(${thread})) or Count({1<${thread} = P({$} ${thread})>} ${id}) > 0`;
+    return `=Aggr(If(${passes} and (${inScope}), ${mark}), ${id})`;
+}
+
+/**
+ * Say why a conversation cannot be widened, in words a reader can act on.
+ *
+ * @param {?{kind: string, roles: string[]}} problem - From {@link buildContextGate}.
+ * @param {string} [model] - The conversation model, for naming the roles the way the panel does.
+ * @returns {string} The reason, or '' when there is none.
+ */
+export function gateProblemText(problem, model) {
+    if (!problem) return '';
+    if (problem.kind === GATE_PROBLEMS.NO_MESSAGE_ID) {
+        return 'Whole conversations need a Message ID dimension on a field.';
+    }
+    const names = problem.roles.map((role) => roleLabel(role, model));
+    return `Whole conversations need ${names.join(' and ')} on a field, not an expression.`;
 }
 
 export default buildContextGate;
