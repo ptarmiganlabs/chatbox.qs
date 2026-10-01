@@ -1,7 +1,12 @@
 /**
  * Appearance settings.
  */
-import { TEXT_TOOL_DEFAULTS } from '../highlight/settings';
+import {
+    AUTO_FONT_SIZE,
+    FONT_SIZES,
+    TEXT_TOOL_DEFAULTS,
+    fontSizeLabel,
+} from '../highlight/settings';
 import { ON_OFF, switchItem } from './items';
 
 /**
@@ -104,6 +109,26 @@ export function appearanceSection() {
                 ref: 'chatbox.showRuler',
                 label: 'Show overview ruler',
                 defaultValue: TEXT_TOOL_DEFAULTS.showRuler,
+            }),
+            // The conversation's text size: bodies, names, times, badges and chips. The bar keeps
+            // its own size, so the controls do not move when a reader changes this.
+            fontSize: {
+                ref: 'chatbox.fontSize',
+                type: 'number',
+                component: 'dropdown',
+                label: 'Text size',
+                options: [AUTO_FONT_SIZE, ...FONT_SIZES].map((size) => ({
+                    value: size,
+                    label: fontSizeLabel(size),
+                })),
+                defaultValue: TEXT_TOOL_DEFAULTS.fontSize,
+            },
+            // The reader's own text size control, in the bar. Switching it off makes the size above
+            // the only one, which is what a small tile usually wants.
+            showTextSize: switchItem({
+                ref: 'chatbox.showTextSize',
+                label: 'Show text size control',
+                defaultValue: TEXT_TOOL_DEFAULTS.showTextSize,
             }),
         },
     };

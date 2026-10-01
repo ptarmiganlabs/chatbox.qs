@@ -182,7 +182,11 @@ describe('ChatLog with conversations side by side, scrolling freely', () => {
     });
 
     it('keeps exactly one tab stop for all the lanes, and none before Sense hands over focus', () => {
-        const { container, unmount } = renderLanes();
+        // One stop for every lane together, not one per lane. The bar's own controls are left out,
+        // so this counts the lanes alone.
+        const { container, unmount } = renderLanes({
+            settings: { ...settings, showTextSize: false },
+        });
         expect(container.querySelectorAll('[tabindex="0"]')).toHaveLength(1);
         unmount();
         const inactive = renderLanes({ keyboard: { enabled: true, active: false } });

@@ -125,18 +125,18 @@ beforeEach(() => {
 });
 
 describe('ChatLog stepping through highlights', () => {
-    it('steps with F3, outlining the current highlight and counting where it is', () => {
+    it('steps with Alt and an arrow, outlining the current keyword and counting where it is', () => {
         const { container, list } = renderLog();
-        fireEvent.keyDown(list, { key: 'F3' });
+        fireEvent.keyDown(list, { key: 'ArrowDown', altKey: true });
         expect(currentMarks(container)).toEqual(['reload']);
         expect(screen.getByText('1 of 3')).toBeInTheDocument();
         expect(virtuoso.scrollIntoView).toHaveBeenLastCalledWith(
             expect.objectContaining({ index: 0 })
         );
 
-        fireEvent.keyDown(list, { key: 'F3' });
+        fireEvent.keyDown(list, { key: 'ArrowDown', altKey: true });
         expect(currentMarks(container)).toEqual(['task']);
-        fireEvent.keyDown(list, { key: 'F3' });
+        fireEvent.keyDown(list, { key: 'ArrowDown', altKey: true });
         expect(currentMarks(container)).toEqual(['reload']);
         expect(screen.getByText('3 of 3')).toBeInTheDocument();
         expect(virtuoso.scrollIntoView).toHaveBeenLastCalledWith(
@@ -144,30 +144,40 @@ describe('ChatLog stepping through highlights', () => {
         );
     });
 
-    it('steps back with Shift+F3, wrapping to the last, and with Ctrl+G and Cmd+Shift+G', () => {
+    it('steps back with Alt and the up arrow, wrapping to the last', () => {
         const { container, list } = renderLog();
-        fireEvent.keyDown(list, { key: 'F3', shiftKey: true });
+        fireEvent.keyDown(list, { key: 'ArrowUp', altKey: true });
         expect(screen.getByText('3 of 3')).toBeInTheDocument();
-        fireEvent.keyDown(list, { key: 'g', ctrlKey: true });
+        fireEvent.keyDown(list, { key: 'ArrowDown', altKey: true });
         expect(screen.getByText('1 of 3')).toBeInTheDocument();
-        fireEvent.keyDown(list, { key: 'G', metaKey: true, shiftKey: true });
+        fireEvent.keyDown(list, { key: 'ArrowUp', altKey: true });
         expect(currentMarks(container)).toEqual(['reload']);
         expect(screen.getByText('3 of 3')).toBeInTheDocument();
     });
 
+    it('leaves the keywords alone on F3 and Ctrl+G, which belong to the find box', () => {
+        // One key, one meaning: F3 used to step the keywords while nothing was typed, which left it
+        // meaning two things depending on a box the reader may not be looking at (textview.qs 1.2.0).
+        const { container, list } = renderLog();
+        fireEvent.keyDown(list, { key: 'F3' });
+        fireEvent.keyDown(list, { key: 'g', ctrlKey: true });
+        expect(currentMarks(container)).toEqual([]);
+        expect(screen.getByText('3')).toBeInTheDocument();
+    });
+
     it('steps with the buttons, from the bar', () => {
         const { container } = renderLog();
-        fireEvent.click(screen.getByRole('button', { name: 'Next highlight' }));
-        fireEvent.click(screen.getByRole('button', { name: 'Next highlight' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Next keyword' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Next keyword' }));
         expect(currentMarks(container)).toEqual(['task']);
-        fireEvent.click(screen.getByRole('button', { name: 'Previous highlight' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Previous keyword' }));
         expect(currentMarks(container)).toEqual(['reload']);
     });
 
     it('selects the value of the highlight stepped to with Enter, and opens details with Space', () => {
         const props = highlights();
         const { list } = renderLog({ highlights: props });
-        fireEvent.keyDown(list, { key: 'F3' });
+        fireEvent.keyDown(list, { key: 'ArrowDown', altKey: true });
         fireEvent.keyDown(list, { key: 'Enter' });
         expect(props.onSelectValues).toHaveBeenCalledWith(['reload'], false);
         expect(screen.queryByLabelText('Message details')).not.toBeInTheDocument();
@@ -179,7 +189,7 @@ describe('ChatLog stepping through highlights', () => {
     it('opens details with Enter while clicking a highlight does not select', () => {
         const props = highlights({ canSelect: false });
         const { list } = renderLog({ highlights: props });
-        fireEvent.keyDown(list, { key: 'F3' });
+        fireEvent.keyDown(list, { key: 'ArrowDown', altKey: true });
         fireEvent.keyDown(list, { key: 'Enter' });
         expect(props.onSelectValues).not.toHaveBeenCalled();
         expect(screen.getByLabelText('Message details')).toBeInTheDocument();
@@ -187,11 +197,11 @@ describe('ChatLog stepping through highlights', () => {
 
     it('lets go of the highlight on moving on, and on Escape before leaving the object', () => {
         const { container, list } = renderLog();
-        fireEvent.keyDown(list, { key: 'F3' });
+        fireEvent.keyDown(list, { key: 'ArrowDown', altKey: true });
         fireEvent.keyDown(list, { key: 'ArrowDown' });
         expect(currentMarks(container)).toEqual([]);
 
-        fireEvent.keyDown(list, { key: 'F3' });
+        fireEvent.keyDown(list, { key: 'ArrowDown', altKey: true });
         expect(currentMarks(container)).toHaveLength(1);
         fireEvent.keyDown(list, { key: 'Escape' });
         expect(currentMarks(container)).toEqual([]);
@@ -200,7 +210,7 @@ describe('ChatLog stepping through highlights', () => {
         expect(active.blur).toHaveBeenCalledWith(true);
     });
 
-    it('keeps F3 for the browser when there is nothing to step to', () => {
+    it('keeps Alt and an arrow for the browser when there is nothing to step to', () => {
         const none = createHighlightView().build({
             tagged: {
                 answer: { ...answer, rows: [{ value: 'absent', category: null }] },
@@ -212,10 +222,15 @@ describe('ChatLog stepping through highlights', () => {
             messages: MESSAGES,
         });
         const { list } = renderLog({ highlights: none });
-        const event = new KeyboardEvent('keydown', { key: 'F3', bubbles: true, cancelable: true });
+        const event = new KeyboardEvent('keydown', {
+            key: 'ArrowDown',
+            altKey: true,
+            bubbles: true,
+            cancelable: true,
+        });
         list.dispatchEvent(event);
         expect(event.defaultPrevented).toBe(false);
-        expect(screen.getByRole('button', { name: 'Next highlight' })).toBeDisabled();
+        expect(screen.getByRole('button', { name: 'Next keyword' })).toBeDisabled();
     });
 
     it('shows an overview ruler that goes to a message when clicked', () => {
@@ -255,7 +270,7 @@ describe('ChatLog stepping through highlights', () => {
             />
         );
         expect(
-            within(snapshot.container).queryByRole('button', { name: 'Next highlight' })
+            within(snapshot.container).queryByRole('button', { name: 'Next keyword' })
         ).toBeNull();
         expect(snapshot.container.querySelector('mark')).not.toBeNull();
     });

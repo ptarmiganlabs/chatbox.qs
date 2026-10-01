@@ -13,6 +13,17 @@
 import { counted, formatCount } from '../util/format';
 
 /**
+ * The two groups of stops a conversation has, each walked on its own.
+ *
+ * The find box and the keywords keep separate places and separate counters, so a key never means
+ * one thing or the other depending on a box the reader may not be looking at (textview.qs 1.2.0).
+ */
+export const STOP_KINDS = Object.freeze({ FIND: 'find', KEYWORD: 'highlight' });
+
+/** No place held in either group. */
+export const NO_PLACES = Object.freeze({ [STOP_KINDS.FIND]: null, [STOP_KINDS.KEYWORD]: null });
+
+/**
  * Find the message a stop belongs to.
  *
  * @param {{firstStop: Int32Array}} stops - The stops.
@@ -67,14 +78,19 @@ export function stepStop({ stops, current, direction, from = 0 }) {
  * @param {number} request.index - The current stop's number, or -1 for none.
  * @param {number} request.count - How many stops there are.
  * @param {boolean} [request.truncated] - Whether the search stopped before finding them all.
- * @returns {string} For example "3 of 12", "12 matches", "No matches", or '' for highlights before the
- *     first step: the summary line counts them.
+ * @param {boolean} [request.asked] - Whether the group has been given a question to answer; a
+ *     question nobody put gets no answer, so an empty search box counts nothing.
+ * @returns {string} For example "3 of 12", "12 matches", "No matches" for the find box, "3 of 7",
+ *     "7" or "None" for the keywords, and '' where nothing was asked.
  */
-export function counterText({ kind, index, count, truncated = false }) {
+export function counterText({ kind, index, count, truncated = false, asked = true }) {
+    if (!asked) return '';
     const more = truncated ? '+' : '';
     if (index >= 0 && index < count)
         return `${formatCount(index + 1)} of ${formatCount(count)}${more}`;
-    if (kind !== 'find') return '';
+    if (kind === STOP_KINDS.KEYWORD) {
+        return count === 0 ? 'None' : `${formatCount(count)}${more}`;
+    }
     if (count === 0) return 'No matches';
     return truncated ? `${formatCount(count)}+ matches` : counted(count, 'match', 'matches');
 }

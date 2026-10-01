@@ -18,6 +18,7 @@ import {
     canReceiveTabStop,
     isFindKey,
     keyAction,
+    keywordStepDirection,
     laneFocusIndex,
     nextFocusIndex,
     stepDirection,
@@ -28,13 +29,19 @@ import ConversationBar from './ConversationBar';
 import Notice from './Notice';
 import HighlightRuler from './HighlightRuler';
 import { isInView, scrollToElement } from './scroll';
-import { counterText as stopCounterText, stepStop } from '../highlight/navigator';
+import {
+    NO_PLACES,
+    STOP_KINDS,
+    counterText as stopCounterText,
+    stepStop,
+} from '../highlight/navigator';
 import { rulerTicks } from '../highlight/ruler';
 import { createConversationFinder, partOf } from '../highlight/conversation-finder';
 import { drawnCount } from '../highlight/conversation-highlights';
 import { legendEntries } from '../highlight/legend';
+import { swatchStyle } from '../highlight/category-styles';
+import { AUTO_FONT_SIZE, FONT_SIZES, readFontSize } from '../highlight/settings';
 import { HIGHLIGHT_KINDS } from '../qix/highlight-source';
-import { counted } from '../util/format';
 import { readKindChipSettings } from '../chat/kind-chips';
 import { Empty } from './states';
 import ConversationList from './ConversationList';
@@ -257,10 +264,13 @@ export function ChatLog({
         setFocus(focusIndex < 0 ? NO_FOCUS : { key: focus.key, index: focusIndex });
     }, [focus, focusIndex]);
 
-    // The current stop: the highlight the reader stepped to, by the message it is in. It counts
-    // only while the stops it was found among are the ones shown, so new highlights or a new
-    // conversation leave no current stop, without any bookkeeping on each path.
-    const [current, setCurrent] = useState(null);
+    // One place per group — the find box and the keywords — and the group the reader stepped
+    // to last, which is the one drawn as current. A place counts only while the stops it was
+    // found among are still the ones shown, compared by identity: both finders hand back the very
+    // same array while nothing has changed, so a search, or a selection that changes the values,
+    // drops that group's place and leaves the other's alone with no bookkeeping (textview.qs).
+    const [current, setCurrent] = useState(NO_PLACES);
+    const [stepped, setStepped] = useState(null);
 
     // Every warning is rendered, not just the first. Truncation and merged
     // bubbles can both be live at once, and showing only one silently hides
@@ -323,18 +333,33 @@ export function ChatLog({
         ? finder.find({ messages, query: appliedQuery, gapSec, previous })
         : null;
 
-    // What stepping, the counter and the ruler go through: the search matches while a query is
-    // typed, the highlights otherwise.
-    const stops = finds ?? (highlightValues ? highlights.result : null);
-    const stopKind = finds ? 'find' : 'highlight';
+    // Where each group's stops come from. A lookup rather than a test with a fallback: a kind
+    // this does not know is a mistake here, and quietly stepping the other group would be a poor
+    // way to find out.
+    const keywordStops = highlightValues ? highlights.result : null;
+    const stopsOf = { [STOP_KINDS.FIND]: finds, [STOP_KINDS.KEYWORD]: keywordStops };
+
+    /**
+     * Find a group's place, if it still belongs to that group's stops.
+     *
+     * @param {string} kind - A value of {@link STOP_KINDS}.
+     * @returns {?{messageIndex: number, ordinal: number}} The place, or null.
+     */
+    const placeOf = (kind) => {
+        const held = current[kind];
+        const stopsNow = stopsOf[kind];
+        if (!held || !stopsNow || held.stops !== stopsNow) return null;
+        const messageIndex = stopsNow.indexByKey.get(held.key) ?? -1;
+        return messageIndex >= 0 ? { messageIndex, ordinal: held.ordinal } : null;
+    };
+
+    // The ruler follows what is typed, as it always has, whichever group was stepped last.
+    const stops = finds ?? keywordStops;
+    const stopKind = finds ? STOP_KINDS.FIND : STOP_KINDS.KEYWORD;
     const stopTotal = stops?.total ?? 0;
-    const truncated = finds ? finds.truncated : Boolean(stops?.searchTruncated);
-    const currentMessage =
-        current !== null && current.stops === stops && current.kind === stopKind
-            ? (stops.indexByKey.get(current.key) ?? -1)
-            : -1;
-    const currentStop =
-        currentMessage >= 0 ? { messageIndex: currentMessage, ordinal: current.ordinal } : null;
+    // Exactly one stop is ever drawn as current: the one in the group stepped to last.
+    const currentKind = stepped !== null && placeOf(stepped) ? stepped : null;
+    const currentStop = currentKind === null ? null : placeOf(currentKind);
 
     /**
      * Describe the current stop within one message, for drawing it.
@@ -345,27 +370,51 @@ export function ChatLog({
      */
     const currentMarkIn = (index) => {
         if (currentStop?.messageIndex !== index) return null;
-        if (stopKind === 'highlight') {
-            return { kind: 'highlight', ordinal: currentStop.ordinal, part: 'body' };
+        if (currentKind === STOP_KINDS.KEYWORD) {
+            return { kind: STOP_KINDS.KEYWORD, ordinal: currentStop.ordinal, part: 'body' };
         }
         const within = partOf(finds.byMessage[index], currentStop.ordinal);
-        return within ? { kind: 'find', ordinal: within.ordinal, part: within.part } : null;
+        return within
+            ? { kind: STOP_KINDS.FIND, ordinal: within.ordinal, part: within.part }
+            : null;
     };
 
-    let counterText = '';
-    if (finds || currentStop) {
-        counterText = stopCounterText({
-            kind: stopKind,
-            index: currentStop
-                ? stops.firstStop[currentStop.messageIndex] + currentStop.ordinal
-                : -1,
-            count: stopTotal,
-            truncated,
+    /**
+     * Write what one group's counter says.
+     *
+     * @param {string} kind - A value of {@link STOP_KINDS}.
+     * @param {boolean} asked - Whether the group has been given a question to answer.
+     * @returns {string} The counter's text.
+     */
+    const counterFor = (kind, asked) => {
+        const stopsNow = stopsOf[kind];
+        // Each group counts its own place, whichever one was stepped last: only the outline is
+        // exclusive. A reader who steps the keywords has not lost their place among the matches.
+        const place = placeOf(kind);
+        return stopCounterText({
+            kind,
+            index: place ? stopsNow.firstStop[place.messageIndex] + place.ordinal : -1,
+            count: stopsNow?.total ?? 0,
+            truncated:
+                kind === STOP_KINDS.FIND
+                    ? Boolean(stopsNow?.truncated)
+                    : Boolean(stopsNow?.searchTruncated),
+            asked,
         });
-    } else if (stops && !highlights.placement.bar && !highlightBanner) {
-        // The summary counts the highlights where it is shown; otherwise the counter does.
-        counterText = counted(stopTotal, 'highlight', 'highlights');
+    };
+
+    // The reader's text size, if they picked one. The setting wins the moment it changes: a
+    // developer who sets a size means it, and a reader's old pick must not quietly outlive it.
+    const sizeSetting = readFontSize(settings.fontSize);
+    const [sizePicked, setSizePicked] = useState(null);
+    const [sizeFrom, setSizeFrom] = useState(sizeSetting);
+    if (sizeFrom !== sizeSetting) {
+        setSizeFrom(sizeSetting);
+        setSizePicked(null);
     }
+    const fontSize = snapshot?.fontSize ?? sizePicked ?? sizeSetting;
+
+    const sizeShown = live && settings.showTextSize !== false;
 
     const showRuler = settings.showRuler !== false;
     // One ruler for the conversation; with free scrolling one per lane, over the lane's messages; with
@@ -447,12 +496,15 @@ export function ChatLog({
      */
     const goTo = (next, stopsNow, kindNow, moveFocus) => {
         const { messageIndex } = next;
-        setCurrent({
-            kind: kindNow,
-            key: bubbleKey(messages[messageIndex]),
-            ordinal: next.ordinal,
-            stops: stopsNow,
-        });
+        setCurrent((places) => ({
+            ...places,
+            [kindNow]: {
+                key: bubbleKey(messages[messageIndex]),
+                ordinal: next.ordinal,
+                stops: stopsNow,
+            },
+        }));
+        setStepped(kindNow);
         /**
          * Reveal the mark on the frame after its message is drawn.
          *
@@ -472,16 +524,16 @@ export function ChatLog({
      * @param {number} direction - 1 for the next stop, -1 for the previous one.
      * @param {boolean} fromList - Whether the step came from a key pressed in the list, which moves
      *     focus to the stop's message.
-     * @param {?object} [stopsNow] - The stops to step through; the ones shown when not given.
-     * @param {string} [kindNow] - Their kind.
+     * @param {string} kindNow - Which group to step: a value of {@link STOP_KINDS}.
+     * @param {?object} [stopsNow] - The stops to step through; that group's when not given.
      * @returns {boolean} True when there was a stop to step to.
      */
-    const step = (direction, fromList, stopsNow = stops, kindNow = stopKind) => {
+    const step = (direction, fromList, kindNow, stopsNow = stopsOf[kindNow]) => {
         if (!stopsNow || stopsNow.total === 0) return false;
         const from = focusIndex >= 0 ? focusIndex : readingIndex();
         const next = stepStop({
             stops: stopsNow,
-            current: stopsNow === stops ? currentStop : null,
+            current: stopsNow === stopsOf[kindNow] ? placeOf(kindNow) : null,
             direction,
             from,
         });
@@ -499,7 +551,7 @@ export function ChatLog({
         if (!finds || finds.total === 0) return;
         const from = focusIndex >= 0 ? focusIndex : readingIndex();
         const next = stepStop({ stops: finds, current: null, direction: 1, from });
-        if (next !== null) goTo(next, finds, 'find', false);
+        if (next !== null) goTo(next, finds, STOP_KINDS.FIND, false);
     }, [appliedQuery, finds]);
 
     /**
@@ -596,6 +648,9 @@ export function ChatLog({
      */
     const handleKeyDown = (event) => {
         if (!tabbable) return;
+        // Alt and an arrow walks the keywords, which the root handles. It is not a plain arrow, and
+        // moving focus on it as well would step and scroll away from the keyword in one press.
+        if (keywordStepDirection(event) !== null) return;
 
         const moved = board
             ? laneFocusIndex(event.key, focusIndex, board, {
@@ -611,7 +666,8 @@ export function ChatLog({
         if (moved !== null) {
             event.preventDefault();
             // Moving on leaves the stop the reader stepped to.
-            setCurrent(null);
+            setCurrent(NO_PLACES);
+            setStepped(null);
             focusAt(moved);
             return;
         }
@@ -623,11 +679,11 @@ export function ChatLog({
             // with Space, it opens the details as it always has.
             if (
                 event.key === 'Enter' &&
-                stopKind === 'highlight' &&
+                currentKind === STOP_KINDS.KEYWORD &&
                 clickMode === 'select' &&
                 currentStop?.messageIndex === focusIndex
             ) {
-                const span = stops.byMessage[focusIndex].spans[currentStop.ordinal];
+                const span = keywordStops.byMessage[focusIndex].spans[currentStop.ordinal];
                 highlights.onSelectValues?.(span.values, Boolean(event.ctrlKey || event.metaKey));
                 return;
             }
@@ -642,7 +698,8 @@ export function ChatLog({
             if (openId) {
                 closeDetail();
             } else if (currentStop) {
-                setCurrent(null);
+                setCurrent(NO_PLACES);
+                setStepped(null);
             } else {
                 setFocus(NO_FOCUS);
                 keyboard?.blur?.(true);
@@ -666,10 +723,15 @@ export function ChatLog({
             searchInputRef.current?.select?.();
             return;
         }
+        const fromList = Boolean(bodyRef.current?.contains(event.target));
+        const keyword = keywordStepDirection(event);
+        if (keyword !== null) {
+            if (step(keyword, fromList, STOP_KINDS.KEYWORD)) event.preventDefault();
+            return;
+        }
         const direction = stepDirection(event);
         if (direction === null) return;
-        const fromList = Boolean(bodyRef.current?.contains(event.target));
-        if (step(direction, fromList)) event.preventDefault();
+        if (step(direction, fromList, STOP_KINDS.FIND)) event.preventDefault();
     };
 
     /**
@@ -681,21 +743,15 @@ export function ChatLog({
     const handleSearchKeyDown = (event) => {
         if (event.key === 'Enter') {
             event.preventDefault();
-            let stopsNow = stops;
-            let kindNow = stopKind;
+            let stopsNow = finds;
             // Enter acts on what is typed, not on what the pause would search.
             if (query !== appliedQuery) {
                 settledRef.current = query;
                 setAppliedQuery(query);
-                const typed = query.trim() !== '';
-                stopsNow = typed
-                    ? finder.find({ messages, query, gapSec, previous })
-                    : highlightValues
-                      ? highlights.result
-                      : null;
-                kindNow = typed ? 'find' : 'highlight';
+                stopsNow =
+                    query.trim() === '' ? null : finder.find({ messages, query, gapSec, previous });
             }
-            step(event.shiftKey ? -1 : 1, false, stopsNow, kindNow);
+            step(event.shiftKey ? -1 : 1, false, STOP_KINDS.FIND, stopsNow);
             return;
         }
         if (event.key === 'Escape' || event.key === 'Esc') {
@@ -706,7 +762,9 @@ export function ChatLog({
                 settledRef.current = '';
                 setQuery('');
                 setAppliedQuery('');
-                setCurrent(null);
+                // The keyword group keeps its own place: clearing the box is not a step.
+                setCurrent((places) => ({ ...places, [STOP_KINDS.FIND]: null }));
+                if (stepped === STOP_KINDS.FIND) setStepped(null);
             } else {
                 keyboard?.blur?.(true);
             }
@@ -720,7 +778,8 @@ export function ChatLog({
      * @returns {void}
      */
     const jumpTo = (index) => {
-        setCurrent(null);
+        setCurrent(NO_PLACES);
+        setStepped(null);
         bodyRef.current?.jumpTo(index);
     };
 
@@ -818,6 +877,9 @@ export function ChatLog({
             />
         ) : null;
 
+    // The bar is there when it has something to put in it; it takes no room otherwise.
+    const barShown = Boolean(highlights || searchable || sizeShown);
+
     const rootClass = [
         styles.root,
         styles[`density${density[0].toUpperCase()}${density.slice(1)}`],
@@ -829,6 +891,7 @@ export function ChatLog({
     return (
         <div
             className={rootClass}
+            style={fontSize === AUTO_FONT_SIZE ? undefined : { '--cqs-read-size': `${fontSize}px` }}
             data-density={density}
             data-labels={showLabels ? 'true' : undefined}
             data-marks={clickMode ?? undefined}
@@ -845,38 +908,65 @@ export function ChatLog({
                     {w.message}
                 </div>
             ))}
-            {highlights || searchable ? (
+            {barShown ? (
                 <ConversationBar
                     info={highlights?.placement?.bar ?? null}
                     entries={legend}
-                    counter={counterText}
                     picking={picking}
-                    search={
+                    find={
                         searchable
                             ? {
                                   query,
                                   inputRef: searchInputRef,
                                   tabbable,
+                                  counter: counterFor(STOP_KINDS.FIND, appliedQuery !== ''),
+                                  canStep: (finds?.total ?? 0) > 0,
                                   onChange: setQuery,
                                   onKeyDown: handleSearchKeyDown,
-                              }
-                            : null
-                    }
-                    stepper={
-                        live && (stops || searchable)
-                            ? {
-                                  kind: finds || !highlightValues ? 'find' : 'highlight',
-                                  canStep: stopTotal > 0,
-                                  tabbable,
                                   /**
-                                   * Step from the bar's buttons, leaving focus on the button.
+                                   * Step the matches from the bar, leaving focus on the button.
                                    *
                                    * @param {number} direction - 1 for next, -1 for previous.
                                    * @returns {void}
                                    */
                                   onStep: (direction) => {
-                                      step(direction, false);
+                                      step(direction, false, STOP_KINDS.FIND);
                                   },
+                              }
+                            : null
+                    }
+                    keywords={
+                        live && keywordStops
+                            ? {
+                                  counter: counterFor(STOP_KINDS.KEYWORD, true),
+                                  canStep: keywordStops.total > 0,
+                                  tabbable,
+                                  swatch: swatchStyle(highlights.styles, keywordStops.counts),
+                                  /**
+                                   * Step the keywords from the bar, leaving focus on the button.
+                                   *
+                                   * @param {number} direction - 1 for next, -1 for previous.
+                                   * @returns {void}
+                                   */
+                                  onStep: (direction) => {
+                                      step(direction, false, STOP_KINDS.KEYWORD);
+                                  },
+                              }
+                            : null
+                    }
+                    view={
+                        sizeShown
+                            ? {
+                                  fontSize,
+                                  sizes: [AUTO_FONT_SIZE, ...FONT_SIZES],
+                                  tabbable,
+                                  /**
+                                   * Take the reader's text size.
+                                   *
+                                   * @param {number} size - The size picked.
+                                   * @returns {void}
+                                   */
+                                  onPickFontSize: (size) => setSizePicked(readFontSize(size)),
                               }
                             : null
                     }

@@ -19,6 +19,8 @@ describe('readTextToolSettings', () => {
         const bag = {
             showSearch: false,
             showRuler: false,
+            fontSize: 16,
+            showTextSize: false,
             highlight: {
                 field: 'match',
                 possibleWhenNoneSelected: false,

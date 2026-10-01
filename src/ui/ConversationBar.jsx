@@ -1,5 +1,11 @@
 /**
- * The bar above the conversation: what the highlights come to, their legend, and the counter.
+ * The bar above the conversation: what the highlights come to, their legend, and the controls.
+ *
+ * The controls are grouped into pills — the find box, the keywords, the conversations side by side,
+ * and the view. The tint behind a group, rather than a border on each control, is what says where one
+ * group ends and the next begins, and it is the only thing that reads on a light and a dark theme
+ * without a second rule. A reader who mistakes one group for another has been failed by the toolbar,
+ * not by their attention: the find box steps with ▲▼ and the keywords with ◂▸.
  *
  * It takes no room of its own when it has nothing to say. The legend lists the categories with their
  * counts, and scrolls when it is taller than a few lines rather than squeezing the conversation.
@@ -8,7 +14,9 @@
  */
 import { categoryClickHint } from '../highlight/click-selection';
 import { entrySummary } from '../highlight/legend';
+import { fontSizeLabel } from '../highlight/settings';
 import { formatCount } from '../util/format';
+import { ICONS, ToolButton } from './controls';
 import styles from './chat.module.css';
 
 /**
@@ -75,86 +83,209 @@ function entryKey(entry) {
 }
 
 /**
+ * Render a pair of step buttons.
+ *
+ * @param {object} props - Component props.
+ * @param {string} props.noun - What is stepped through, for the buttons' names.
+ * @param {string} props.back - The glyph for the previous one.
+ * @param {string} props.forward - The glyph for the next one.
+ * @param {boolean} props.canStep - Whether there is anything to step to.
+ * @param {boolean} props.tabbable - Whether the buttons take the object's tab stop.
+ * @param {?string} [props.backKeys] - The keys for the previous one.
+ * @param {?string} [props.forwardKeys] - The keys for the next one.
+ * @param {Function} props.onStep - Takes 1 for the next, -1 for the previous.
+ * @returns {object} The rendered buttons.
+ */
+function Steps({
+    noun,
+    back,
+    forward,
+    canStep,
+    tabbable,
+    backKeys = undefined,
+    forwardKeys = undefined,
+    onStep,
+}) {
+    return (
+        <>
+            <ToolButton
+                className={styles.step}
+                label={`Previous ${noun}`}
+                text={back}
+                disabled={!canStep}
+                tabbable={tabbable}
+                keyShortcuts={backKeys}
+                onClick={() => onStep(-1)}
+            />
+            <ToolButton
+                className={styles.step}
+                label={`Next ${noun}`}
+                text={forward}
+                disabled={!canStep}
+                tabbable={tabbable}
+                keyShortcuts={forwardKeys}
+                onClick={() => onStep(1)}
+            />
+        </>
+    );
+}
+
+/**
  * Render the bar above the conversation.
  *
  * @param {object} props - Component props.
  * @param {?{text: string, level: string}} [props.info] - The highlight summary, when it is shown here.
  * @param {Array<object>} [props.entries] - The legend's entries; none hides the legend.
- * @param {string} [props.counter] - What the counter says; '' for nothing.
  * @param {?object} [props.picking] - How chips select a category; null while they do not.
- * @param {?object} [props.stepper] - The step buttons: `kind` ('highlight' or 'find'), `canStep`,
- *     `tabbable` and `onStep(direction)`; null to leave them out.
- * @param {?object} [props.search] - The search box: `query`, `inputRef`, `tabbable`,
- *     `onChange(query)` and `onKeyDown(event)`; null to leave it out.
+ * @param {?object} [props.find] - The find box: `query`, `inputRef`, `tabbable`, `counter`, `canStep`,
+ *     `onChange(query)`, `onKeyDown(event)` and `onStep(direction)`; null to leave it out.
+ * @param {?object} [props.keywords] - The keyword group: `counter`, `canStep`, `tabbable`, `swatch`
+ *     and `onStep(direction)`; null to leave it out.
+ * @param {?object} [props.lanes] - The conversation stepper: `label`, `canPrevious`, `canNext`,
+ *     `tabbable` and `onStep(direction)`; null to leave it out.
+ * @param {?object} [props.view] - The view group: `fontSize`, `sizes`, `tabbable`,
+ *     `onPickFontSize(size)`, and optionally `whole` for the whole-conversations toggle.
  * @returns {?object} The rendered bar, or null when it has nothing to show.
  */
 export function ConversationBar({
     info = null,
     entries = [],
-    counter = '',
     picking = null,
-    stepper = null,
-    search = null,
+    find = null,
+    keywords = null,
+    lanes = null,
+    view = null,
 }) {
-    const hasTools = Boolean(info) || counter !== '' || stepper !== null || search !== null;
-    const noun = stepper?.kind === 'find' ? 'match' : 'highlight';
-    if (!hasTools && entries.length === 0) return null;
+    const hasActions = find !== null || keywords !== null || lanes !== null || view !== null;
+    if (!info && !hasActions && entries.length === 0) return null;
     return (
         <div className={styles.bar}>
-            {hasTools ? (
-                <div className={styles.toolbar}>
-                    {search ? (
-                        <input
-                            ref={search.inputRef}
-                            type="search"
-                            className={styles.search}
-                            placeholder="Search messages"
-                            aria-label="Search messages"
-                            autoComplete="off"
-                            spellCheck={false}
-                            value={search.query}
-                            tabIndex={search.tabbable ? 0 : -1}
-                            onChange={(event) => search.onChange(event.target.value)}
-                            onKeyDown={search.onKeyDown}
-                        />
-                    ) : null}
-                    {info ? (
-                        <span className={styles.summary} title={info.text} data-level={info.level}>
-                            {info.text}
-                        </span>
-                    ) : null}
-                    {counter !== '' ? (
-                        <span className={styles.counter} role="status">
-                            {counter}
-                        </span>
-                    ) : null}
-                    {stepper ? (
-                        <span className={styles.stepper}>
-                            <button
-                                type="button"
-                                className={styles.step}
-                                aria-label={`Previous ${noun}`}
-                                title={`Previous ${noun} (Shift+F3)`}
-                                aria-keyshortcuts="Shift+F3"
-                                disabled={!stepper.canStep}
-                                tabIndex={stepper.tabbable ? 0 : -1}
-                                onClick={() => stepper.onStep(-1)}
-                            >
-                                ▲
-                            </button>
-                            <button
-                                type="button"
-                                className={styles.step}
-                                aria-label={`Next ${noun}`}
-                                title={`Next ${noun} (F3)`}
-                                aria-keyshortcuts="F3"
-                                disabled={!stepper.canStep}
-                                tabIndex={stepper.tabbable ? 0 : -1}
-                                onClick={() => stepper.onStep(1)}
-                            >
-                                ▼
-                            </button>
-                        </span>
+            {info || hasActions ? (
+                <div className={styles.toolStrip}>
+                    <div className={styles.meta}>
+                        {info ? (
+                            <p className={styles.summary} title={info.text} data-level={info.level}>
+                                {info.text}
+                            </p>
+                        ) : null}
+                    </div>
+                    {hasActions ? (
+                        <div className={styles.actions}>
+                            {find ? (
+                                <div className={`${styles.group} ${styles.findBox}`} role="search">
+                                    <input
+                                        ref={find.inputRef}
+                                        type="search"
+                                        className={styles.search}
+                                        placeholder="Search messages"
+                                        aria-label="Search messages"
+                                        autoComplete="off"
+                                        spellCheck={false}
+                                        value={find.query}
+                                        tabIndex={find.tabbable ? 0 : -1}
+                                        onChange={(event) => find.onChange(event.target.value)}
+                                        onKeyDown={find.onKeyDown}
+                                    />
+                                    <span className={styles.counter} role="status">
+                                        {find.counter}
+                                    </span>
+                                    <Steps
+                                        noun="match"
+                                        back="▲"
+                                        forward="▼"
+                                        canStep={find.canStep}
+                                        tabbable={find.tabbable}
+                                        backKeys="Shift+F3"
+                                        forwardKeys="F3"
+                                        onStep={find.onStep}
+                                    />
+                                </div>
+                            ) : null}
+                            {keywords ? (
+                                <div
+                                    className={`${styles.group} ${styles.keywordSteps}`}
+                                    role="group"
+                                    aria-label="Keywords"
+                                >
+                                    <span
+                                        className={styles.keywordSwatch}
+                                        style={keywords.swatch ?? undefined}
+                                        aria-hidden="true"
+                                    />
+                                    <span className={styles.counter} role="status">
+                                        {keywords.counter}
+                                    </span>
+                                    <Steps
+                                        noun="keyword"
+                                        back="◂"
+                                        forward="▸"
+                                        canStep={keywords.canStep}
+                                        tabbable={keywords.tabbable}
+                                        backKeys="Alt+Up"
+                                        forwardKeys="Alt+Down"
+                                        onStep={keywords.onStep}
+                                    />
+                                </div>
+                            ) : null}
+                            {lanes ? (
+                                <div
+                                    className={`${styles.group} ${styles.laneSteps}`}
+                                    role="group"
+                                    aria-label="Conversations shown"
+                                >
+                                    <ToolButton
+                                        className={styles.step}
+                                        label="Earlier conversations"
+                                        text="◂"
+                                        disabled={!lanes.canPrevious}
+                                        tabbable={lanes.tabbable}
+                                        onClick={() => lanes.onStep(-1)}
+                                    />
+                                    <span className={styles.counter} role="status">
+                                        {lanes.label}
+                                    </span>
+                                    <ToolButton
+                                        className={styles.step}
+                                        label="Later conversations"
+                                        text="▸"
+                                        disabled={!lanes.canNext}
+                                        tabbable={lanes.tabbable}
+                                        onClick={() => lanes.onStep(1)}
+                                    />
+                                </div>
+                            ) : null}
+                            {view ? (
+                                <div className={styles.group}>
+                                    <select
+                                        className={styles.fontSize}
+                                        title="Text size"
+                                        aria-label="Text size"
+                                        value={String(view.fontSize)}
+                                        tabIndex={view.tabbable ? 0 : -1}
+                                        onChange={(event) =>
+                                            view.onPickFontSize(Number(event.target.value))
+                                        }
+                                    >
+                                        {view.sizes.map((size) => (
+                                            <option key={size} value={String(size)}>
+                                                {fontSizeLabel(size)}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    {view.whole ? (
+                                        <ToolButton
+                                            className={styles.toggle}
+                                            label="Show whole conversations"
+                                            paths={ICONS.whole}
+                                            pressed={view.whole.on}
+                                            disabled={view.whole.disabled}
+                                            tabbable={view.tabbable}
+                                            onClick={view.whole.onToggle}
+                                        />
+                                    ) : null}
+                                </div>
+                            ) : null}
+                        </div>
                     ) : null}
                 </div>
             ) : null}

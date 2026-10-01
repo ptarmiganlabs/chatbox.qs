@@ -17,7 +17,7 @@
     --cqs-bubble-pad: 6px 10px;
     --cqs-avatar: 26px;
     --cqs-gap: 8px;
-    --cqs-font: 13px;
+    --cqs-font-size: 13px;
 }
 
 .densityCompact {
@@ -25,7 +25,7 @@
     --cqs-bubble-pad: 4px 8px;
     --cqs-avatar: 20px;
     --cqs-gap: 6px;
-    --cqs-font: 12px;
+    --cqs-font-size: 12px;
 }
 
 .densityUltra {
@@ -33,7 +33,7 @@
     --cqs-bubble-pad: 3px 6px;
     --cqs-avatar: 0px;
     --cqs-gap: 4px;
-    --cqs-font: 11px;
+    --cqs-font-size: 11px;
 }
 
 .root {
@@ -45,8 +45,8 @@
     overflow: hidden;
     color: var(--cqs-text, #404040);
     background: var(--cqs-bg, #ffffff);
-    font-family: var(--cqs-font, 'Segoe UI', Tahoma, sans-serif);
-    font-size: var(--cqs-font, 13px);
+    font-family: var(--cqs-font-family, 'Segoe UI', Tahoma, sans-serif);
+    font-size: var(--cqs-read-size, var(--cqs-font-size, 13px));
     line-height: 1.45;
 }
 
@@ -254,7 +254,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 11px;
+    font-size: max(10px, 0.85em);
     font-weight: 600;
     color: #ffffff;
     background: var(--cqs-accent, #9e9e9e);
@@ -299,7 +299,7 @@
 }
 
 .author {
-    font-size: 11px;
+    font-size: max(10px, 0.85em);
     font-weight: 600;
     color: var(--cqs-accent, var(--cqs-muted, #6c6c6c));
     margin-bottom: 1px;
@@ -392,7 +392,7 @@
     gap: 6px;
     align-items: baseline;
     margin-top: 2px;
-    font-size: 10px;
+    font-size: max(9px, 0.78em);
     color: var(--cqs-muted, #6c6c6c);
 }
 
@@ -421,7 +421,7 @@
     border: 1px solid var(--cqs-border, #d9d9d9);
     border-radius: 8px;
     color: var(--cqs-muted, #6c6c6c);
-    font-size: 10px;
+    font-size: max(9px, 0.78em);
     line-height: 1.5;
     -webkit-user-select: none;
     user-select: none;
@@ -439,7 +439,7 @@
     display: flex;
     justify-content: center;
     padding: 6px 0 4px;
-    font-size: 10px;
+    font-size: max(9px, 0.78em);
     font-weight: 600;
     color: var(--cqs-muted, #6c6c6c);
     /* GroupedVirtuoso positions the group header itself; the background keeps
@@ -633,26 +633,139 @@
     color: var(--cqs-muted, #6c6c6c);
 }
 
-.toolbar {
+/* On a narrow object the control groups move below the summary rather than squeezing it. */
+.toolStrip {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: 8px;
+    gap: 4px 10px;
     min-width: 0;
 }
 
+/* What the object says about these highlights. It takes the room the groups leave and gives way
+   first: a summary cut off with an ellipsis costs less than a button that cannot be read. */
+.meta {
+    flex: 1 1 13em;
+    min-width: 0;
+}
+
+.actions {
+    display: flex;
+    flex: 0 1 auto;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 4px;
+    margin-left: auto;
+}
+
+/* A group of controls that belong together. The tint, rather than a border on every control, is what
+   says where one group ends and the next begins — and it is the only thing that reads on both a light
+   and a dark theme without a second rule (textview.qs). */
+.group {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: var(--cqs-groupbg, rgba(0, 0, 0, 0.055));
+}
+
+.findBox,
+.keywordSteps {
+    gap: 4px;
+}
+
 .summary {
-    flex: 1 1 auto;
+    margin: 0;
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
+/* A reserved width, so a counter counting up does not rewrap the strip under the pointer. */
 .counter {
     flex: none;
-    margin-left: auto;
+    min-width: 4.2em;
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
+    text-align: right;
+}
+
+/* A highlight in miniature, so the keyword group says what it steps through without a word. The
+   declarations below are the ones a mark uses, and the bar hands it the same custom properties, so a
+   conversation whose highlights are category-coloured gets a swatch in those colours. */
+.keywordSwatch {
+    box-sizing: border-box;
+    flex: none;
+    width: 0.9em;
+    height: 0.9em;
+    border-radius: 2px;
+    background-color: var(--cqs-mark-fill, var(--cqs-highlight, rgba(255, 196, 0, 0.35)));
+    background-image: var(
+        --cqs-mark-line,
+        linear-gradient(var(--cqs-highlight-line, #b58900), var(--cqs-highlight-line, #b58900))
+    );
+    background-position: left bottom;
+    background-size: 100% 2px;
+    background-repeat: no-repeat;
+}
+
+.fontSize {
+    flex: none;
+    max-width: 9em;
+    padding: 0 2px;
+    border: 1px solid transparent;
+    border-radius: 3px;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+}
+
+.fontSize:focus-visible {
+    outline: 2px solid var(--cqs-focus, #3f8ab3);
+    outline-offset: 1px;
+}
+
+/* An icon button in a group. The border carries the pressed state as well as the tint: a forced
+   colours mode drops backgrounds, and a tint alone would leave no pressed state to see. */
+.toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    min-width: 1.9em;
+    height: 1.6em;
+    padding: 0 3px;
+    border: 1px solid transparent;
+    border-radius: 3px;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+}
+
+.toggle:disabled {
+    cursor: default;
+    opacity: 0.45;
+}
+
+.toggle[aria-pressed='true'] {
+    border-color: var(--cqs-muted, #6c6c6c);
+    background: var(--cqs-pressed, rgba(0, 0, 0, 0.08));
+}
+
+.toggle:focus-visible {
+    outline: 2px solid var(--cqs-focus, #3f8ab3);
+    outline-offset: 1px;
+}
+
+.icon {
+    display: block;
+    width: 1.1em;
+    height: 1.1em;
 }
 
 .legend {
@@ -755,22 +868,17 @@ button.chip:focus-visible {
     border-color: #b3261e;
 }
 
-/* Step buttons beside the counter. */
-.stepper {
-    display: inline-flex;
-    flex: none;
-    gap: 2px;
-}
-
 .step {
-    width: 20px;
-    height: 18px;
-    padding: 0;
-    border: 1px solid var(--cqs-border, #d9d9d9);
+    flex: none;
+    min-width: 1.6em;
+    height: 1.6em;
+    padding: 0 2px;
+    border: 1px solid transparent;
     border-radius: 3px;
     background: transparent;
     color: var(--cqs-text, #404040);
-    font-size: 9px;
+    font: inherit;
+    font-size: 0.8em;
     line-height: 1;
     cursor: pointer;
 }
@@ -928,9 +1036,9 @@ button.chip:focus-visible {
 
 /* The search box, first in the bar. */
 .search {
-    flex: 0 1 180px;
-    min-width: 80px;
-    height: 20px;
+    flex: 0 1 150px;
+    min-width: 70px;
+    height: 1.7em;
     padding: 0 6px;
     border: 1px solid var(--cqs-border, #d9d9d9);
     border-radius: 3px;

@@ -189,7 +189,7 @@ describe('ChatLog search', () => {
         expect(document.activeElement).toBe(input);
     });
 
-    it('steps through the matches with F3 while a query is typed, and the highlights after', () => {
+    it('steps the matches with F3 and the keywords with Alt and an arrow, each on its own', () => {
         const layout = { qHyperCube: {}, chatbox: { highlight: { field: 'match' } } };
         const highlights = createHighlightView().build({
             tagged: {
@@ -216,8 +216,14 @@ describe('ChatLog search', () => {
         expect(screen.getByText('2 of 2')).toBeInTheDocument();
         expect(container.querySelector('[data-kind="find"]')).not.toBeNull();
 
+        // The keyword group keeps its own place: stepping it leaves the find box's alone, and the
+        // two counters answer side by side rather than one of them taking the other's turn.
+        fireEvent.keyDown(list, { key: 'ArrowDown', altKey: true });
+        expect(screen.getByText('1 of 1')).toBeInTheDocument();
+        expect(screen.getByText('2 of 2')).toBeInTheDocument();
+
+        // Clearing the box drops its matches; the keywords are still where they were.
         fireEvent.keyDown(input, { key: 'Escape' });
-        fireEvent.keyDown(list, { key: 'F3' });
         expect(screen.getByText('1 of 1')).toBeInTheDocument();
         expect(container.querySelector('[data-kind="highlight"]')).not.toBeNull();
     });

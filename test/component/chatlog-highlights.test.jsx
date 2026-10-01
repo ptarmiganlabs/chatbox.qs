@@ -136,7 +136,9 @@ describe('ChatLog with highlights', () => {
         );
         expect(screen.queryByText(/possible values/)).not.toBeInTheDocument();
         expect(screen.queryByRole('list', { name: 'Categories' })).not.toBeInTheDocument();
-        expect(screen.getByText('3 highlights')).toBeInTheDocument();
+        // The keyword group counts them, beside the buttons that walk them.
+        const keywords = screen.getByRole('group', { name: 'Keywords' });
+        expect(within(keywords).getByText('3')).toBeInTheDocument();
     });
 
     it('keeps a problem in sight as a banner, even with the summary switched off', () => {

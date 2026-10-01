@@ -290,7 +290,8 @@ describe('highlights and categories sections', () => {
 
     const highlights = definition.items.highlights;
     const categories = definition.items.categories;
-    const TEXT_TOOL_REF = /^chatbox\.((highlight|match|category)\.|showRuler$|showSearch$)/;
+    const TEXT_TOOL_REF =
+        /^chatbox\.((highlight|match|category)\.|showRuler$|showSearch$|showTextSize$|fontSize$)/;
     const SECTION_REF = /^chatbox\.(highlight|match|category)\./;
 
     it('sit after the message metadata and before the details', () => {

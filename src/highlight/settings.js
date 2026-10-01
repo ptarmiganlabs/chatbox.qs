@@ -14,6 +14,38 @@
  */
 import { normalizeFieldName } from '../qix/field-ref';
 
+/**
+ * The text sizes a reader can pick, and the one the property panel offers as a default.
+ *
+ * One list and one label function, shared by the panel's dropdown and the reader's own control:
+ * three spellings of the same size would make the documentation quietly untrue (textview.qs).
+ */
+export const FONT_SIZES = Object.freeze([10, 11, 12, 13, 14, 16, 18, 20, 24]);
+
+/** The size that means "whatever density resolved", which is what the object has always done. */
+export const AUTO_FONT_SIZE = 0;
+
+/**
+ * How a text size reads wherever one is offered.
+ *
+ * @param {number} size - A size from {@link FONT_SIZES}, or {@link AUTO_FONT_SIZE}.
+ * @returns {string} The label.
+ */
+export function fontSizeLabel(size) {
+    return size === AUTO_FONT_SIZE ? 'Follow density' : `${size} px`;
+}
+
+/**
+ * Read a text size, refusing anything the list does not offer.
+ *
+ * @param {*} value - The stored value.
+ * @returns {number} A size from {@link FONT_SIZES}, or {@link AUTO_FONT_SIZE}.
+ */
+export function readFontSize(value) {
+    const size = Number(value);
+    return FONT_SIZES.includes(size) ? size : AUTO_FONT_SIZE;
+}
+
 /** The most values highlighted: the engine's per-call cell budget is 10,000. */
 export const HIGHLIGHT_LIMIT_MAX = 10_000;
 
@@ -23,6 +55,10 @@ export const TEXT_TOOL_DEFAULTS = Object.freeze({
     showSearch: true,
     // The overview ruler beside the conversation, for highlights and search matches alike.
     showRuler: true,
+    // The conversation's text size. Zero follows density, as the object always has.
+    fontSize: AUTO_FONT_SIZE,
+    // The reader's own text size control, in the bar above the conversation.
+    showTextSize: true,
     highlight: Object.freeze({
         field: '',
         possibleWhenNoneSelected: true,
@@ -97,7 +133,7 @@ export function normalizeColorExpression(value) {
  * @param {object} [bag] - The `chatbox` property bag of a layout or of the object properties.
  * @returns {{showSearch: boolean, showRuler: boolean,
  *     highlight: {field: string, possibleWhenNoneSelected: boolean, limit: number,
- *     clickToSelect: boolean, showSummary: boolean},
+ *     clickToSelect: boolean, showSummary: boolean}, fontSize: number, showTextSize: boolean,
  *     match: {caseSensitive: boolean, wholeValues: boolean, flexibleWhitespace: boolean},
  *     category: {field: string, colorExpression: string, showLegend: boolean,
  *     showLabels: boolean}}} The settings.
@@ -110,6 +146,8 @@ export function readTextToolSettings(bag) {
     return {
         showSearch: booleanOr(bag?.showSearch, defaults.showSearch),
         showRuler: booleanOr(bag?.showRuler, defaults.showRuler),
+        fontSize: readFontSize(bag?.fontSize),
+        showTextSize: booleanOr(bag?.showTextSize, defaults.showTextSize),
         highlight: {
             field: normalizeFieldName(highlight.field),
             possibleWhenNoneSelected: booleanOr(

@@ -193,9 +193,14 @@ describe('ChatLog keyboard navigation', () => {
     const inactive = { enabled: true, active: false, blur: () => {} };
 
     it('exposes exactly ONE tab stop for the whole conversation', () => {
-        // The point of roving tabindex. One stop, not one per message.
+        // The point of roving tabindex. One stop, not one per message. The bar's own controls are
+        // left out, so this counts the list alone.
         const { container } = renderList(
-            <ChatLog conversation={conversation(five)} settings={{}} keyboard={active} />
+            <ChatLog
+                conversation={conversation(five)}
+                settings={{ showTextSize: false }}
+                keyboard={active}
+            />
         );
         const stops = container.querySelectorAll('[tabindex="0"]');
         expect(stops).toHaveLength(1);
@@ -207,7 +212,11 @@ describe('ChatLog keyboard navigation', () => {
         // not handed focus over — so the roving tabindex would not be the only
         // one. Pinned here because a virtuoso upgrade could reintroduce it.
         const { container } = renderList(
-            <ChatLog conversation={conversation(five)} settings={{}} keyboard={active} />
+            <ChatLog
+                conversation={conversation(five)}
+                settings={{ showTextSize: false }}
+                keyboard={active}
+            />
         );
         const zeros = [...container.querySelectorAll('[tabindex="0"]')];
         expect(zeros).toHaveLength(1);
@@ -215,9 +224,12 @@ describe('ChatLog keyboard navigation', () => {
     });
 
     it('exposes NO tab stop when Sense has not handed focus over', () => {
+        // The bar is drawn here, so this covers its controls too: nothing in the object takes a tab
+        // stop until Sense hands focus over, or a sheet of chatboxes would take dozens to tab past.
         const { container } = renderList(
             <ChatLog conversation={conversation(five)} settings={{}} keyboard={inactive} />
         );
+        expect(container.querySelector('[class*="toolStrip"]')).not.toBeNull();
         expect(container.querySelectorAll('[tabindex="0"]')).toHaveLength(0);
     });
 
