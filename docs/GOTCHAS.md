@@ -491,3 +491,56 @@ to a keyword and moved focus to the next message, which then scrolled away from 
 
 **Rule:** the list's key handler returns at once for a press the root will read as a keyword step.
 _Guard: `test/component/chatlog-stepping.test.jsx`._
+
+## 41. A cube in an alternate state is the only way to re-read someone else's expression
+
+Selecting a participant narrows a conversation to that person's own lines. Widening it back to the
+whole exchange means evaluating the cube under a different selection, and the message body is the
+user's own measure — `Only([MsgText])` — into which no set expression can be injected without parsing
+it. Measured on Qlik Sense May 2026, against the scratch app:
+
+- `Doc.AddSessionAlternateState` succeeds at runtime and the state is **not** in `qStateNames`, so the
+  client's selection bar never shows it and nothing is written to the app.
+- A cube whose `qHyperCubeDef.qStateName` names that state honours the state's own selections and
+  ignores the default state's: with `Author = Priya` selected, the same cube answered 2 rows in `$`
+  and 14 in the state.
+- `{$}` and `{$<[Author]=>}` read from inside the state see the real selection, so the gate below can
+  be written at all.
+- A **soft patch** of `/qHyperCubeDef/qStateName` applies for the session only:
+  `getEffectiveProperties` reports it, `getProperties` never does, and removing the patch restores the
+  object exactly.
+
+**Rule:** the mode is a session alternate state plus a soft patch, and never a saved property.
+
+## 42. Selecting in an alternate state still pushes an undo step
+
+The obvious way to bound the state's cube to the conversations in scope is to select them in the
+state. It works, and the default state's selection object is untouched — but `qBackCount` went from 2
+to 3. Sense's back button would then undo the object's own bookkeeping: the reader presses back, their
+own selection does not change, the object re-applies, and they can never step past it.
+
+**Rule:** nothing is ever selected in the state. The cube is bounded by a null-suppressed calculated
+dimension appended to it, which the engine drops the out-of-scope rows by:
+
+```
+=Aggr(If(Count({$<[Author]=>} [MsgId]) > 0
+     and (IsNull(Only([ThreadId]))
+          or Count({1<[ThreadId] = P({$} [ThreadId])>} [MsgId]) > 0), 1), [MsgId])
+```
+
+Appended rather than put in place of the message id, because a calculated dimension's `qElemNumber` is
+the Aggr's own index and every selection by element number would then be wrong. Measured on the
+12,000-row fixture: first page 143 ms against 93 ms for the strict cube, and paging no slower. The
+widened cube can be far larger than the strict one — 4,000 rows became 12,000 — so **Maximum messages**
+bites sooner, which the existing banner already reports.
+
+## 43. A selection in a field the object's data does not reach changes nothing, and says nothing
+
+Reported as "selecting an author does nothing in From → To". Reproduced against the scratch app, and
+it is not a bug in the model: the From → To objects are built on `FtFrom` / `FtTo` and the field
+selected was `Author`, which belongs to the unrelated `Chat` table. Selecting `Author` left both
+objects at 17 rows; selecting `FtFrom` took them to 8. Both objects resolve their roles correctly from
+their cIds, so neither the missing-recipient screen nor the positional fallback was involved.
+
+**Rule:** this is GOTCHAS 15 seen from the reader's side. Nothing in the object says a selection could
+not reach it, and nothing can: the object is not told. Worth a diagnostic one day, not a fix.
