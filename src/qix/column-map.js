@@ -13,6 +13,8 @@
  */
 
 /** Role identifiers, used as the keys of a resolved role map. */
+import { normalizeFieldName } from './field-ref';
+
 export const ROLES = {
     MESSAGE_ID: 'messageId',
     AUTHOR: 'author',
@@ -276,4 +278,24 @@ export function unassignedDimensions(columns, byRole) {
 export function dimensionIndex(column) {
     if (!column || column.kind !== 'dim') return -1;
     return column.col;
+}
+
+/**
+ * Name the field behind a dimension column, when there is one.
+ *
+ * A calculated dimension's `qGroupFieldDefs` holds its expression, not a field, and there is nothing
+ * there to select in or to name in a set expression. Saying so is the point: a caller that cannot
+ * tell the two apart offers a click that quietly selects nothing.
+ *
+ * @param {?object} column - A column from {@link buildColumns}.
+ * @returns {string} The field name, or '' for a calculated dimension, a measure or no column.
+ */
+export function fieldOfColumn(column) {
+    if (!column || column.kind !== 'dim') return '';
+    const defs = column.info?.qGroupFieldDefs;
+    if (!Array.isArray(defs) || defs.length === 0) return '';
+    const at = Number.isInteger(column.info?.qGroupPos) ? column.info.qGroupPos : 0;
+    const name = defs[at] ?? defs[0];
+    if (typeof name !== 'string' || name.trim() === '' || name.trim().startsWith('=')) return '';
+    return normalizeFieldName(name);
 }

@@ -29,7 +29,7 @@ import dataTargets from './data';
 import ext from './ext/index';
 import { normalize } from './chat/normalize';
 import { readConversationRows } from './qix/conversation-rows';
-import { ROLES, conversationModelOf, resolveRoles } from './qix/column-map';
+import { ROLES, conversationModelOf, fieldOfColumn, resolveRoles } from './qix/column-map';
 import { buildSelection } from './qix/selection';
 import { describeAssignments } from './qix/role-labels';
 import { syncAttributeExpressions } from './qix/sync-attrs';
@@ -41,7 +41,7 @@ import {
     writeLaneSnapshot,
     writeSnapshot,
 } from './ui/snapshot';
-import { createBoardCache, laneKeys, readLaneSettings } from './chat/lanes';
+import { createBoardCache, laneKeys, laneWindowStart, readLaneSettings } from './chat/lanes';
 import { reloadingView } from './ui/reload-view';
 import { createHighlightLoader } from './qix/highlight-loader';
 import { loadHighlightResult } from './highlight/highlight-result';
@@ -208,6 +208,11 @@ export default function supernova(galaxy) {
                     projections: highlightViewRef.current.projections,
                 });
             }
+            // How far down the ranking the lanes shown start. The reader steps it; it is never
+            // reset on a selection, because buildBoard clamps it to what there is, and a reader who
+            // stepped to older conversations has said where they want to be.
+            const [laneOffset, setLaneOffset] = useState(0);
+
             const queryRef = useRef('');
             const handleQueryRef = useRef(null);
             if (!handleQueryRef.current) {
@@ -527,6 +532,7 @@ export default function supernova(galaxy) {
                     width: rect?.width ?? 0,
                     keys: readLaneSnapshot(staleLayout)?.keys ?? null,
                     gapSec: settings.groupGapSec,
+                    offset: laneOffset,
                 });
                 const shown = board ? { ...conversation, messages: board.messages } : conversation;
 
@@ -594,9 +600,73 @@ export default function supernova(galaxy) {
                         pick(planCategorySelection(highlightView.answer, name, toggle)),
                 };
 
+                // A lane header selects its conversation, the way a legend chip selects its
+                // category: directly, like a filter pane, rather than through the object's own
+                // selection mode. It is a filter affordance and not a message, it reads the same
+                // whatever the object's cube is in, and a thread dimension that is an expression has
+                // no field to select in at all.
+                // Never in an export render, whose server reports every interaction as allowed,
+                // nor in edit mode — the same gate a click on a highlight passes. "Clicking a
+                // message does nothing" is about messages and does not silence a lane header.
+                const threadField = fieldOfColumn(byRole[ROLES.THREAD]);
+                const canSelectLanes =
+                    !isSnapshot(staleLayout) &&
+                    interactions?.active !== false &&
+                    Boolean(interactions?.select) &&
+                    !interactions?.edit;
+                const lanePicking =
+                    canSelectLanes && board && threadField
+                        ? {
+                              locked: false,
+                              hint: `Selects this conversation in ${threadField}. Ctrl or Cmd adds.`,
+                              /**
+                               * Select a lane's conversation in the thread field.
+                               *
+                               * @param {object} lane - The lane whose header was clicked.
+                               * @param {boolean} toggle - Whether Ctrl or Cmd was held.
+                               * @returns {Promise<void>} Resolves once the selection is sent.
+                               */
+                              onPick: (lane, toggle) =>
+                                  pick({
+                                      field: threadField,
+                                      elemNumbers: [lane.elem],
+                                      toggle,
+                                      locked: false,
+                                  }),
+                          }
+                        : null;
+
+                // Stepping the window of conversations: only where there are more than fit, and
+                // never in an export, which shows the lanes its snapshot recorded.
+                const laneSteps =
+                    board && board.total > board.lanes.length && !isSnapshot(staleLayout)
+                        ? {
+                              first: board.first,
+                              shown: board.lanes.length,
+                              total: board.total,
+                              /**
+                               * Move the window of conversations.
+                               *
+                               * @param {number} direction - 1 for later in the ranking, -1 for earlier.
+                               * @returns {void}
+                               */
+                              onStep: (direction) => {
+                                  setLaneOffset(
+                                      laneWindowStart(
+                                          board.first + direction * board.lanes.length,
+                                          board.lanes.length,
+                                          board.total
+                                      )
+                                  );
+                              },
+                          }
+                        : null;
+
                 const view = {
                     conversation: shown,
                     board,
+                    lanePicking,
+                    laneSteps,
                     // Lanes switched on without a thread to put in them: said in a banner, since the
                     // conversation then shows as one.
                     laneNotice:

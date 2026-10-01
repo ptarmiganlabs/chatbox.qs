@@ -42,6 +42,7 @@ import { legendEntries } from '../highlight/legend';
 import { swatchStyle } from '../highlight/category-styles';
 import { AUTO_FONT_SIZE, FONT_SIZES, readFontSize } from '../highlight/settings';
 import { HIGHLIGHT_KINDS } from '../qix/highlight-source';
+import { formatCount } from '../util/format';
 import { readKindChipSettings } from '../chat/kind-chips';
 import { Empty } from './states';
 import ConversationList from './ConversationList';
@@ -127,6 +128,10 @@ function ReloadingLine({ reloading }) {
  *   null to leave it out.
  * @param {?object} [props.board] - Conversations side by side, from src/chat/lanes.js; the conversation's
  *   messages are then the board's, in its order. Null for one conversation.
+ * @param {?object} [props.lanePicking] - How a lane header selects its conversation: `locked`,
+ *     `hint` and `onPick(lane, toggle)`; null while headers do not select.
+ * @param {?object} [props.laneSteps] - Stepping the window of conversations: `first`, `shown`,
+ *     `total` and `onStep(direction)`; null where every conversation is already shown.
  * @param {?string} [props.laneNotice] - Why conversations cannot be shown side by side, as a banner.
  * @returns {object} The rendered conversation.
  */
@@ -146,6 +151,8 @@ export function ChatLog({
     search = null,
     board = null,
     laneNotice = null,
+    lanePicking = null,
+    laneSteps = null,
 }) {
     // State captured when a snapshot was taken. Null for a normal render.
     const snapshot = readSnapshot(layout);
@@ -878,7 +885,7 @@ export function ChatLog({
         ) : null;
 
     // The bar is there when it has something to put in it; it takes no room otherwise.
-    const barShown = Boolean(highlights || searchable || sizeShown);
+    const barShown = Boolean(highlights || searchable || sizeShown || laneSteps);
 
     const rootClass = [
         styles.root,
@@ -954,6 +961,19 @@ export function ChatLog({
                               }
                             : null
                     }
+                    lanes={
+                        laneSteps
+                            ? {
+                                  label: `${formatCount(laneSteps.first + 1)}–${formatCount(
+                                      laneSteps.first + laneSteps.shown
+                                  )} of ${formatCount(laneSteps.total)}`,
+                                  canPrevious: laneSteps.first > 0,
+                                  canNext: laneSteps.first + laneSteps.shown < laneSteps.total,
+                                  tabbable,
+                                  onStep: laneSteps.onStep,
+                              }
+                            : null
+                    }
                     view={
                         sizeShown
                             ? {
@@ -984,6 +1004,7 @@ export function ChatLog({
                         live={live}
                         busy={Boolean(reloading)}
                         caption={laneCaption(board, conversation.meta)}
+                        picking={live && lanePicking ? { ...lanePicking, tabbable } : null}
                         onKeyDown={handleKeyDown}
                         onRange={handleRange}
                         renderRuler={renderLaneRuler}

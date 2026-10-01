@@ -967,11 +967,36 @@ button.chip:focus-visible {
     align-items: baseline;
     gap: 6px;
     min-width: 0;
+    width: 100%;
     padding: 3px 8px;
+    border: 0;
     border-bottom: 1px solid var(--cqs-border, #d9d9d9);
+    background: transparent;
+    color: inherit;
+    font: inherit;
     font-size: 11px;
     font-weight: 600;
     white-space: nowrap;
+    text-align: start;
+}
+
+/* A header that selects its conversation. It is a filter affordance, so it takes the pointer and
+   says so, rather than looking like the text beside it. */
+button.laneHeader {
+    cursor: pointer;
+}
+
+button.laneHeader:hover:not(:disabled) {
+    background: var(--cqs-pressed, rgba(0, 0, 0, 0.08));
+}
+
+button.laneHeader:disabled {
+    cursor: default;
+}
+
+button.laneHeader:focus-visible {
+    outline: 2px solid var(--cqs-focus, #3f8ab3);
+    outline-offset: -2px;
 }
 
 .laneName {

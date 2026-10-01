@@ -12,6 +12,7 @@ import {
     laneKeyOf,
     laneKeys,
     laneLabelOf,
+    laneWindowStart,
     lanePlace,
     lanesBag,
     packRows,
@@ -477,5 +478,38 @@ describe('boards at scale', () => {
         expect(linked.messages).toHaveLength(5000);
         expect(free.messages).toHaveLength(5000);
         expect(linked.rows.count).toBeGreaterThan(0);
+    });
+});
+
+describe('laneWindowStart', () => {
+    it('clamps a window so it always holds as many lanes as fit', () => {
+        expect(laneWindowStart(0, 4, 12)).toBe(0);
+        expect(laneWindowStart(4, 4, 12)).toBe(4);
+        // Stepping past the end would leave a half-empty board and nowhere to step back from.
+        expect(laneWindowStart(11, 4, 12)).toBe(8);
+        expect(laneWindowStart(-3, 4, 12)).toBe(0);
+        expect(laneWindowStart(2, 4, 3)).toBe(0);
+        expect(laneWindowStart(Number.NaN, 4, 12)).toBe(0);
+    });
+});
+
+describe('buildBoard with an offset', () => {
+    it('shows the lanes the window lands on, and says where it starts', () => {
+        const messages = ['T1', 'T2', 'T3', 'T4'].map((thread, index) => ({
+            id: String(index + 1),
+            key: `k${index + 1}`,
+            threadId: thread,
+            threadElem: index,
+            rowIdx: index,
+            ts: null,
+        }));
+        const first = buildBoard(messages, { max: 2, scroll: 'free' });
+        expect(first.first).toBe(0);
+        expect(first.lanes.map((lane) => lane.label)).toEqual(['T4', 'T3']);
+
+        const next = buildBoard(messages, { max: 2, scroll: 'free', offset: 2 });
+        expect(next.first).toBe(2);
+        expect(next.lanes.map((lane) => lane.label)).toEqual(['T2', 'T1']);
+        expect(next.total).toBe(4);
     });
 });
