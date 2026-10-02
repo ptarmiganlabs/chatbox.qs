@@ -164,3 +164,38 @@ describe('stepping the window of conversations', () => {
         expect(screen.queryByRole('group', { name: 'Conversations shown' })).toBeNull();
     });
 });
+
+describe('a lane header the engine refused', () => {
+    it('is not drawn as picked, so nobody confirms a selection that never happened', () => {
+        // A locked field answers false. A header green over a selection that did not happen is
+        // worse than no feedback: the reader confirms what they believe they chose.
+        const picked = new Set();
+        renderLanes({
+            lanePicking: {
+                locked: false,
+                hint: 'Selects this conversation. Pick several, then confirm.',
+                picked,
+                onPick: () => {},
+            },
+        });
+        const header = screen.getByRole('button', { name: /T4/ });
+        expect(header).toHaveAttribute('aria-pressed', 'false');
+    });
+
+    it('is drawn as picked once it is in the picked set', () => {
+        const board = buildBoard(MESSAGES, { max: 2, scroll: 'free' });
+        const { key, label } = board.lanes[0];
+        renderLanes({
+            lanePicking: {
+                locked: false,
+                hint: 'Selects this conversation. Pick several, then confirm.',
+                picked: new Set([key]),
+                onPick: () => {},
+            },
+        });
+        expect(screen.getByRole('button', { name: new RegExp(label) })).toHaveAttribute(
+            'aria-pressed',
+            'true'
+        );
+    });
+});

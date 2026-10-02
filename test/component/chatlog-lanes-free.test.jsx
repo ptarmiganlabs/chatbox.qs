@@ -181,14 +181,18 @@ describe('ChatLog with conversations side by side, scrolling freely', () => {
         ).toBeInTheDocument();
     });
 
-    it('keeps exactly one tab stop for all the lanes, and none before Sense hands over focus', () => {
-        // One stop for every lane together, not one per lane. The bar's own controls are left out,
-        // so this counts the lanes alone.
+    it('keeps the lanes to one focused message between them, and none before Sense hands over', () => {
+        // One stop for every lane together, not one per lane. The focused row's own controls go
+        // with it, so what is counted is the message the focus rests on.
         const { container, unmount } = renderLanes({
             settings: { ...settings, showTextSize: false },
         });
-        expect(container.querySelectorAll('[tabindex="0"]')).toHaveLength(1);
+        expect(container.querySelectorAll('[data-message-index][tabindex="0"]')).toHaveLength(1);
+        for (const stop of container.querySelectorAll('[tabindex="0"], button:not([tabindex])')) {
+            expect(stop.closest('[data-row]'), stop.outerHTML.slice(0, 70)).not.toBeNull();
+        }
         unmount();
+
         const inactive = renderLanes({ keyboard: { enabled: true, active: false } });
         expect(inactive.container.querySelectorAll('[tabindex="0"]')).toHaveLength(0);
     });

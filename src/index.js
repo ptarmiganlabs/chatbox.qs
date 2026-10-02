@@ -237,8 +237,34 @@ export default function supernova(galaxy) {
                 repaired: false,
                 object: null,
                 layout: null,
+                onChanged: null,
                 stalled: false,
             });
+
+            /**
+             * Let go of the widened cube: stop listening to it, and tell the engine to drop it.
+             *
+             * A session object outlives the component that made it, and so does a listener bound to
+             * one, so an object left on a sheet the reader walked away from would keep a hypercube
+             * over the whole message table resident for the rest of the session.
+             *
+             * @returns {Promise<void>} Resolves once the engine has been told.
+             */
+            const detachWidened = async () => {
+                const held = wholeRef.current;
+                const object = held.object;
+                const onChanged = held.onChanged;
+                held.object = null;
+                held.layout = null;
+                held.onChanged = null;
+                if (!object) return;
+                try {
+                    object.removeListener?.('changed', onChanged);
+                } catch (err) {
+                    logger.warn('whole conversations: could not stop listening:', err);
+                }
+                await releaseWidened({ app, object, logger });
+            };
 
             /**
              * Read the widened cube's layout again and fetch the rows it now holds.
@@ -625,14 +651,18 @@ export default function supernova(galaxy) {
                 // work is both heaviest and pointless.
                 const wholeWanted = wholeChosen && selectionReaches(liveLayout ?? staleLayout);
                 const signature = wholeWanted && !gate.problem ? gateDimensionExpression(gate) : '';
-                if (signature !== wholeRef.current.signature) {
+                // Not while the reader is still picking. Making the cube is as disruptive as
+                // letting it answer: a first lane header picked is itself the selection that brings
+                // the cube into being, and building it there would take the other headers off the
+                // board before a second could be picked. Stalling is remembered, and the catch-up
+                // above runs the whole block again once the session is confirmed or cancelled.
+                if (signature !== wholeRef.current.signature && selections?.isActive?.()) {
+                    wholeRef.current.stalled = true;
+                } else if (signature !== wholeRef.current.signature) {
                     wholeRef.current.signature = signature;
                     // Fire and forget: the widened cube arriving bumps a version, which fetches.
                     (async () => {
-                        const previous = wholeRef.current.object;
-                        wholeRef.current.object = null;
-                        wholeRef.current.layout = null;
-                        await releaseWidened({ app, object: previous, logger });
+                        await detachWidened();
                         if (signature === '' || wholeRef.current.signature !== signature) {
                             setWidenedVersion((version) => version + 1);
                             return;
@@ -654,7 +684,12 @@ export default function supernova(galaxy) {
                         }
                         // Its own changes matter: a selection changes which conversations are in
                         // scope without changing the object's own cube at all.
-                        object.on('changed', async () => {
+                        /**
+                         * Read the widened cube again when the engine says it changed.
+                         *
+                         * @returns {Promise<void>} Resolves once the rows are asked for.
+                         */
+                        const onChanged = async () => {
                             // Not while the reader is still choosing. Nebula freezes the object's
                             // own layout in the modal state so a chart does not redraw from under
                             // the pointer; the widened cube is a different object and is not
@@ -667,7 +702,9 @@ export default function supernova(galaxy) {
                                 return;
                             }
                             await refreshWidened(object);
-                        });
+                        };
+                        object.on('changed', onChanged);
+                        wholeRef.current.onChanged = onChanged;
                         wholeRef.current.object = object;
                         await refreshWidened(object);
                     })();
@@ -784,13 +821,20 @@ export default function supernova(galaxy) {
                                   try {
                                       if (!selections.isActive())
                                           await selections.begin(['/qHyperCubeDef']);
+                                      let applied = false;
                                       for (const { dimIdx, values, toggle } of steps) {
                                           const ok = await selections.select({
                                               method: 'selectHyperCubeValues',
                                               params: ['/qHyperCubeDef', dimIdx, values, toggle],
                                           });
                                           if (ok === false) break;
+                                          applied = true;
                                       }
+                                      // Only a selection the engine took is drawn as picked. A
+                                      // locked field answers false, and a header green over a
+                                      // selection that never happened is worse than no feedback —
+                                      // the reader would confirm what they believe they chose.
+                                      if (!applied) return;
                                       setPickedLanes((picked) => {
                                           const next = new Set(picked ?? []);
                                           if (next.has(lane.key)) next.delete(lane.key);
@@ -924,6 +968,20 @@ export default function supernova(galaxy) {
                 pickedLanes,
                 laneOffset,
             ]);
+
+            // Let go of the widened cube when the object leaves the sheet. Its own effect, because
+            // it belongs to the app handle rather than to the element the view renders into.
+            useEffect(() => {
+                /**
+                 * Release the widened cube and stop listening to it.
+                 *
+                 * @returns {void}
+                 */
+                return () => {
+                    wholeRef.current.signature = '';
+                    detachWidened();
+                };
+            }, [app]);
 
             // Tear the root down when the object is removed from the sheet.
             useEffect(() => {

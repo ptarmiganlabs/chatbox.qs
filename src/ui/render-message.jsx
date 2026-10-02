@@ -196,8 +196,9 @@ export function MessageRow({
                         className={styles.copyMessage}
                         title="Copy this message"
                         aria-label="Copy this message"
-                        // One tab stop for the whole conversation: a button per message would put
-                        // hundreds in the sheet. The focused row's is reachable, the rest are not.
+                        // Roving with the focus, as Details does beside it: the focused row's
+                        // controls are reachable and no others, so tabbing past the conversation
+                        // costs the same whether it holds five messages or five thousand.
                         tabIndex={tabbable ? 0 : -1}
                         onClick={(event) => {
                             // A click on it is never a click on the message.
@@ -310,6 +311,11 @@ export function MessageRow({
                                     type="button"
                                     className={styles.detailsLink}
                                     aria-expanded={Boolean(expanded)}
+                                    // The conversation contributes the focused row's controls and
+                                    // nothing else, so the stops it costs do not grow with the
+                                    // messages: a virtualized list draws twenty rows, and twenty
+                                    // Details buttons were twenty presses to tab past.
+                                    tabIndex={tabbable ? 0 : -1}
                                     onClick={(event) => {
                                         // The bubble itself is bound to selection.
                                         event.stopPropagation();

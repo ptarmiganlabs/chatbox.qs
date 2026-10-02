@@ -612,3 +612,38 @@ rather than optimised away: the object simply does not widen at all when nothing
 there is nothing to free then and the widened cube would hold exactly what the strict one does. That
 is also the moment the cube is at its largest, so it is the one case where the work was both heaviest
 and pointless. _Guard: `test/unit/context-gate.test.js`._
+
+## 49. Making the widened cube is as disruptive as letting it answer
+
+The board was held still while a selection session was open, by stalling the widened cube's `changed`
+event. That covered a cube that already existed. It did not cover the cube being **made**: once the
+object stopped widening while nothing was selected, picking the first lane header became the very
+selection that brought the cube into being, and building it there took the other headers off the
+board before a second could be picked.
+
+**Rule:** no part of the widened cube's life — created, replaced or released — happens while
+`selections.isActive()`. The stall is remembered and the whole decision is taken again once the
+session is confirmed or cancelled.
+
+## 50. A session object outlives the component that made it
+
+Nothing released the widened cube when the object left the sheet, and nothing removed its `changed`
+listener, so a reader browsing sheets left a hypercube over the whole message table resident per
+object for the rest of the session — each with a listener still calling `getLayout()` against a
+component that no longer rendered.
+
+**Rule:** the widened cube is released, and its listener removed, from an effect of its own keyed on
+the app handle. Session objects die with the session, which is exactly why a leak inside one is easy
+to miss: nothing ever fails, the engine simply holds more than it needs to.
+
+## 51. A button without a tabIndex is a tab stop on every row that draws it
+
+The guard asserted the conversation exposed one `[tabindex="0"]`, and passed while the **Details**
+button — which carried no `tabIndex` at all — was a tab stop on every rendered row. A selector for
+`[tabindex="0"]` cannot see an implicit stop, so the invariant it was written to protect had been
+quietly broken for as long as that button existed.
+
+**Rule:** every control inside a message roves with the focus, Details and the copy button alike, so
+what the conversation costs to tab past does not grow with it. The guard counts implicit stops too
+and compares a five-message conversation with a fifty-message one, rather than asserting a number.
+_Guard: `test/component/chatlog.test.jsx`, `test/component/chatlog-lanes-free.test.jsx`._

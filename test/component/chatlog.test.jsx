@@ -192,25 +192,40 @@ describe('ChatLog keyboard navigation', () => {
     /** Sense manages keyboard handling and has NOT handed focus over. */
     const inactive = { enabled: true, active: false, blur: () => {} };
 
-    it('exposes exactly ONE tab stop for the whole conversation', () => {
-        // The point of roving tabindex. One stop, not one per message. The bar's own controls are
-        // left out, so this counts the list alone.
-        const { container } = renderList(
-            <ChatLog
-                conversation={conversation(five)}
-                settings={{ showTextSize: false }}
-                keyboard={active}
-            />
+    /** Everything in `node` that a Tab press would reach: explicit stops and implicit ones alike. */
+    const tabbables = (node) => [
+        ...node.querySelectorAll('[tabindex="0"], button:not([tabindex]), a[href]:not([tabindex])'),
+    ];
+
+    it('costs the same tab stops whether it holds five messages or fifty', () => {
+        // The point of roving tabindex. Counting stops rather than asserting one: the focused row
+        // carries its own controls — Details, the copy button — and what must never happen is the
+        // count growing with the conversation. A virtualized list draws twenty rows, so a control
+        // tabbable on every drawn row would be twenty presses to tab past.
+        const fifty = Array.from({ length: 50 }, (_, i) =>
+            message({ id: String(i + 1), body: `msg ${i + 1}` })
         );
-        const stops = container.querySelectorAll('[tabindex="0"]');
-        expect(stops).toHaveLength(1);
+        const props = {
+            settings: { showTextSize: false },
+            keyboard: active,
+            onCopyMessage: () => {},
+        };
+        const small = renderList(<ChatLog conversation={conversation(five)} {...props} />);
+        const smallStops = tabbables(small.container).length;
+        small.unmount();
+
+        const large = renderList(<ChatLog conversation={conversation(fifty)} {...props} />);
+        expect(tabbables(large.container)).toHaveLength(smallStops);
+        // And exactly one message is the one focus rests on.
+        expect(large.container.querySelectorAll('[data-message-index][tabindex="0"]')).toHaveLength(
+            1
+        );
     });
 
     it("makes the virtualizer's own scroller non-tabbable", () => {
-        // react-virtuoso sets tabIndex=0 on its scroller by default. Left alone
-        // that is a second tab stop for the list, present even when Sense has
-        // not handed focus over — so the roving tabindex would not be the only
-        // one. Pinned here because a virtuoso upgrade could reintroduce it.
+        // react-virtuoso sets tabIndex=0 on its scroller by default. Left alone that is a stop for
+        // the list present even when Sense has not handed focus over, so the roving tabindex would
+        // not govern. Pinned here because a virtuoso upgrade could reintroduce it.
         const { container } = renderList(
             <ChatLog
                 conversation={conversation(five)}
@@ -218,9 +233,11 @@ describe('ChatLog keyboard navigation', () => {
                 keyboard={active}
             />
         );
-        const zeros = [...container.querySelectorAll('[tabindex="0"]')];
-        expect(zeros).toHaveLength(1);
-        expect(zeros[0].getAttribute('data-message-index')).not.toBeNull();
+        // Every stop the list offers belongs to the focused message: its bubble, or a control
+        // inside that row. The scroller is neither.
+        for (const stop of tabbables(container)) {
+            expect(stop.closest('[data-row]'), stop.outerHTML.slice(0, 70)).not.toBeNull();
+        }
     });
 
     it('exposes NO tab stop when Sense has not handed focus over', () => {
