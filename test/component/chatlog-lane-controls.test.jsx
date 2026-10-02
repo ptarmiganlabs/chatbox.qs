@@ -73,7 +73,6 @@ function renderLanes({ max = 2, offset = 0, ...props } = {}) {
 
 describe('lane headers that select their conversation', () => {
     const picking = (over = {}) => ({
-        locked: false,
         hint: 'Selects this conversation. Pick several, then confirm.',
         onPick: vi.fn(),
         ...over,
@@ -92,15 +91,9 @@ describe('lane headers that select their conversation', () => {
         expect(header).toHaveAttribute('title', expect.stringContaining('confirm'));
 
         fireEvent.click(header);
-        expect(pick.onPick).toHaveBeenLastCalledWith(
-            expect.objectContaining({ label: 'T4' }),
-            false
-        );
+        expect(pick.onPick).toHaveBeenLastCalledWith(expect.objectContaining({ label: 'T4' }));
         fireEvent.click(screen.getByRole('button', { name: /T3/ }));
-        expect(pick.onPick).toHaveBeenLastCalledWith(
-            expect.objectContaining({ label: 'T3' }),
-            false
-        );
+        expect(pick.onPick).toHaveBeenLastCalledWith(expect.objectContaining({ label: 'T3' }));
         expect(pick.onPick).toHaveBeenCalledTimes(2);
     });
 
@@ -172,7 +165,6 @@ describe('a lane header the engine refused', () => {
         const picked = new Set();
         renderLanes({
             lanePicking: {
-                locked: false,
                 hint: 'Selects this conversation. Pick several, then confirm.',
                 picked,
                 onPick: () => {},
@@ -187,7 +179,6 @@ describe('a lane header the engine refused', () => {
         const { key, label } = board.lanes[0];
         renderLanes({
             lanePicking: {
-                locked: false,
                 hint: 'Selects this conversation. Pick several, then confirm.',
                 picked: new Set([key]),
                 onPick: () => {},

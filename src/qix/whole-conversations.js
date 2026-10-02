@@ -211,17 +211,6 @@ export async function releaseWidened({ app, object, logger }) {
 }
 
 /**
- * Find the gate dimension in a layout, by its cId and never by position.
- *
- * @param {object} layout - The object's layout.
- * @returns {number} Its index among the dimensions, or -1 when it is not there.
- */
-export function gateIndexOf(layout) {
-    const dims = layout?.qHyperCube?.qDimensionInfo ?? [];
-    return dims.findIndex((info) => info?.cId === CONTEXT_GATE_CID);
-}
-
-/**
  * Take a gate out of an object's stored properties.
  *
  * Version 0.6.0 patched the cube while the sheet was being edited, and the property panel saved the

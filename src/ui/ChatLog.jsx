@@ -425,7 +425,9 @@ export function ChatLog({
         setSizeFrom(sizeSetting);
         setSizePicked(null);
     }
-    const fontSize = snapshot?.fontSize ?? sizePicked ?? sizeSetting;
+    // An export draws from the setting, not from a reader's pick: a snapshot records where the
+    // reader was and what they had open, not how large they liked the text.
+    const fontSize = sizePicked ?? sizeSetting;
 
     const sizeShown = live && settings.showTextSize !== false;
     // While the conversation is widened, the bar says what is on screen rather than leaving the
@@ -444,7 +446,7 @@ export function ChatLog({
                       board
                           ? ` in ${counted(board.lanes.length, 'conversation', 'conversations')}`
                           : ''
-                  } · ${formatCount(messages.length - contextCount)} match the selection`,
+                  } · ${formatCount(messages.length - contextCount)} matching the selection`,
                   level: 'info',
               }
             : null;

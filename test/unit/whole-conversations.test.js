@@ -4,7 +4,6 @@ import {
     ensureState,
     forgetStates,
     gateDimension,
-    gateIndexOf,
     releaseWidened,
     repairStoredGate,
     stateAlreadyExists,
@@ -168,23 +167,6 @@ describe('createWidened and releaseWidened', () => {
         expect(app.destroySessionObject).toHaveBeenCalledWith('w1');
         await releaseWidened({ app, object: null });
         expect(app.destroySessionObject).toHaveBeenCalledTimes(1);
-    });
-});
-
-describe('gateIndexOf', () => {
-    it('finds the gate by its cId, never by position', () => {
-        const layout = {
-            qHyperCube: {
-                qDimensionInfo: [
-                    { cId: 'd_msgid' },
-                    { cId: 'd_author' },
-                    { cId: CONTEXT_GATE_CID },
-                ],
-            },
-        };
-        expect(gateIndexOf(layout)).toBe(2);
-        expect(gateIndexOf({ qHyperCube: { qDimensionInfo: [{ cId: 'd_msgid' }] } })).toBe(-1);
-        expect(gateIndexOf(null)).toBe(-1);
     });
 });
 

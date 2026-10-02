@@ -819,7 +819,6 @@ export default function supernova(galaxy) {
                 const lanePicking =
                     canSelectLanes && board && byRole[ROLES.THREAD]
                         ? {
-                              locked: false,
                               hint: 'Selects this conversation. Pick several, then confirm.',
                               picked: pickedLanes,
                               /**

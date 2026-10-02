@@ -206,7 +206,7 @@ describe('ChatLog with the conversation widened', () => {
 
     it('says what is on screen, so nobody wonders why unselected messages are there', () => {
         renderWide();
-        expect(screen.getByText('3 messages · 1 match the selection')).toBeInTheDocument();
+        expect(screen.getByText('3 messages · 1 matching the selection')).toBeInTheDocument();
     });
 
     it('says it beneath the highlight summary rather than in its place', () => {
@@ -229,7 +229,7 @@ describe('ChatLog with the conversation widened', () => {
         expect(
             screen.getByText('1 selected value \u00b7 1 highlight in 1 message')
         ).toBeInTheDocument();
-        expect(screen.getByText('3 messages \u00b7 1 match the selection')).toBeInTheDocument();
+        expect(screen.getByText('3 messages \u00b7 1 matching the selection')).toBeInTheDocument();
     });
 
     it('offers the toggle pressed, and says why when the cube cannot be widened', () => {

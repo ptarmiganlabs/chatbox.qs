@@ -12,7 +12,6 @@
  *     warning; positional binding breaks silently when they do.
  */
 
-/** Role identifiers, used as the keys of a resolved role map. */
 import { normalizeFieldName } from './field-ref';
 
 /**
@@ -23,6 +22,7 @@ import { normalizeFieldName } from './field-ref';
  */
 export const CONTEXT_GATE_CID = 'd_cqs_scope';
 
+/** Role identifiers, used as the keys of a resolved role map. */
 export const ROLES = {
     MESSAGE_ID: 'messageId',
     AUTHOR: 'author',
