@@ -1,13 +1,13 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
-    WIDEN_OUTCOMES,
+    createWidened,
     ensureState,
     gateDimension,
     gateIndexOf,
-    narrow,
+    releaseWidened,
     repairStoredGate,
     stateNameFor,
-    widen,
+    widenedDefinition,
 } from '../../src/qix/whole-conversations';
 import { buildContextGate } from '../../src/qix/context-gate';
 import { CONTEXT_GATE_CID, ROLES } from '../../src/qix/column-map';
@@ -73,71 +73,91 @@ describe('ensureState', () => {
     });
 });
 
-describe('widen and narrow', () => {
-    it('patches the cube into the state and appends the gate, as a soft patch', async () => {
-        const model = { applyPatches: vi.fn().mockResolvedValue(undefined) };
-        const outcome = await widen({
-            model,
-            stateName: 'cqs_xy',
-            gate: gateOf(),
-            dimensionCount: 3,
-        });
-        expect(outcome).toBe(WIDEN_OUTCOMES.WIDENED);
-        const [patches, soft] = model.applyPatches.mock.calls[0];
-        // Soft, or it would be saved with the object and widen it for everyone, for ever.
-        expect(soft).toBe(true);
-        expect(patches[0]).toMatchObject({
-            qOp: 'replace',
-            qPath: '/qHyperCubeDef/qStateName',
-            qValue: '"cqs_xy"',
-        });
-        // Appended after the dimensions the object stores, never in place of one.
-        expect(patches[1]).toMatchObject({ qOp: 'add', qPath: '/qHyperCubeDef/qDimensions/3' });
+describe('widenedDefinition', () => {
+    const cube = () => ({
+        qStateName: '',
+        qDimensions: [{ qDef: { cId: 'd_msgid' } }, { qDef: { cId: 'd_author' } }],
+        qMeasures: [{ qDef: { cId: 'm_text' } }],
+        qInitialDataFetch: [{ qTop: 0, qLeft: 0, qWidth: 10, qHeight: 100 }],
     });
 
-    it('refuses rather than patching half of it', async () => {
-        const model = { applyPatches: vi.fn() };
-        expect(await widen({ model, stateName: null, gate: gateOf(), dimensionCount: 3 })).toBe(
-            WIDEN_OUTCOMES.REFUSED
-        );
+    it('copies the cube into the state and appends the gate, leaving the object alone', () => {
+        // The object's own cube is never touched: it stays in the default state, so a click still
+        // selects through the object's selection mode and the selection reaches the app.
+        const def = widenedDefinition({ cube: cube(), stateName: 'cqs_xy', gate: gateOf() });
+        expect(def.qHyperCubeDef.qStateName).toBe('cqs_xy');
+        expect(def.qHyperCubeDef.qDimensions.map((d) => d.qDef.cId)).toEqual([
+            'd_msgid',
+            'd_author',
+            CONTEXT_GATE_CID,
+        ]);
+        // Everything else the object was reading with comes along.
+        expect(def.qHyperCubeDef.qMeasures).toHaveLength(1);
+        expect(def.qHyperCubeDef.qInitialDataFetch).toHaveLength(1);
+    });
+
+    it('drops a gate an earlier build left in the object, rather than gating twice', () => {
+        const stale = cube();
+        stale.qDimensions.push({ qDef: { cId: CONTEXT_GATE_CID, qFieldDefs: ['=Aggr(old)'] } });
+        const def = widenedDefinition({ cube: stale, stateName: 'cqs_xy', gate: gateOf() });
+        const gates = def.qHyperCubeDef.qDimensions.filter((d) => d.qDef.cId === CONTEXT_GATE_CID);
+        expect(gates).toHaveLength(1);
+        expect(gates[0].qDef.qFieldDefs[0]).not.toBe('=Aggr(old)');
+    });
+
+    it('leaves an object that already reads in an alternate state alone', () => {
+        // Freeing a field is relative to the default state; widening relative to another one would
+        // answer a question nobody asked.
+        const own = { ...cube(), qStateName: 'Comparison' };
+        expect(widenedDefinition({ cube: own, stateName: 'cqs_xy', gate: gateOf() })).toBeNull();
+    });
+
+    it('builds nothing without a state, a cube or a gate', () => {
+        expect(widenedDefinition({ cube: cube(), stateName: null, gate: gateOf() })).toBeNull();
+        expect(widenedDefinition({ cube: null, stateName: 'cqs_xy', gate: gateOf() })).toBeNull();
         expect(
-            await widen({
-                model,
-                stateName: 'cqs_xy',
-                gate: buildContextGate({}),
-                dimensionCount: 3,
-            })
-        ).toBe(WIDEN_OUTCOMES.REFUSED);
-        expect(model.applyPatches).not.toHaveBeenCalled();
+            widenedDefinition({ cube: cube(), stateName: 'cqs_xy', gate: buildContextGate({}) })
+        ).toBeNull();
+    });
+});
+
+describe('createWidened and releaseWidened', () => {
+    it('reads the effective cube, so the session sort order comes along', async () => {
+        // The time order is a soft patch in an app nobody can edit; a copy of the stored cube would
+        // show the messages in the message id's order instead.
+        const model = {
+            getEffectiveProperties: vi.fn().mockResolvedValue({
+                qHyperCubeDef: { qDimensions: [{ qDef: { cId: 'd_msgid' } }], qMeasures: [] },
+            }),
+        };
+        const app = { createSessionObject: vi.fn().mockResolvedValue({ id: 'w1' }) };
+        const object = await createWidened({ app, model, stateName: 'cqs_xy', gate: gateOf() });
+        expect(object).toEqual({ id: 'w1' });
+        expect(model.getEffectiveProperties).toHaveBeenCalled();
     });
 
-    it('says when the engine refused the patch, rather than looking widened', async () => {
+    it('answers null when the engine refuses, and says so', async () => {
         const warn = vi.fn();
-        const model = { applyPatches: vi.fn().mockRejectedValue(new Error('no')) };
+        const model = { getEffectiveProperties: vi.fn().mockRejectedValue(new Error('no')) };
+        const app = { createSessionObject: vi.fn() };
         expect(
-            await widen({
+            await createWidened({
+                app,
                 model,
                 stateName: 'cqs_xy',
                 gate: gateOf(),
-                dimensionCount: 3,
                 logger: { warn },
             })
-        ).toBe(WIDEN_OUTCOMES.REFUSED);
+        ).toBeNull();
         expect(warn).toHaveBeenCalled();
     });
 
-    it('puts the cube back, state and gate together', async () => {
-        const model = { applyPatches: vi.fn().mockResolvedValue(undefined) };
-        await narrow({ model, gateIndex: 3 });
-        const [patches] = model.applyPatches.mock.calls[0];
-        expect(patches[0]).toMatchObject({ qPath: '/qHyperCubeDef/qStateName', qValue: '""' });
-        expect(patches[1]).toMatchObject({ qOp: 'remove', qPath: '/qHyperCubeDef/qDimensions/3' });
-    });
-
-    it('leaves the dimensions alone when there is no gate to remove', async () => {
-        const model = { applyPatches: vi.fn().mockResolvedValue(undefined) };
-        await narrow({ model, gateIndex: -1 });
-        expect(model.applyPatches.mock.calls[0][0]).toHaveLength(1);
+    it('destroys the cube it made, and shrugs off one that was never made', async () => {
+        const app = { destroySessionObject: vi.fn().mockResolvedValue(true) };
+        await releaseWidened({ app, object: { id: 'w1' } });
+        expect(app.destroySessionObject).toHaveBeenCalledWith('w1');
+        await releaseWidened({ app, object: null });
+        expect(app.destroySessionObject).toHaveBeenCalledTimes(1);
     });
 });
 

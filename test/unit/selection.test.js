@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { buildSelection } from '../../src/qix/selection';
-import { DEFAULT_CIDS, resolveRoles } from '../../src/qix/column-map';
+import { buildSelection, buildLaneSelection } from '../../src/qix/selection';
+import { DEFAULT_CIDS, ROLES, resolveRoles } from '../../src/qix/column-map';
 
 const layout = (dimCIds) => ({
     qHyperCube: {
@@ -233,5 +233,32 @@ describe('buildSelection — selectConversation', () => {
                 participants,
             })
         ).toEqual([]);
+    });
+});
+
+describe('buildLaneSelection', () => {
+    const byRole = {
+        [ROLES.MESSAGE_ID]: { col: 0, kind: 'dim' },
+        [ROLES.AUTHOR]: { col: 1, kind: 'dim' },
+        [ROLES.THREAD]: { col: 2, kind: 'dim' },
+    };
+
+    it('selects the lane in the thread dimension, by its element number', () => {
+        expect(buildLaneSelection({ lane: { elem: 4 }, byRole })).toEqual([
+            { dimIdx: 2, values: [4], toggle: true },
+        ]);
+    });
+
+    it('toggles, which is what lets a second header join the first', () => {
+        // Headers are picked through the object's selection mode and confirmed together, the way a
+        // filter pane works; replacing would make each click undo the last.
+        const [step] = buildLaneSelection({ lane: { elem: 4 }, byRole });
+        expect(step.toggle).toBe(true);
+    });
+
+    it('selects nothing for a lane with no value behind it, or no thread dimension', () => {
+        expect(buildLaneSelection({ lane: { elem: -2 }, byRole })).toEqual([]);
+        expect(buildLaneSelection({ lane: { elem: 4 }, byRole: {} })).toEqual([]);
+        expect(buildLaneSelection({ lane: null, byRole })).toEqual([]);
     });
 });

@@ -558,7 +558,20 @@ object's Recipient, and every message grew a recipient of "1". The conversation 
 and the patch wrote over each other, and went on looking widened — the toggle pressed, the summary
 counting conversations — while showing the strict rows.
 
-**Rule:** never patch while `interactions.edit`, and take the patch off as editing starts, before the
-panel can read it. The fallback skips the gate's cId outright, and an object that already carries one
-is repaired the next time it is edited. _Guard: `test/unit/column-map.test.js`,
-`test/unit/whole-conversations.test.js`._
+**Rule:** the object's own cube is never patched at all. The widened cube is a **session object**
+holding a copy of it, which the panel cannot reach and nothing can save. The role fallback skips the
+gate's cId outright, and an object that already carries one from 0.6.0 is repaired the next time it is
+edited. _Guard: `test/unit/column-map.test.js`, `test/unit/whole-conversations.test.js`._
+
+## 45. A patched cube takes the object's selections into the alternate state with it
+
+The second half of the same mistake, and the reason the copy is not optional. While the object's own
+cube was patched into the alternate state, everything that selected through the object selected
+_there_: a click on a lane header narrowed the conversation and left the app untouched — no green bar,
+nothing in the field, nothing for anyone else on the sheet. `stateNameOf(layout)` was reading the
+state the object had been patched into rather than the one it belongs to.
+
+**Rule:** the object's cube stays in the default state and the widened copy lives beside it, so
+`useSelections` keeps working as it always has. A lane header selects through the object's selection
+mode like a filter pane — several picked, then confirmed together — rather than applying at once.
+_Guard: `test/unit/selection.test.js`, `test/component/chatlog-lane-controls.test.jsx`._

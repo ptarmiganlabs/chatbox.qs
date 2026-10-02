@@ -74,7 +74,7 @@ function renderLanes({ max = 2, offset = 0, ...props } = {}) {
 describe('lane headers that select their conversation', () => {
     const picking = (over = {}) => ({
         locked: false,
-        hint: 'Selects this conversation in ThreadId. Ctrl or Cmd adds.',
+        hint: 'Selects this conversation. Pick several, then confirm.',
         onPick: vi.fn(),
         ...over,
     });
@@ -85,22 +85,23 @@ describe('lane headers that select their conversation', () => {
         expect(screen.getByText('T4')).toBeInTheDocument();
     });
 
-    it('selects a conversation on a click, and adds on Ctrl or Cmd', () => {
+    it('hands each header clicked to the picker, so several can be confirmed together', () => {
         const pick = picking();
         renderLanes({ lanePicking: pick });
         const header = screen.getByRole('button', { name: /T4/ });
-        expect(header).toHaveAttribute('title', expect.stringContaining('ThreadId'));
+        expect(header).toHaveAttribute('title', expect.stringContaining('confirm'));
 
         fireEvent.click(header);
         expect(pick.onPick).toHaveBeenLastCalledWith(
             expect.objectContaining({ label: 'T4' }),
             false
         );
-        fireEvent.click(header, { ctrlKey: true });
+        fireEvent.click(screen.getByRole('button', { name: /T3/ }));
         expect(pick.onPick).toHaveBeenLastCalledWith(
-            expect.objectContaining({ label: 'T4' }),
-            true
+            expect.objectContaining({ label: 'T3' }),
+            false
         );
+        expect(pick.onPick).toHaveBeenCalledTimes(2);
     });
 
     it('leaves the lane for messages without a conversation unclickable', () => {

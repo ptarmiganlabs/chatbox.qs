@@ -29,16 +29,15 @@ import dataTargets from './data';
 import ext from './ext/index';
 import { normalize } from './chat/normalize';
 import { readConversationRows } from './qix/conversation-rows';
-import { ROLES, conversationModelOf, fieldOfColumn, resolveRoles } from './qix/column-map';
+import { ROLES, conversationModelOf, resolveRoles } from './qix/column-map';
 import { buildContextGate, gateDimensionExpression, gateProblemText } from './qix/context-gate';
 import {
+    createWidened,
     ensureState,
-    gateIndexOf,
-    narrow,
+    releaseWidened,
     repairStoredGate,
-    widen,
 } from './qix/whole-conversations';
-import { buildSelection } from './qix/selection';
+import { buildLaneSelection, buildSelection } from './qix/selection';
 import { describeAssignments } from './qix/role-labels';
 import { syncAttributeExpressions } from './qix/sync-attrs';
 import { createTimeOrder } from './qix/time-order';
@@ -218,14 +217,17 @@ export default function supernova(galaxy) {
                 });
             }
             // Whole conversations: the reader's own choice, null while they follow the setting,
-            // and what the cube was last patched with. The patch changes the layout, which renders
-            // again and finds the signature unchanged, so it settles after one pass.
+            // and the widened cube beside the object's own. The version is bumped when that cube
+            // appears, changes or goes, which is what fetches the rows again.
             const [wholePicked, setWholePicked] = useState(null);
+            const [widenedVersion, setWidenedVersion] = useState(0);
             const wholeRef = useRef({
                 signature: '',
                 stateName: null,
                 from: null,
                 repaired: false,
+                object: null,
+                layout: null,
             });
 
             // How far down the ranking the lanes shown start. The reader steps it; it is never
@@ -331,6 +333,14 @@ export default function supernova(galaxy) {
             const [page, fetchError] = usePromise(async () => {
                 if (!model || !staleLayout?.qHyperCube) return null;
                 const runId = ++runIdRef.current;
+                // The widened cube when there is one; the object's own otherwise. Read from the ref
+                // so a cube that arrives between renders is used as soon as the version says so.
+                const wide =
+                    wholeRef.current.object && wholeRef.current.layout
+                        ? { model: wholeRef.current.object, layout: wholeRef.current.layout }
+                        : null;
+                const readModel = wide?.model ?? model;
+                const readLayout = wide?.layout ?? staleLayout;
                 setProgress(null);
                 // The messages are shown in the cube's order, so sort the cube by the timestamp
                 // before any row is read (src/qix/time-order.js). A patch changes the layout, and
@@ -345,8 +355,8 @@ export default function supernova(galaxy) {
                 // Up to Maximum messages: the newest rows for Newest first and lanes, past
                 // any phantom rows at the end of the cube.
                 const result = await readConversationRows({
-                    model,
-                    layout: staleLayout,
+                    model: readModel,
+                    layout: readLayout,
                     settings,
                     /**
                      * Report whether this run has been superseded.
@@ -367,8 +377,8 @@ export default function supernova(galaxy) {
                 // keeps the PREVIOUS resolved value while a new promise is in
                 // flight, so without this the old rows are normalized against
                 // the new layout's column map — silently mismatched columns.
-                return { ...result, derivedFrom: staleLayout };
-            }, [staleLayout, model, settings.maxMessages]);
+                return { ...result, derivedFrom: readLayout };
+            }, [staleLayout, model, settings.maxMessages, widenedVersion]);
 
             // The highlight values load beside the rows, in usePromise for the same reason: nebula
             // waits for it before it declares the render complete. The conversation does not wait for
@@ -405,7 +415,16 @@ export default function supernova(galaxy) {
                     return undefined;
                 }
 
-                const { columns, byRole, missing } = resolveRoles(staleLayout, settings.roles, {
+                // The widened cube when there is one, the object's own otherwise. Its layout
+                // carries the same roles by cId, plus the gate column normalize reads. Settings
+                // always come from the object: the widened cube holds a hypercube and nothing else.
+                const widened =
+                    wholeRef.current.object && wholeRef.current.layout
+                        ? { model: wholeRef.current.object, layout: wholeRef.current.layout }
+                        : null;
+                const sourceLayout = widened?.layout ?? staleLayout;
+
+                const { columns, byRole, missing } = resolveRoles(sourceLayout, settings.roles, {
                     conversationModel,
                 });
                 if (missing.length) {
@@ -426,7 +445,7 @@ export default function supernova(galaxy) {
                     return undefined;
                 }
 
-                if (!page || page.derivedFrom !== staleLayout) {
+                if (!page || page.derivedFrom !== sourceLayout) {
                     const reloading = reloadingView(lastViewRef.current, {
                         rect,
                         keyboard,
@@ -449,15 +468,15 @@ export default function supernova(galaxy) {
                 if (
                     cached === null ||
                     cached.page !== page ||
-                    cached.layout !== staleLayout ||
+                    cached.layout !== sourceLayout ||
                     cached.themeName !== themeName
                 ) {
                     conversationCacheRef.current = {
                         page,
-                        layout: staleLayout,
+                        layout: sourceLayout,
                         themeName,
                         conversation: normalize({
-                            layout: staleLayout,
+                            layout: sourceLayout,
                             rows: page.rows,
                             props: settings,
                             theme,
@@ -549,50 +568,64 @@ export default function supernova(galaxy) {
                     wholeRef.current.from = toolSettings.wholeConversations;
                     if (wholePicked !== null) setWholePicked(null);
                 }
-                // An object saved by 0.6.0 with the patch baked in is put right here, where its
-                // properties may be written at all. Once per session: a repair changes the layout.
+                // An object saved by an earlier build with the gate patched into it is put right
+                // here, where its properties may be written at all. Once per session.
                 if (interactions?.edit && !wholeRef.current.repaired) {
                     wholeRef.current.repaired = true;
                     repairStoredGate({ model, logger });
                 }
 
                 const gate = buildContextGate(byRole);
-                // Never while the sheet is edited. A soft patch is session-only until something
-                // writes the properties back, and in edit mode everything does: the panel
-                // round-trips the effective properties into the stored ones, and the object would
-                // be saved with a dimension nobody added. Entering edit mode therefore takes the
-                // patch off again, before the panel can read it.
                 const wholeWanted =
-                    (wholePicked ?? toolSettings.wholeConversations) &&
-                    !isSnapshot(staleLayout) &&
-                    !interactions?.edit;
+                    (wholePicked ?? toolSettings.wholeConversations) && !isSnapshot(staleLayout);
                 const signature = wholeWanted && !gate.problem ? gateDimensionExpression(gate) : '';
                 if (signature !== wholeRef.current.signature) {
                     wholeRef.current.signature = signature;
-                    const gateAt = gateIndexOf(staleLayout);
-                    const stored = (hc.qDimensionInfo ?? []).length - (gateAt >= 0 ? 1 : 0);
-                    // Fire and forget: the patch changes the layout, which renders again.
+                    // Fire and forget: the widened cube arriving bumps a version, which fetches.
                     (async () => {
-                        if (gateAt >= 0) await narrow({ model, gateIndex: gateAt, logger });
-                        if (signature === '') return;
+                        const previous = wholeRef.current.object;
+                        wholeRef.current.object = null;
+                        wholeRef.current.layout = null;
+                        await releaseWidened({ app, object: previous, logger });
+                        if (signature === '' || wholeRef.current.signature !== signature) {
+                            setWidenedVersion((version) => version + 1);
+                            return;
+                        }
                         wholeRef.current.stateName =
                             wholeRef.current.stateName ??
-                            (await ensureState({
-                                app,
-                                objectId: staleLayout?.qInfo?.qId,
-                                logger,
-                            }));
-                        if (!wholeRef.current.stateName) return;
-                        await widen({
+                            (await ensureState({ app, objectId: staleLayout?.qInfo?.qId, logger }));
+                        const object = await createWidened({
+                            app,
                             model,
                             stateName: wholeRef.current.stateName,
                             gate,
-                            dimensionCount: stored,
                             logger,
                         });
+                        if (!object || wholeRef.current.signature !== signature) {
+                            await releaseWidened({ app, object, logger });
+                            setWidenedVersion((version) => version + 1);
+                            return;
+                        }
+                        // Its own changes matter: a selection changes which conversations are in
+                        // scope without changing the object's own cube at all.
+                        object.on('changed', async () => {
+                            try {
+                                wholeRef.current.layout = await object.getLayout();
+                            } catch {
+                                wholeRef.current.layout = null;
+                            }
+                            setWidenedVersion((version) => version + 1);
+                        });
+                        try {
+                            wholeRef.current.layout = await object.getLayout();
+                        } catch {
+                            wholeRef.current.layout = null;
+                        }
+                        wholeRef.current.object = object;
+                        setWidenedVersion((version) => version + 1);
                     })();
                 }
-                const wholeOn = signature !== '' && gateIndexOf(staleLayout) >= 0;
+                const wholeOn = widened !== null && signature !== '';
 
                 // Conversations side by side: a board of lanes, whose order of messages everything below
                 // follows — the highlights, search, stepping and copying count messages by their index in
@@ -674,39 +707,46 @@ export default function supernova(galaxy) {
                         pick(planCategorySelection(highlightView.answer, name, toggle)),
                 };
 
-                // A lane header selects its conversation, the way a legend chip selects its
-                // category: directly, like a filter pane, rather than through the object's own
-                // selection mode. It is a filter affordance and not a message, it reads the same
-                // whatever the object's cube is in, and a thread dimension that is an expression has
-                // no field to select in at all.
-                // Never in an export render, whose server reports every interaction as allowed,
-                // nor in edit mode — the same gate a click on a highlight passes. "Clicking a
-                // message does nothing" is about messages and does not silence a lane header.
-                const threadField = fieldOfColumn(byRole[ROLES.THREAD]);
+                // Never in an export, whose server reports every interaction as allowed, nor in
+                // edit mode — the same gate a click on a message passes.
                 const canSelectLanes =
                     !isSnapshot(staleLayout) &&
                     interactions?.active !== false &&
                     Boolean(interactions?.select) &&
                     !interactions?.edit;
+
+                // A lane header selects its conversation through the object's own selection
+                // mode, as a filter pane does: pick one header, then another, then confirm or
+                // cancel them together. A thread dimension that is an expression still selects —
+                // the hypercube addresses a column, not a field name.
                 const lanePicking =
-                    canSelectLanes && board && threadField
+                    canSelectLanes && board && byRole[ROLES.THREAD]
                         ? {
                               locked: false,
-                              hint: `Selects this conversation in ${threadField}. Ctrl or Cmd adds.`,
+                              hint: 'Selects this conversation. Pick several, then confirm.',
                               /**
-                               * Select a lane's conversation in the thread field.
+                               * Select a lane's conversation beside any already picked.
                                *
                                * @param {object} lane - The lane whose header was clicked.
-                               * @param {boolean} toggle - Whether Ctrl or Cmd was held.
                                * @returns {Promise<void>} Resolves once the selection is sent.
                                */
-                              onPick: (lane, toggle) =>
-                                  pick({
-                                      field: threadField,
-                                      elemNumbers: [lane.elem],
-                                      toggle,
-                                      locked: false,
-                                  }),
+                              onPick: async (lane) => {
+                                  const steps = buildLaneSelection({ lane, byRole });
+                                  if (!steps.length || !selections) return;
+                                  try {
+                                      if (!selections.isActive())
+                                          await selections.begin(['/qHyperCubeDef']);
+                                      for (const { dimIdx, values, toggle } of steps) {
+                                          const ok = await selections.select({
+                                              method: 'selectHyperCubeValues',
+                                              params: ['/qHyperCubeDef', dimIdx, values, toggle],
+                                          });
+                                          if (ok === false) break;
+                                      }
+                                  } catch (err) {
+                                      logger.warn('lane selection failed:', err);
+                                  }
+                              },
                           }
                         : null;
 

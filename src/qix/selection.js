@@ -116,4 +116,22 @@ export function buildSelection({
     }
 }
 
+/**
+ * Build the step a click on a lane header runs.
+ *
+ * A lane header selects through the object's own selection mode, as a filter pane does: headers are
+ * picked one after another and then confirmed or cancelled together, rather than each click applying
+ * at once. Every header therefore toggles — that is what lets a second one join the first, and a
+ * second click on the same one take it back again.
+ *
+ * @param {object} request - The click.
+ * @param {object} request.lane - The lane whose header was clicked.
+ * @param {object} request.byRole - Resolved columns by role.
+ * @returns {object[]} Steps; empty when the lane names no value to select.
+ */
+export function buildLaneSelection({ lane, byRole }) {
+    if (!lane || !byRole) return [];
+    return step(byRole[ROLES.THREAD], selectable([lane.elem]), true);
+}
+
 export default buildSelection;

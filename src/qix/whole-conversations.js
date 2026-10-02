@@ -8,9 +8,13 @@
  *
  * So: a **session** alternate state, one per object, which is never persisted and never appears in the
  * app layout's `qStateNames`, so nothing is written to the app and the selection bar never shows it;
- * the object's own cube **soft-patched** into that state, which `getProperties` never sees and which
- * reverts cleanly; and a calculated dimension appended to the cube that the engine drops the
- * out-of-scope rows by.
+ * a **session object** holding a copy of the object's cube read in that state; and a calculated
+ * dimension appended to the copy that the engine drops the out-of-scope rows by.
+ *
+ * The object's own cube is never touched. A soft patch of it looked session-only and was not: in edit
+ * mode the property panel round-trips the effective properties into the stored ones, and the gate was
+ * saved with the object (GOTCHAS 44). A patched cube also reads in the alternate state, so the
+ * object's own selections went there instead of into the app.
  *
  * Nothing is ever selected in the state. A selection there pushes an undo step, so Sense's back button
  * would undo the object's own bookkeeping and the reader could never step past it (GOTCHAS 42).
@@ -20,16 +24,8 @@
  */
 import { CONTEXT_GATE_CID, gateDimensionExpression } from './context-gate';
 
-/** What a widening attempt came to. */
-export const WIDEN_OUTCOMES = Object.freeze({
-    WIDENED: 'widened',
-    UNCHANGED: 'unchanged',
-    REFUSED: 'refused',
-});
-
-/** The path the state is patched onto, and the one the gate dimension is appended to. */
-const STATE_PATH = '/qHyperCubeDef/qStateName';
-const DIMENSIONS_PATH = '/qHyperCubeDef/qDimensions';
+/** The session object's type, visible in engine logs. */
+export const WIDENED_TYPE = 'chatbox-widened';
 
 /**
  * Name the session state for an object.
@@ -88,64 +84,80 @@ export async function ensureState({ app, objectId, logger }) {
 }
 
 /**
- * Patch the object's cube into the state, with the gate appended.
+ * Build the definition of the widened cube.
  *
- * @param {object} request - What to patch.
- * @param {object} request.model - The object's model.
- * @param {string} request.stateName - The session state.
+ * A copy of the cube the object stores, read in the alternate state, with the gate appended. The
+ * object's own cube is not touched at all: it stays in the default state, so a click still selects
+ * through the object's selection mode, the selection bar still shows what was selected, and nothing
+ * the property panel writes back can carry any of this with it.
+ *
+ * @param {object} request - What to build it from.
+ * @param {?object} request.cube - The object's stored `qHyperCubeDef`.
+ * @param {?string} request.stateName - The session alternate state.
  * @param {object} request.gate - From `buildContextGate`.
- * @param {number} request.dimensionCount - How many dimensions the cube has now.
- * @param {object} [request.logger] - Where a refusal is reported.
- * @returns {Promise<string>} A value of {@link WIDEN_OUTCOMES}.
+ * @returns {?object} The session object's definition, or null when it cannot be built.
  */
-export async function widen({ model, stateName, gate, dimensionCount, logger }) {
+export function widenedDefinition({ cube, stateName, gate }) {
     const dimension = gateDimension(gate);
-    if (!dimension || !stateName) return WIDEN_OUTCOMES.REFUSED;
-    try {
-        await model.applyPatches(
-            [
-                { qOp: 'replace', qPath: STATE_PATH, qValue: JSON.stringify(stateName) },
-                {
-                    // Appended, never in place of the message id: a calculated dimension's element
-                    // numbers are the Aggr's own, and every selection by element number would be wrong.
-                    qOp: 'add',
-                    qPath: `${DIMENSIONS_PATH}/${dimensionCount}`,
-                    qValue: JSON.stringify(dimension),
-                },
+    if (!cube || !dimension || !stateName) return null;
+    // An object already read in an alternate state is left alone: the gate frees fields from the
+    // default state, and widening relative to another one would answer a question nobody asked.
+    if (typeof cube.qStateName === 'string' && cube.qStateName !== '') return null;
+    return {
+        qInfo: { qType: WIDENED_TYPE },
+        qHyperCubeDef: {
+            ...cube,
+            qStateName: stateName,
+            // Any gate an earlier build left in the object's own cube is dropped: one is enough,
+            // and a stale one would gate against the wrong fields.
+            qDimensions: [
+                ...(cube.qDimensions ?? []).filter((d) => d?.qDef?.cId !== CONTEXT_GATE_CID),
+                dimension,
             ],
-            true
-        );
-        return WIDEN_OUTCOMES.WIDENED;
+        },
+    };
+}
+
+/**
+ * Create the widened cube beside the object.
+ *
+ * @param {object} request - What to create it from.
+ * @param {object} request.app - The app handle.
+ * @param {object} request.model - The object's model.
+ * @param {?string} request.stateName - The session alternate state.
+ * @param {object} request.gate - From `buildContextGate`.
+ * @param {object} [request.logger] - Where a refusal is reported.
+ * @returns {Promise<?object>} The session object, or null when it could not be created.
+ */
+export async function createWidened({ app, model, stateName, gate, logger }) {
+    try {
+        // Effective, not stored: the time order is a soft patch in an app nobody can edit, and a
+        // copy made from the stored cube would show the messages in the message id's order.
+        const props = await model.getEffectiveProperties();
+        const definition = widenedDefinition({ cube: props?.qHyperCubeDef, stateName, gate });
+        if (!definition) return null;
+        return await app.createSessionObject(definition);
     } catch (error) {
-        logger?.warn?.('whole conversations: the engine refused the patch:', error);
-        return WIDEN_OUTCOMES.REFUSED;
+        logger?.warn?.('whole conversations: the widened cube could not be created:', error);
+        return null;
     }
 }
 
 /**
- * Put the cube back the way the object stores it.
+ * Destroy a widened cube.
  *
- * @param {object} request - What to restore.
- * @param {object} request.model - The object's model.
- * @param {number} request.gateIndex - Where the gate dimension sits in the cube.
+ * @param {object} request - What to release.
+ * @param {object} request.app - The app handle.
+ * @param {?object} request.object - The session object, or null.
  * @param {object} [request.logger] - Where a refusal is reported.
- * @returns {Promise<string>} A value of {@link WIDEN_OUTCOMES}.
+ * @returns {Promise<void>} Resolves once it is gone, whether or not the engine obliged.
  */
-export async function narrow({ model, gateIndex, logger }) {
+export async function releaseWidened({ app, object, logger }) {
+    if (!object) return;
     try {
-        await model.applyPatches(
-            [
-                { qOp: 'replace', qPath: STATE_PATH, qValue: JSON.stringify('') },
-                ...(gateIndex >= 0
-                    ? [{ qOp: 'remove', qPath: `${DIMENSIONS_PATH}/${gateIndex}`, qValue: '' }]
-                    : []),
-            ],
-            true
-        );
-        return WIDEN_OUTCOMES.UNCHANGED;
+        await app.destroySessionObject(object.id);
     } catch (error) {
-        logger?.warn?.('whole conversations: the engine refused to put the cube back:', error);
-        return WIDEN_OUTCOMES.REFUSED;
+        logger?.warn?.('whole conversations: the widened cube could not be released:', error);
     }
 }
 

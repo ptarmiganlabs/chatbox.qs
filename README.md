@@ -128,10 +128,10 @@ many messages it has.
 - **Free scrolling** gives each lane its own list and scrollbar, packed without gaps, and each keeps its
   place when a selection changes the others.
 - Messages without a thread share a **(no conversation)** lane.
-- **A click on a lane's header selects that conversation**, in the field the _Conversation / thread_
-  dimension is on, the way a click on a legend chip selects its category: at once, like a filter pane.
-  Ctrl or Cmd adds and removes. The **(no conversation)** lane has no value behind it and is not
-  clickable, and nor is any header while the dimension is an expression rather than a field.
+- **A click on a lane's header selects that conversation**, through the object's own selection mode:
+  pick one header, then another, then confirm or cancel them together, exactly as a filter pane works.
+  A second click on a header you have picked takes it back. The **(no conversation)** lane has no
+  value behind it and is not clickable.
 - **When there are more conversations than fit**, the bar steps through them: **◂ 1–4 of 12 ▸**, a
   windowful at a time, down the same ranking. A selection that leaves fewer conversations pulls the
   window back on its own; otherwise it stays where you put it.
@@ -175,15 +175,13 @@ the reader usually meant is _which chats is Ada in_ — and for that, **Show who
 from a selection means naming it. Where one of them is an expression the button is disabled and says
 so, rather than widening some conversations and not others.
 
-**It is off while a sheet is being edited.** The widening lives in a patch that belongs to the
-session and to nothing else, and an edited sheet writes its objects back; the object takes the patch
-off as editing starts, so nothing of it can ever be saved. Leave edit mode to see it again.
-
-Under the hood the object asks the engine to read its cube in a **session alternate state** — the only
-way to re-read an expression as it is written, since the message body is your measure and nothing can
-be injected into it. Nothing is written to the app: the state is never persisted, never appears among
-the app's alternate states, never shows in the selection bar, and nothing is ever selected in it. An
-image or PDF export is drawn without an engine, so it shows the strict conversation.
+Under the hood the object reads a **copy of its cube in a session alternate state** — the only way to
+re-read an expression as it is written, since the message body is your measure and nothing can be
+injected into it. The object's own cube is untouched and stays in the default state, so selections
+behave exactly as they always have. Nothing is written to the app: the state and the copy both live
+only in your session, the state never appears among the app's alternate states, it never shows in the
+selection bar, and nothing is ever selected in it. An image or PDF export is drawn without an engine,
+so it shows the strict conversation.
 
 A widened conversation holds more messages than a narrow one, so **Maximum messages** is reached
 sooner; the banner says when it was.
