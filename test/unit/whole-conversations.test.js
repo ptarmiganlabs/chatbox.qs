@@ -5,6 +5,7 @@ import {
     gateDimension,
     gateIndexOf,
     narrow,
+    repairStoredGate,
     stateNameFor,
     widen,
 } from '../../src/qix/whole-conversations';
@@ -154,5 +155,49 @@ describe('gateIndexOf', () => {
         expect(gateIndexOf(layout)).toBe(2);
         expect(gateIndexOf({ qHyperCube: { qDimensionInfo: [{ cId: 'd_msgid' }] } })).toBe(-1);
         expect(gateIndexOf(null)).toBe(-1);
+    });
+});
+
+describe('repairStoredGate', () => {
+    it('takes a gate 0.6.0 saved with the object back out, and the state with it', async () => {
+        const props = {
+            qHyperCubeDef: {
+                qStateName: 'cqs_pPPN',
+                qDimensions: [
+                    { qDef: { cId: 'd_msgid' } },
+                    { qDef: { cId: 'd_author' } },
+                    { qDef: { cId: CONTEXT_GATE_CID } },
+                ],
+            },
+        };
+        const model = {
+            getProperties: vi.fn().mockResolvedValue(props),
+            setProperties: vi.fn().mockResolvedValue(undefined),
+        };
+        expect(await repairStoredGate({ model })).toBe(true);
+        const written = model.setProperties.mock.calls[0][0];
+        expect(written.qHyperCubeDef.qDimensions.map((d) => d.qDef.cId)).toEqual([
+            'd_msgid',
+            'd_author',
+        ]);
+        expect(written.qHyperCubeDef.qStateName).toBe('');
+    });
+
+    it('writes nothing to an object that was never damaged', async () => {
+        const model = {
+            getProperties: vi.fn().mockResolvedValue({
+                qHyperCubeDef: { qStateName: '', qDimensions: [{ qDef: { cId: 'd_msgid' } }] },
+            }),
+            setProperties: vi.fn(),
+        };
+        expect(await repairStoredGate({ model })).toBe(false);
+        expect(model.setProperties).not.toHaveBeenCalled();
+    });
+
+    it('says when the engine refused, rather than throwing into the render', async () => {
+        const warn = vi.fn();
+        const model = { getProperties: vi.fn().mockRejectedValue(new Error('no')) };
+        expect(await repairStoredGate({ model, logger: { warn } })).toBe(false);
+        expect(warn).toHaveBeenCalled();
     });
 });

@@ -159,3 +159,34 @@ export function gateIndexOf(layout) {
     const dims = layout?.qHyperCube?.qDimensionInfo ?? [];
     return dims.findIndex((info) => info?.cId === CONTEXT_GATE_CID);
 }
+
+/**
+ * Take a gate out of an object's stored properties.
+ *
+ * Version 0.6.0 patched the cube while the sheet was being edited, and the property panel saved the
+ * patch with the object: a dimension nobody added, which the positional role fallback then handed to
+ * whichever role was missing. An object that carries one is repaired the next time it is edited,
+ * which is the only time its properties may be written at all.
+ *
+ * @param {object} request - What to repair.
+ * @param {object} request.model - The object's model.
+ * @param {object} [request.logger] - Where a refusal is reported.
+ * @returns {Promise<boolean>} True when something was repaired.
+ */
+export async function repairStoredGate({ model, logger }) {
+    try {
+        const props = await model.getProperties();
+        const cube = props?.qHyperCubeDef;
+        const dimensions = cube?.qDimensions ?? [];
+        const kept = dimensions.filter((d) => d?.qDef?.cId !== CONTEXT_GATE_CID);
+        const state = cube?.qStateName ?? '';
+        if (kept.length === dimensions.length && state === '') return false;
+        cube.qDimensions = kept;
+        cube.qStateName = '';
+        await model.setProperties(props);
+        return true;
+    } catch (error) {
+        logger?.warn?.('whole conversations: could not repair the stored cube:', error);
+        return false;
+    }
+}

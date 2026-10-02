@@ -544,3 +544,21 @@ their cIds, so neither the missing-recipient screen nor the positional fallback 
 
 **Rule:** this is GOTCHAS 15 seen from the reader's side. Nothing in the object says a selection could
 not reach it, and nothing can: the object is not told. Worth a diagnostic one day, not a fix.
+
+## 44. A soft patch is session-only until the property panel reads it back
+
+A soft patch is not saved — but in edit mode the property panel round-trips the **effective**
+properties into the stored ones, and whatever was patched is then written with the object. Seen on
+Qlik Sense May 2026: the whole-conversations gate dimension ended up in a saved object's
+`qHyperCubeDef.qDimensions` with `qStateName` left empty, so the object was no longer widened and
+carried a dimension nobody had added.
+
+Which the positional role fallback then bound, because the gate carries no _role_ cId: it became the
+object's Recipient, and every message grew a recipient of "1". The conversation flickered as the panel
+and the patch wrote over each other, and went on looking widened — the toggle pressed, the summary
+counting conversations — while showing the strict rows.
+
+**Rule:** never patch while `interactions.edit`, and take the patch off as editing starts, before the
+panel can read it. The fallback skips the gate's cId outright, and an object that already carries one
+is repaired the next time it is edited. _Guard: `test/unit/column-map.test.js`,
+`test/unit/whole-conversations.test.js`._

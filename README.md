@@ -175,6 +175,10 @@ the reader usually meant is _which chats is Ada in_ — and for that, **Show who
 from a selection means naming it. Where one of them is an expression the button is disabled and says
 so, rather than widening some conversations and not others.
 
+**It is off while a sheet is being edited.** The widening lives in a patch that belongs to the
+session and to nothing else, and an edited sheet writes its objects back; the object takes the patch
+off as editing starts, so nothing of it can ever be saved. Leave edit mode to see it again.
+
 Under the hood the object asks the engine to read its cube in a **session alternate state** — the only
 way to re-read an expression as it is written, since the message body is your measure and nothing can
 be injected into it. Nothing is written to the app: the state is never persisted, never appears among

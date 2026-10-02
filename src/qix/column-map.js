@@ -196,10 +196,14 @@ export function resolveRoles(layout, roleCIds = DEFAULT_CIDS, { conversationMode
         msr: columns.filter((c) => c.kind === 'msr'),
     };
 
-    // Positional fallback, matching the slot order the panel seeds for this model.
+    // Positional fallback, matching the slot order the panel seeds for this model. The
+    // whole-conversations gate is the object's own column and is left out of the slots entirely:
+    // it carries no role cId, so the fallback would otherwise hand it to whichever role is
+    // missing — and a gate bound as the recipient gives every message a recipient of "1".
+    const slots = pools.dim.filter((c) => c.cId !== CONTEXT_GATE_CID);
     const positional = {};
     dimensionRoleOrder(model).forEach((role, i) => {
-        positional[role] = pools.dim[i];
+        positional[role] = slots[i];
     });
     MEASURE_ROLE_ORDER.forEach((role, i) => {
         positional[role] = pools.msr[i];
@@ -222,7 +226,12 @@ export function resolveRoles(layout, roleCIds = DEFAULT_CIDS, { conversationMode
     for (const role of Object.values(ROLES)) {
         if (byRole[role]) continue;
         const column = positional[role];
-        if (column && !claimed.has(column.col) && !roleCIdSet.has(column.cId)) {
+        if (
+            column &&
+            !claimed.has(column.col) &&
+            !roleCIdSet.has(column.cId) &&
+            column.cId !== CONTEXT_GATE_CID
+        ) {
             byRole[role] = column;
             claimed.add(column.col);
         }

@@ -31,7 +31,13 @@ import { normalize } from './chat/normalize';
 import { readConversationRows } from './qix/conversation-rows';
 import { ROLES, conversationModelOf, fieldOfColumn, resolveRoles } from './qix/column-map';
 import { buildContextGate, gateDimensionExpression, gateProblemText } from './qix/context-gate';
-import { ensureState, gateIndexOf, narrow, widen } from './qix/whole-conversations';
+import {
+    ensureState,
+    gateIndexOf,
+    narrow,
+    repairStoredGate,
+    widen,
+} from './qix/whole-conversations';
 import { buildSelection } from './qix/selection';
 import { describeAssignments } from './qix/role-labels';
 import { syncAttributeExpressions } from './qix/sync-attrs';
@@ -215,7 +221,12 @@ export default function supernova(galaxy) {
             // and what the cube was last patched with. The patch changes the layout, which renders
             // again and finds the signature unchanged, so it settles after one pass.
             const [wholePicked, setWholePicked] = useState(null);
-            const wholeRef = useRef({ signature: '', stateName: null, from: null });
+            const wholeRef = useRef({
+                signature: '',
+                stateName: null,
+                from: null,
+                repaired: false,
+            });
 
             // How far down the ranking the lanes shown start. The reader steps it; it is never
             // reset on a selection, because buildBoard clamps it to what there is, and a reader who
@@ -538,9 +549,23 @@ export default function supernova(galaxy) {
                     wholeRef.current.from = toolSettings.wholeConversations;
                     if (wholePicked !== null) setWholePicked(null);
                 }
+                // An object saved by 0.6.0 with the patch baked in is put right here, where its
+                // properties may be written at all. Once per session: a repair changes the layout.
+                if (interactions?.edit && !wholeRef.current.repaired) {
+                    wholeRef.current.repaired = true;
+                    repairStoredGate({ model, logger });
+                }
+
                 const gate = buildContextGate(byRole);
+                // Never while the sheet is edited. A soft patch is session-only until something
+                // writes the properties back, and in edit mode everything does: the panel
+                // round-trips the effective properties into the stored ones, and the object would
+                // be saved with a dimension nobody added. Entering edit mode therefore takes the
+                // patch off again, before the panel can read it.
                 const wholeWanted =
-                    (wholePicked ?? toolSettings.wholeConversations) && !isSnapshot(staleLayout);
+                    (wholePicked ?? toolSettings.wholeConversations) &&
+                    !isSnapshot(staleLayout) &&
+                    !interactions?.edit;
                 const signature = wholeWanted && !gate.problem ? gateDimensionExpression(gate) : '';
                 if (signature !== wholeRef.current.signature) {
                     wholeRef.current.signature = signature;
@@ -567,7 +592,7 @@ export default function supernova(galaxy) {
                         });
                     })();
                 }
-                const wholeOn = gateIndexOf(staleLayout) >= 0;
+                const wholeOn = signature !== '' && gateIndexOf(staleLayout) >= 0;
 
                 // Conversations side by side: a board of lanes, whose order of messages everything below
                 // follows — the highlights, search, stepping and copying count messages by their index in
