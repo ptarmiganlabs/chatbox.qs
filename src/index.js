@@ -57,10 +57,15 @@ import { createConversationFinder } from './highlight/conversation-finder';
 import {
     planCategorySelection,
     planValueSelection,
+    selectionMadeNotice,
     selectionNotice,
 } from './highlight/click-selection';
 import { readTextToolSettings } from './highlight/settings';
-import { selectInFieldBesideObjectSelections, stateNameOf } from './qix/field-selection';
+import {
+    SELECTION_OUTCOMES,
+    selectInFieldBesideObjectSelections,
+    stateNameOf,
+} from './qix/field-selection';
 import { render, destroy } from './ui/chat-renderer';
 import ChatLog from './ui/ChatLog';
 import { Empty, Failed, Loading, NotConfigured, emptyStateMessage } from './ui/states';
@@ -753,9 +758,10 @@ export default function supernova(galaxy) {
                  * did not happen.
                  *
                  * @param {object} plan - From planValueSelection or planCategorySelection.
+                 * @param {string} [label] - The value or category the reader clicked, for the notice.
                  * @returns {Promise<void>} Resolves once the selection is sent.
                  */
-                const pick = async (plan) => {
+                const pick = async (plan, label) => {
                     const result = plan.locked
                         ? { outcome: 'locked' }
                         : await selectInFieldBesideObjectSelections({
@@ -767,7 +773,12 @@ export default function supernova(galaxy) {
                               toggle: plan.toggle,
                               logger,
                           });
-                    const message = selectionNotice(plan.field, result);
+                    // A click that worked says so too, not only one that failed.
+                    const message =
+                        selectionNotice(plan.field, result) ??
+                        (result?.outcome === SELECTION_OUTCOMES.SELECTED
+                            ? selectionMadeNotice(plan.field, label, plan.toggle)
+                            : null);
                     if (message) setNotice({ ...message, id: ++noticeIdRef.current });
                 };
 
@@ -781,7 +792,7 @@ export default function supernova(galaxy) {
                      * @returns {Promise<void>} Resolves once the selection is sent.
                      */
                     onSelectValues: (values, toggle) =>
-                        pick(planValueSelection(highlightView.answer, values, toggle)),
+                        pick(planValueSelection(highlightView.answer, values, toggle), values?.[0]),
                     /**
                      * Select a category in the category field.
                      *
@@ -790,7 +801,7 @@ export default function supernova(galaxy) {
                      * @returns {Promise<void>} Resolves once the selection is sent.
                      */
                     onSelectCategory: (name, toggle) =>
-                        pick(planCategorySelection(highlightView.answer, name, toggle)),
+                        pick(planCategorySelection(highlightView.answer, name, toggle), name),
                 };
 
                 // Never in an export, whose server reports every interaction as allowed, nor in

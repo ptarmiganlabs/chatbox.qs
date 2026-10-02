@@ -209,6 +209,29 @@ describe('ChatLog with the conversation widened', () => {
         expect(screen.getByText('3 messages · 1 match the selection')).toBeInTheDocument();
     });
 
+    it('says it beneath the highlight summary rather than in its place', () => {
+        // The two are wanted together: a keyword selected is exactly when a reader asks why the
+        // other messages are there, and the summary is what says a keyword is selected at all.
+        renderWide({
+            highlights: {
+                placement: {
+                    bar: {
+                        text: '1 selected value \u00b7 1 highlight in 1 message',
+                        level: 'info',
+                    },
+                },
+                settings: { category: { showLegend: false }, highlight: {} },
+                answer: { kind: 'no-selection' },
+                result: null,
+                styles: null,
+            },
+        });
+        expect(
+            screen.getByText('1 selected value \u00b7 1 highlight in 1 message')
+        ).toBeInTheDocument();
+        expect(screen.getByText('3 messages \u00b7 1 match the selection')).toBeInTheDocument();
+    });
+
     it('offers the toggle pressed, and says why when the cube cannot be widened', () => {
         const { unmount } = renderWide();
         expect(screen.getByRole('button', { name: 'Show whole conversations' })).toHaveAttribute(

@@ -940,7 +940,8 @@ export function ChatLog({
             ))}
             {barShown ? (
                 <ConversationBar
-                    info={wholeInfo ?? highlights?.placement?.bar ?? null}
+                    info={highlights?.placement?.bar ?? null}
+                    widened={wholeInfo}
                     entries={legend}
                     picking={picking}
                     find={

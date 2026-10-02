@@ -300,7 +300,11 @@ Set under **Categories**, which appears once a highlight field is set:
 - A click on a highlight selects its value in the highlight field — every spelling it stands for — and
   a click on a legend chip selects its category. Ctrl+click or Cmd+click adds or removes; clicking the
   only selected chip clears it. These select directly, like a filter pane: a selection pending in the
-  object's own selection mode is confirmed first.
+  object's own selection mode is confirmed first. They cannot be held pending behind Sense's own
+  confirm tick, which belongs to the values in an object's own hypercube, and the highlight field is
+  not one of them. The corner says what was selected and in which field, since that field is often in
+  no object on the sheet; a Ctrl or Cmd click says nothing, because whether it added or removed is not
+  something the object can tell.
 - A highlight inside a link leaves the click to the link.
 - Nothing is selected in edit mode, in an image or PDF export, or while **Select by clicking a
   highlight** is off. A click that selects nothing — a locked field, an engine error — says why in the
@@ -393,8 +397,8 @@ been looking at. F3 and Ctrl+G now mean the find box and nothing else.
 Right-click the object for **Copy conversation as text** or **Copy conversation as JSON**. Both copy the
 messages the object shows under the current selections, in the order shown.
 
-**One message on its own** is copied from the button that appears on it under the pointer, or under the
-keyboard. It copies the two lines a whole transcript gives that message — the sender, every recipient
+**One message on its own** is copied from the button in the bubble's upper corner, which appears
+under the pointer or the keyboard. It copies the two lines a whole transcript gives that message — the sender, every recipient
 and the time, then the message as it was written — so a message copied alone reads like a message
 copied among the rest. **Show copy button on messages** under **Appearance** takes it away, and an
 image or PDF export never has it.

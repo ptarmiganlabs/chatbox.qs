@@ -135,6 +135,9 @@ function Steps({
  *
  * @param {object} props - Component props.
  * @param {?{text: string, level: string}} [props.info] - The highlight summary, when it is shown here.
+ * @param {?{text: string, level: string}} [props.widened] - What a widened conversation is showing.
+ *     It sits under the highlight summary rather than in its place: the two are wanted together,
+ *     since a keyword selected is exactly when a reader asks why the other messages are there.
  * @param {Array<object>} [props.entries] - The legend's entries; none hides the legend.
  * @param {?object} [props.picking] - How chips select a category; null while they do not.
  * @param {?object} [props.find] - The find box: `query`, `inputRef`, `tabbable`, `counter`, `canStep`,
@@ -149,6 +152,7 @@ function Steps({
  */
 export function ConversationBar({
     info = null,
+    widened = null,
     entries = [],
     picking = null,
     find = null,
@@ -163,11 +167,16 @@ export function ConversationBar({
             {info || hasActions ? (
                 <div className={styles.toolStrip}>
                     <div className={styles.meta}>
-                        {info ? (
-                            <p className={styles.summary} title={info.text} data-level={info.level}>
-                                {info.text}
+                        {[info, widened].filter(Boolean).map((line) => (
+                            <p
+                                key={line.text}
+                                className={styles.summary}
+                                title={line.text}
+                                data-level={line.level}
+                            >
+                                {line.text}
                             </p>
-                        ) : null}
+                        ))}
                     </div>
                     {hasActions ? (
                         <div className={styles.actions}>

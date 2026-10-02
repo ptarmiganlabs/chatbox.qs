@@ -280,21 +280,22 @@
     max-width: 78%;
 }
 
-/* Copy one message. It sits over the bubble's outer top corner rather than in the text, so a drag
-   that selects the message still selects the message (GOTCHAS 24), and it is drawn only while the
-   pointer or the keyboard is on this bubble: a button on every message at once is a wall of them. */
+/* Copy one message, in the bubble's own upper corner. It takes the bubble's background so it never
+   sits on top of a glyph, and is drawn only while the pointer or the keyboard is on this bubble: a
+   button on every message at once is a wall of them. A drag that selects the message text still
+   selects it (GOTCHAS 24), because the button appears over the padding rather than in the text. */
 .copyMessage {
     position: absolute;
-    top: -2px;
-    inset-inline-end: -4px;
+    top: 2px;
+    inset-inline-end: 2px;
+    background: inherit;
     z-index: 1;
     display: flex;
     align-items: center;
     justify-content: center;
     padding: 2px;
-    border: 1px solid var(--cqs-border, #d9d9d9);
+    border: 0;
     border-radius: 3px;
-    background: var(--cqs-bg, #ffffff);
     color: var(--cqs-muted, #6c6c6c);
     font: inherit;
     cursor: pointer;

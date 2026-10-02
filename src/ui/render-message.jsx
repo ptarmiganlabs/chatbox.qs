@@ -190,25 +190,6 @@ export function MessageRow({
         >
             {avatar}
             <div className={styles.bubbleWrap}>
-                {onCopy ? (
-                    <button
-                        type="button"
-                        className={styles.copyMessage}
-                        title="Copy this message"
-                        aria-label="Copy this message"
-                        // Roving with the focus, as Details does beside it: the focused row's
-                        // controls are reachable and no others, so tabbing past the conversation
-                        // costs the same whether it holds five messages or five thousand.
-                        tabIndex={tabbable ? 0 : -1}
-                        onClick={(event) => {
-                            // A click on it is never a click on the message.
-                            event.stopPropagation();
-                            onCopy(message);
-                        }}
-                    >
-                        <Icon paths={ICONS.copy} />
-                    </button>
-                ) : null}
                 {showAuthor ? (
                     <div className={styles.author}>
                         <span>
@@ -253,6 +234,25 @@ export function MessageRow({
                         onShowDetails || expanded !== undefined ? Boolean(expanded) : undefined
                     }
                 >
+                    {onCopy ? (
+                        <button
+                            type="button"
+                            className={styles.copyMessage}
+                            title="Copy this message"
+                            aria-label="Copy this message"
+                            // Roving with the focus, as Details does beside it: the focused row's
+                            // controls are reachable and no others, so tabbing past the conversation
+                            // costs the same whether it holds five messages or five thousand.
+                            tabIndex={tabbable ? 0 : -1}
+                            onClick={(event) => {
+                                // A click on it is never a click on the message.
+                                event.stopPropagation();
+                                onCopy(message);
+                            }}
+                        >
+                            <Icon paths={ICONS.copy} />
+                        </button>
+                    ) : null}
                     {kindChips && message.kinds?.length ? (
                         <KindChips
                             kinds={message.kinds}
