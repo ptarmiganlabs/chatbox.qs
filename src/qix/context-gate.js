@@ -1,28 +1,27 @@
 /**
- * The set expressions that widen a selection to the conversations it touches.
+ * The calculated dimension that widens a selection to the conversations it touches.
  *
  * Selecting a participant narrows a conversation to the lines that participant wrote, which is what
  * Qlik was asked for and almost never what the reader meant: they asked which chats someone is in and
  * got which lines they wrote. Widening it means evaluating the object's cube under a different
  * selection — one with the people fields freed — and that cannot be done by rewriting expressions,
  * because the message body is the user's own measure and no set can be injected into an arbitrary
- * expression without parsing it. An alternate state re-evaluates every expression at once; these are
- * the expressions that then say which rows still belong.
+ * expression without parsing it. An alternate state re-evaluates every expression at once; the gate
+ * dimension is what then says which rows still belong.
  *
- * Both are written to be read from inside that state, where `$` means the default state — the real
- * selection, the one the rest of the sheet is showing.
- *
- * - `passes` is 0 for a message that fails a selection which should still narrow — a date, a kind —
- *   and the row is dropped.
- * - `inSelection` is 0 for a message that survives those but not the people selection: it is context,
- *   and is drawn as context rather than as an answer.
+ * It is read from inside that state, where `$` means the default state — the real selection, the one
+ * the rest of the sheet is showing — and it counts each message twice: once under the selection with
+ * the freed fields set aside, which drops a message that fails a selection that should still narrow
+ * (a date, a kind), and once under the selection as it stands, which tells a message that matches
+ * from one that is only there as context. {@link buildContextGate} decides which fields are freed;
+ * {@link gateDimensionExpression} writes the dimension, and is the only thing that does.
  *
  * Freeing a field needs its name, so a dimension that is an expression cannot take part: there is no
  * field to free and nothing to put in the set. Saying so is the point — a gate that quietly left such
  * a dimension narrowing would widen some conversations and not others, with nothing to see.
  */
 import { CONTEXT_GATE_CID, ROLES, fieldOfColumn } from './column-map';
-import { fieldRef, normalizeFieldName } from './field-ref';
+import { fieldRef } from './field-ref';
 import { roleLabel } from './role-labels';
 
 export { CONTEXT_GATE_CID };
@@ -50,19 +49,23 @@ export function freedSet(fields) {
 /**
  * Build the gate expressions for a cube's resolved roles.
  *
+ * The keyword fields are taken as field **names**, the way `readTextToolSettings` hands them over and
+ * `fieldOfColumn` reads the roles: already out of their brackets. They are not normalised again here.
+ * Doing it twice is not harmless — a field literally named `[weird]` is typed `[[weird]]`, comes out
+ * of the first pass as `[weird]`, and a second pass strips it to a field that does not exist.
+ *
  * @param {object} byRole - The resolved columns by role, from `resolveRoles`.
- * @param {object} [keywords] - The highlight settings' field names.
+ * @param {object} [keywords] - The highlight settings' field names, as `readTextToolSettings` returns
+ *     them.
  * @param {string} [keywords.highlightField] - The field whose values are highlighted.
  * @param {string} [keywords.categoryField] - The field that groups those values.
- * @returns {{passes: string, inSelection: string, freed: string[], messageIdField: string,
- *     threadField: string, problem: ?{kind: string, roles: string[]}}} The expressions, the fields
- *     freed, and what stands in the way; `problem` is null when nothing does.
+ * @returns {{freed: string[], messageIdField: string, threadField: string,
+ *     problem: ?{kind: string, roles: string[]}}} The fields freed, the fields the gate counts and
+ *     scopes by, and what stands in the way; `problem` is null when nothing does.
  */
 export function buildContextGate(byRole, { highlightField = '', categoryField = '' } = {}) {
     const messageIdField = fieldOfColumn(byRole?.[ROLES.MESSAGE_ID]);
     const empty = {
-        passes: '',
-        inSelection: '',
         freed: [],
         messageIdField,
         threadField: fieldOfColumn(byRole?.[ROLES.THREAD]),
@@ -85,15 +88,12 @@ export function buildContextGate(byRole, { highlightField = '', categoryField = 
         ...new Set(
             [
                 ...PEOPLE_ROLES.map((role) => fieldOfColumn(byRole?.[role])),
-                normalizeFieldName(highlightField),
-                normalizeFieldName(categoryField),
-            ].filter((name) => name !== '')
+                highlightField,
+                categoryField,
+            ].filter((name) => typeof name === 'string' && name !== '')
         ),
     ];
-    const id = fieldRef(messageIdField);
     return {
-        passes: `Count(${freedSet(freed)} ${id})`,
-        inSelection: `Count({$} ${id})`,
         freed,
         messageIdField,
         threadField: empty.threadField,

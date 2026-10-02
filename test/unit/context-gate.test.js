@@ -6,6 +6,7 @@ import {
     gateDimensionExpression,
 } from '../../src/qix/context-gate';
 import { ROLES } from '../../src/qix/column-map';
+import { readTextToolSettings } from '../../src/highlight/settings';
 
 /** A dimension column on a field, as resolveRoles hands it over. */
 const onField = (name, col = 0) => ({
@@ -47,24 +48,27 @@ describe('buildContextGate', () => {
         [ROLES.THREAD]: onField('ThreadId', 2),
     };
 
-    it('counts a message under the selection with the people fields freed, and under all of it', () => {
-        const gate = buildContextGate(roles);
-        expect(gate.problem).toBeNull();
-        expect(gate.passes).toBe('Count({$<[Author]=>} [MsgId])');
-        expect(gate.inSelection).toBe('Count({$} [MsgId])');
-        expect(gate.freed).toEqual(['Author']);
-        expect(gate.threadField).toBe('ThreadId');
+    it('names the fields it frees, and the ones it counts and scopes by — and nothing else', () => {
+        // The whole shape, so that nothing comes back into it unread: the gate once also returned
+        // two expression strings nobody used, and the tests that pinned them were all that kept
+        // them alive. gateDimensionExpression writes the conditions; this only decides the fields.
+        expect(buildContextGate(roles)).toEqual({
+            freed: ['Author'],
+            messageIdField: 'MsgId',
+            threadField: 'ThreadId',
+            problem: null,
+        });
     });
 
     it('frees the sender and the recipient together in a From → To model', () => {
         const gate = buildContextGate({ ...roles, [ROLES.RECIPIENT]: onField('To', 3) });
-        expect(gate.passes).toBe('Count({$<[Author]=,[To]=>} [MsgId])');
         expect(gate.freed).toEqual(['Author', 'To']);
+        expect(gateDimensionExpression(gate)).toContain('Count({$<[Author]=,[To]=>} [MsgId]) > 0');
     });
 
     it('never frees one field twice, however the roles resolved', () => {
         const same = { ...roles, [ROLES.RECIPIENT]: onField('Author', 3) };
-        expect(buildContextGate(same).passes).toBe('Count({$<[Author]=>} [MsgId])');
+        expect(buildContextGate(same).freed).toEqual(['Author']);
     });
 
     it('refuses a people dimension that is an expression, and says which', () => {
@@ -75,7 +79,8 @@ describe('buildContextGate', () => {
             kind: GATE_PROBLEMS.EXPRESSION_DIMENSION,
             roles: [ROLES.AUTHOR],
         });
-        expect(gate.passes).toBe('');
+        expect(gate.freed).toEqual([]);
+        expect(gateDimensionExpression(gate)).toBe('');
     });
 
     it('refuses a message id that is an expression, which nothing can be counted by', () => {
@@ -138,13 +143,37 @@ describe('freeing the keyword and its category', () => {
             categoryField: 'HlKeywordCategory',
         });
         expect(gate.freed).toEqual(['Author', 'HlKeyword', 'HlKeywordCategory']);
-        expect(gate.passes).toBe('Count({$<[Author]=,[HlKeyword]=,[HlKeywordCategory]=>} [MsgId])');
+        expect(gateDimensionExpression(gate)).toContain(
+            'Count({$<[Author]=,[HlKeyword]=,[HlKeywordCategory]=>} [MsgId]) > 0'
+        );
     });
 
-    it('takes a field name in brackets, as the panel stores a typed one', () => {
-        const gate = buildContextGate(roles, { highlightField: '[odd]]name]' });
+    /**
+     * Build the gate from what an author typed, through the settings reader, as the object does.
+     *
+     * @param {string} typed - The highlight field as typed in the panel.
+     * @returns {object} The gate.
+     */
+    const gateFromTyped = (typed) =>
+        buildContextGate(roles, {
+            highlightField: readTextToolSettings({ highlight: { field: typed } }).highlight.field,
+        });
+
+    it('frees a field typed in brackets, once the settings reader has taken them off', () => {
+        // What the panel stores is what the author typed; the settings reader takes the brackets
+        // off, and the gate takes the name it is handed.
+        const gate = gateFromTyped('[odd]]name]');
         expect(gate.freed).toEqual(['Author', 'odd]name']);
-        expect(gate.passes).toContain('[odd]]name]=');
+        expect(gateDimensionExpression(gate)).toContain('[odd]]name]=');
+    });
+
+    it('frees a field whose own name is in brackets, rather than unwrapping it a second time', () => {
+        // A field literally named "[weird]" is typed "[[weird]]". Unwrapped once it is the field;
+        // unwrapped twice it was "weird" — a field that does not exist, freed in place of the real
+        // one, which went on narrowing.
+        const gate = gateFromTyped('[[weird]]');
+        expect(gate.freed).toEqual(['Author', '[weird]']);
+        expect(gateDimensionExpression(gate)).toContain('[[weird]]]=');
     });
 
     it('frees nothing extra while no highlight field is set', () => {
