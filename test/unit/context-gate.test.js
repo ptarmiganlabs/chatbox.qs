@@ -4,7 +4,6 @@ import {
     buildContextGate,
     freedSet,
     gateDimensionExpression,
-    selectionReaches,
 } from '../../src/qix/context-gate';
 import { ROLES } from '../../src/qix/column-map';
 
@@ -156,30 +155,5 @@ describe('freeing the keyword and its category', () => {
     it('never frees one field twice, whatever it is used for', () => {
         const gate = buildContextGate(roles, { highlightField: 'Author' });
         expect(gate.freed).toEqual(['Author']);
-    });
-});
-
-describe('selectionReaches', () => {
-    const dims = (...counts) => ({
-        qHyperCube: { qDimensionInfo: counts.map((c) => ({ qStateCounts: c })) },
-    });
-
-    it('answers false when no selection touches the object', () => {
-        // Nothing to free, so the widened cube would hold exactly what the object's own does — and
-        // its gate is an Aggr over every message in the app.
-        expect(selectionReaches(dims({ qSelected: 0, qExcluded: 0, qOption: 12 }))).toBe(false);
-    });
-
-    it('answers true for a selection in the object, and for one outside it', () => {
-        expect(selectionReaches(dims({ qSelected: 1, qExcluded: 0 }))).toBe(true);
-        // An unrelated field selected: the object's own values are excluded by it.
-        expect(selectionReaches(dims({ qSelected: 0, qExcluded: 7 }))).toBe(true);
-        expect(selectionReaches(dims({ qSelected: 0, qAlternative: 2 }))).toBe(true);
-    });
-
-    it('answers true in doubt: being slow costs less than being wrong', () => {
-        expect(selectionReaches(null)).toBe(true);
-        expect(selectionReaches({ qHyperCube: { qDimensionInfo: [] } })).toBe(true);
-        expect(selectionReaches({ qHyperCube: { qDimensionInfo: [{}] } })).toBe(true);
     });
 });

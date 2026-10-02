@@ -30,12 +30,7 @@ import ext from './ext/index';
 import { normalize } from './chat/normalize';
 import { readConversationRows } from './qix/conversation-rows';
 import { ROLES, conversationModelOf, resolveRoles } from './qix/column-map';
-import {
-    buildContextGate,
-    gateDimensionExpression,
-    gateProblemText,
-    selectionReaches,
-} from './qix/context-gate';
+import { buildContextGate, gateDimensionExpression, gateProblemText } from './qix/context-gate';
 import {
     createWidened,
     ensureState,
@@ -643,22 +638,19 @@ export default function supernova(galaxy) {
                     highlightField: toolSettings.highlight.field,
                     categoryField: toolSettings.category.field,
                 });
-                const wholeChosen =
+                // Chosen is all it takes. There was a short-circuit here that skipped widening
+                // while nothing was selected, on the grounds that the widened cube would then hold
+                // exactly what the object's own does and its gate is an Aggr over every message in
+                // the app. It bought about 80 ms on a 12,000-message app and cost the invariant
+                // everything else rests on: that choosing the mode means the cube exists. Without
+                // it the first lane header picked was itself the selection that brought the cube
+                // into being, and whether the mode engaged at all came to depend on reading the
+                // selection state out of a layout correctly. Both are worse than the 80 ms.
+                const wholeWanted =
                     (wholePicked ?? toolSettings.wholeConversations) && !isSnapshot(staleLayout);
-                // With nothing selected there is nothing to free: the widened cube would hold
-                // exactly what the object's own does, and its gate is an Aggr over every message
-                // in the app. That is the largest the cube ever is, so it is the one time the
-                // work is both heaviest and pointless.
-                const wholeWanted = wholeChosen && selectionReaches(liveLayout ?? staleLayout);
+                const wholeChosen = wholeWanted;
                 const signature = wholeWanted && !gate.problem ? gateDimensionExpression(gate) : '';
-                // Not while the reader is still picking. Making the cube is as disruptive as
-                // letting it answer: a first lane header picked is itself the selection that brings
-                // the cube into being, and building it there would take the other headers off the
-                // board before a second could be picked. Stalling is remembered, and the catch-up
-                // above runs the whole block again once the session is confirmed or cancelled.
-                if (signature !== wholeRef.current.signature && selections?.isActive?.()) {
-                    wholeRef.current.stalled = true;
-                } else if (signature !== wholeRef.current.signature) {
+                if (signature !== wholeRef.current.signature) {
                     wholeRef.current.signature = signature;
                     // Fire and forget: the widened cube arriving bumps a version, which fetches.
                     (async () => {

@@ -607,11 +607,11 @@ message ids of the conversations in scope are walked — does not work: measured
 the set changed what was counted inside and left the groups alone, so every message id was still
 iterated and the gate let them all through. 35 rows came back where 8 were right.
 
-**Rule:** the conversation test belongs inside the `If`, where it was. The cost is real and documented
-rather than optimised away: the object simply does not widen at all when nothing is selected, since
-there is nothing to free then and the widened cube would hold exactly what the strict one does. That
-is also the moment the cube is at its largest, so it is the one case where the work was both heaviest
-and pointless. _Guard: `test/unit/context-gate.test.js`._
+**Rule:** the conversation test belongs inside the `If`, where it was, and the cost is documented
+rather than optimised away. Skipping the widening while nothing was selected looked free — the
+widened cube holds exactly what the object's own does then — and cost about 80 ms on a
+12,000-message app. It was removed again; see GOTCHAS 53 for why. _Guard:
+`test/unit/context-gate.test.js`._
 
 ## 49. Making the widened cube is as disruptive as letting it answer
 
@@ -669,3 +669,21 @@ made.
 code 8 together with a parameter naming the state. A mode that was asked for and did not happen says
 so in a notice, rather than leaving the toggle pressed over a conversation that never widened.
 _Guard: `test/unit/whole-conversations.test.js`._
+
+## 53. An optimisation that breaks an invariant is not an optimisation
+
+Not widening while nothing was selected saved an `Aggr` over every message in the app — about 80 ms
+on the 12,000-message fixture — and broke the invariant everything else rested on: **choosing the
+mode means the widened cube exists**.
+
+Two defects came out of that one hole, a day apart. The first lane header picked was itself the
+selection that brought the cube into being, so it was built mid-pick and took the other headers off
+the board before a second could be picked — the very defect the stall had been added to fix. And
+whether the mode engaged at all came to depend on reading the current selection state out of a
+layout: with the setting on and an author selected, the object did not widen on load, while flipping
+the setting made it widen at once.
+
+**Rule:** the cube exists whenever the mode is chosen, full stop. The stall then has one narrow job —
+holding the board still while a selection session is open — because the cube it is protecting is
+always already there. An optimisation is welcome back only where it cannot decide whether the feature
+happens.

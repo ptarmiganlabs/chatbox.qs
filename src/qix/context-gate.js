@@ -37,33 +37,6 @@ export const GATE_PROBLEMS = Object.freeze({
 const PEOPLE_ROLES = Object.freeze([ROLES.AUTHOR, ROLES.RECIPIENT]);
 
 /**
- * Tell whether any selection reaches this object at all.
- *
- * Widening frees some fields from the selection; with nothing selected there is nothing to free, the
- * widened cube would hold exactly what the object's own does, and the gate would be an `Aggr` over
- * every message in the app for no difference whatever. The state counts come with the layout, so
- * asking costs nothing. In doubt it answers true: a widening that was not needed is slow, one that
- * was needed and skipped is wrong.
- *
- * @param {object} [layout] - The object's live layout, which carries the current selection state.
- * @returns {boolean} True when a selection excludes or picks out anything the object reads.
- */
-export function selectionReaches(layout) {
-    const dims = layout?.qHyperCube?.qDimensionInfo;
-    if (!Array.isArray(dims) || dims.length === 0) return true;
-    return dims.some((info) => {
-        const counts = info?.qStateCounts;
-        if (!counts) return true;
-        return (
-            (counts.qSelected ?? 0) > 0 ||
-            (counts.qExcluded ?? 0) > 0 ||
-            (counts.qSelectedExcluded ?? 0) > 0 ||
-            (counts.qAlternative ?? 0) > 0
-        );
-    });
-}
-
-/**
  * Write a set expression that frees some fields from the default state's selection.
  *
  * @param {string[]} fields - The field names to free.
