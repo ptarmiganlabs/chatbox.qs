@@ -174,11 +174,20 @@ undoes every selection made in the session, not just the one that failed. And `s
 with toggle on flips each listed value separately: toggling `[Ada, Bob]` while Ada is already
 selected leaves just Bob.
 
+**And it leaves the session open.** After the reset the object is still modal: a refused first click
+leaves Sense's confirm bar over a selection that holds nothing, and a refused later one leaves every
+lane header picked before it drawn green over a selection that no longer exists. A call that
+**throws** is different — stardust resets nothing then, and the picks already made are still real.
+
 **Rule:** a click that selects in two fields runs its steps in order and stops at the first `false`,
 so they succeed or fail together. A single value toggles; a set replaces. Never send an empty value
-list — the engine reads it as every value.
+list — the engine reads it as every value. A refusal ends the session (`selections.cancel()`), since
+there is nothing left in it to confirm, and says why in the corner; a throw lets go only of a session
+the same click opened.
 
-_See `src/qix/selection.js`._
+_See `src/qix/selection.js`, `src/qix/object-selection.js`. Guard: `test/unit/object-selection.test.js`.
+A click on a message still only stops at the first `false`: it does not yet end the session or say
+anything._
 
 ## Highlighting, search and copying
 

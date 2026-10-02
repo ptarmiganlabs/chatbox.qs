@@ -29,7 +29,7 @@ import dataTargets from './data';
 import ext from './ext/index';
 import { normalize } from './chat/normalize';
 import { readConversationRows } from './qix/conversation-rows';
-import { ROLES, conversationModelOf, resolveRoles } from './qix/column-map';
+import { ROLES, conversationModelOf, fieldOfColumn, resolveRoles } from './qix/column-map';
 import { buildContextGate, gateDimensionExpression, gateProblemText } from './qix/context-gate';
 import {
     createWidened,
@@ -66,6 +66,7 @@ import {
     selectInFieldBesideObjectSelections,
     stateNameOf,
 } from './qix/field-selection';
+import { selectInObjectSession } from './qix/object-selection';
 import { render, destroy } from './ui/chat-renderer';
 import ChatLog from './ui/ChatLog';
 import { Empty, Failed, Loading, NotConfigured, emptyStateMessage } from './ui/states';
@@ -624,10 +625,18 @@ export default function supernova(galaxy) {
                     if (wholePicked !== null) setWholePicked(null);
                 }
                 // An object saved by an earlier build with the gate patched into it is put right
-                // here, where its properties may be written at all. Once per session.
-                if (interactions?.edit && !wholeRef.current.repaired) {
-                    wholeRef.current.repaired = true;
-                    repairStoredGate({ model, logger });
+                // here, where its properties may be written at all. Once per session when it works:
+                // a repair that failed is tried again the next time the sheet is edited, rather
+                // than being remembered as done. Never twice at once — the effect runs again for
+                // every layout while the first is still writing.
+                if (!interactions?.edit && wholeRef.current.repaired === 'failed') {
+                    wholeRef.current.repaired = false;
+                }
+                if (interactions?.edit && wholeRef.current.repaired === false) {
+                    wholeRef.current.repaired = 'pending';
+                    repairStoredGate({ model, logger }).then((outcome) => {
+                        wholeRef.current.repaired = outcome === null ? 'failed' : true;
+                    });
                 }
 
                 // The selection session is over: the headers are no longer anybody's pick.
@@ -719,7 +728,13 @@ export default function supernova(galaxy) {
                         await refreshWidened(object);
                     })();
                 }
-                const wholeOn = widened !== null && signature !== '';
+                // Whether the rows on screen are the widened ones, which is what the summary in the
+                // bar describes — not whether the mode is still chosen. Turning it off clears the
+                // signature at once while the widened rows stay up until the strict ones arrive, a
+                // whole engine round trip later; reading the signature here took the summary away for
+                // that time and left the context messages dimmed with nothing to say why. The
+                // toggle shows the choice (`wholeChosen`); this follows the data.
+                const wholeOn = widened !== null;
 
                 // Conversations side by side: a board of lanes, whose order of messages everything below
                 // follows — the highlights, search, stepping and copying count messages by their index in
@@ -819,6 +834,10 @@ export default function supernova(galaxy) {
                 // mode, as a filter pane does: pick one header, then another, then confirm or
                 // cancel them together. A thread dimension that is an expression still selects —
                 // the hypercube addresses a column, not a field name.
+                const laneField =
+                    fieldOfColumn(byRole[ROLES.THREAD]) ||
+                    byRole[ROLES.THREAD]?.label ||
+                    'the conversation dimension';
                 const lanePicking =
                     canSelectLanes && board && byRole[ROLES.THREAD]
                         ? {
@@ -833,32 +852,29 @@ export default function supernova(galaxy) {
                               onPick: async (lane) => {
                                   const steps = buildLaneSelection({ lane, byRole });
                                   if (!steps.length || !selections) return;
-                                  try {
-                                      if (!selections.isActive())
-                                          await selections.begin(['/qHyperCubeDef']);
-                                      let applied = false;
-                                      for (const { dimIdx, values, toggle } of steps) {
-                                          const ok = await selections.select({
-                                              method: 'selectHyperCubeValues',
-                                              params: ['/qHyperCubeDef', dimIdx, values, toggle],
-                                          });
-                                          if (ok === false) break;
-                                          applied = true;
-                                      }
-                                      // Only a selection the engine took is drawn as picked. A
-                                      // locked field answers false, and a header green over a
-                                      // selection that never happened is worse than no feedback —
-                                      // the reader would confirm what they believe they chose.
-                                      if (!applied) return;
+                                  const result = await selectInObjectSession({
+                                      selections,
+                                      steps,
+                                      logger,
+                                  });
+                                  // Only a selection the engine took is drawn as picked: a header
+                                  // green over a selection that never happened is worse than no
+                                  // feedback, because the reader confirms what they believe they
+                                  // chose. A refusal has also ended the session, which takes every
+                                  // header picked in it off the board on the next render.
+                                  if (result.outcome === SELECTION_OUTCOMES.SELECTED) {
                                       setPickedLanes((picked) => {
                                           const next = new Set(picked ?? []);
                                           if (next.has(lane.key)) next.delete(lane.key);
                                           else next.add(lane.key);
                                           return next;
                                       });
-                                  } catch (err) {
-                                      logger.warn('lane selection failed:', err);
+                                      return;
                                   }
+                                  // And it says so, as a click on a keyword does: a header that
+                                  // stays grey under the pointer reads as a click that missed.
+                                  const message = selectionNotice(laneField, result);
+                                  if (message) setNotice({ ...message, id: ++noticeIdRef.current });
                               },
                           }
                         : null;

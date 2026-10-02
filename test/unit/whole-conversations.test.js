@@ -30,8 +30,21 @@ const gateOf = () =>
 describe('stateNameFor', () => {
     it('names one state per object, so two chatboxes never bound each other', () => {
         expect(stateNameFor('AbCdEf')).toBe('cqs_AbCdEf');
-        expect(stateNameFor('a-b-c')).toBe('cqs_abc');
+        expect(stateNameFor('a-b-c')).toBe('cqs_a_002db_002dc');
         expect(stateNameFor('')).toBe('cqs_object');
+        expect(stateNameFor(undefined)).toBe('cqs_object');
+    });
+
+    it('leaves an id of letters and digits alone, as Qlik writes its own', () => {
+        expect(stateNameFor('pPPNjm')).toBe('cqs_pPPNjm');
+    });
+
+    it('never gives two ids the same name, which stripping did', () => {
+        // Stripping what a state name should not hold made "a-bc" and "ab-c" one state, and two
+        // chatboxes on a sheet would then have bounded each other's cube.
+        const ids = ['a-bc', 'ab-c', 'abc', 'a_bc', 'a_002dbc', 'a😀bc', 'a😁bc'];
+        const names = ids.map(stateNameFor);
+        expect(new Set(names).size).toBe(ids.length);
     });
 });
 
@@ -209,8 +222,22 @@ describe('repairStoredGate', () => {
     it('says when the engine refused, rather than throwing into the render', async () => {
         const warn = vi.fn();
         const model = { getProperties: vi.fn().mockRejectedValue(new Error('no')) };
-        expect(await repairStoredGate({ model, logger: { warn } })).toBe(false);
+        // Null, not false: false means there was nothing to repair, and is not worth asking again.
+        expect(await repairStoredGate({ model, logger: { warn } })).toBeNull();
         expect(warn).toHaveBeenCalled();
+    });
+
+    it('answers null too when the repaired properties could not be written', async () => {
+        const model = {
+            getProperties: vi.fn().mockResolvedValue({
+                qHyperCubeDef: {
+                    qStateName: '',
+                    qDimensions: [{ qDef: { cId: CONTEXT_GATE_CID } }],
+                },
+            }),
+            setProperties: vi.fn().mockRejectedValue(new Error('read only')),
+        };
+        expect(await repairStoredGate({ model, logger: { warn: vi.fn() } })).toBeNull();
     });
 });
 

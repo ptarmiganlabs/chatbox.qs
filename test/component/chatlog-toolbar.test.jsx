@@ -243,6 +243,7 @@ describe('ChatLog with the conversation widened', () => {
         renderWide({
             whole: whole({
                 on: false,
+                widened: false,
                 disabled: true,
                 reason: 'Whole conversations need Participant on a field, not an expression.',
             }),
@@ -251,6 +252,29 @@ describe('ChatLog with the conversation widened', () => {
             name: 'Whole conversations need Participant on a field, not an expression.',
         });
         expect(off).toBeDisabled();
+    });
+
+    it('shows the toggle pressed the moment it is asked, before the widened rows arrive', () => {
+        // The choice and the data are two things. The toggle answers the click at once; the summary
+        // waits for rows that are really widened. A toggle that waited too looked like a button that
+        // did nothing — the defect this split exists to prevent.
+        renderWide({ whole: whole({ on: true, widened: false }) });
+        expect(screen.getByRole('button', { name: 'Show whole conversations' })).toHaveAttribute(
+            'aria-pressed',
+            'true'
+        );
+        expect(screen.queryByText(/matching the selection/)).toBeNull();
+    });
+
+    it('keeps saying what is on screen while widened rows are still up after turning it off', () => {
+        // Turning the mode off takes an engine round trip to bring the strict rows back. Until they
+        // arrive the widened ones are still drawn, context dimmed, and the summary stays to say why.
+        renderWide({ whole: whole({ on: false, widened: true }) });
+        expect(screen.getByRole('button', { name: 'Show whole conversations' })).toHaveAttribute(
+            'aria-pressed',
+            'false'
+        );
+        expect(screen.getByText('3 messages \u00b7 1 matching the selection')).toBeInTheDocument();
     });
 
     it('leaves the toggle out of a snapshot, which has no engine to widen with', () => {

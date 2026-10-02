@@ -132,7 +132,9 @@ many messages it has.
   pick one header, then another, then confirm or cancel them together, exactly as a filter pane works.
   A header you have picked is drawn in green, and a second click on it takes it back. The lanes stay
   as they were until you confirm, so there is always something left to pick. The **(no conversation)**
-  lane has no value behind it and is not clickable.
+  lane has no value behind it and is not clickable. A click Qlik Sense refuses — the field is locked —
+  says so in the corner and ends the selection, since Sense has already let go of everything picked
+  in it.
 - **When there are more conversations than fit**, the bar steps through them: **◂ 1–4 of 12 ▸**, a
   windowful at a time, down the same ranking. A selection that leaves fewer conversations pulls the
   window back on its own; otherwise it stays where you put it.
