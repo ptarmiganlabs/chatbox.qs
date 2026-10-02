@@ -453,6 +453,13 @@ server to be seen, which is why the panel's shape is unit-tested.
 See [docs/GOTCHAS.md](docs/GOTCHAS.md) for the engine and toolchain traps this extension has already
 hit, each of which produced silently wrong output rather than an error.
 
+A change that a user would notice also gets a documentation draft in
+[to-doc-site/](to-doc-site/), in the same commit as the change;
+[to-doc-site/README.md](to-doc-site/README.md) says what counts and how to write one. There is no
+documentation site yet, so this file and the readme inside the release archive
+([release-config/readme-template.txt](release-config/readme-template.txt)) are what a user actually
+reads — a draft does not excuse leaving either of them stale.
+
 ## Requirements
 
 - Qlik Sense Enterprise on Windows (primary target) or Qlik Cloud
