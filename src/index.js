@@ -795,10 +795,9 @@ export default function supernova(galaxy) {
                  * did not happen.
                  *
                  * @param {object} plan - From planValueSelection or planCategorySelection.
-                 * @param {string} [label] - The value or category the reader clicked, for the notice.
                  * @returns {Promise<void>} Resolves once the selection is sent.
                  */
-                const pick = async (plan, label) => {
+                const pick = async (plan) => {
                     const result = plan.locked
                         ? { outcome: 'locked' }
                         : await selectInFieldBesideObjectSelections({
@@ -814,7 +813,7 @@ export default function supernova(galaxy) {
                     const message =
                         selectionNotice(plan.field, result) ??
                         (result?.outcome === SELECTION_OUTCOMES.SELECTED
-                            ? selectionMadeNotice(plan.field, label, plan.toggle)
+                            ? selectionMadeNotice(plan.field, plan.labels, plan.toggle)
                             : null);
                     if (message) setNotice({ ...message, id: ++noticeIdRef.current });
                 };
@@ -829,7 +828,7 @@ export default function supernova(galaxy) {
                      * @returns {Promise<void>} Resolves once the selection is sent.
                      */
                     onSelectValues: (values, toggle) =>
-                        pick(planValueSelection(highlightView.answer, values, toggle), values?.[0]),
+                        pick(planValueSelection(highlightView.answer, values, toggle)),
                     /**
                      * Select a category in the category field.
                      *
@@ -838,7 +837,7 @@ export default function supernova(galaxy) {
                      * @returns {Promise<void>} Resolves once the selection is sent.
                      */
                     onSelectCategory: (name, toggle) =>
-                        pick(planCategorySelection(highlightView.answer, name, toggle), name),
+                        pick(planCategorySelection(highlightView.answer, name, toggle)),
                 };
 
                 // Never in an export, whose server reports every interaction as allowed, nor in

@@ -32,6 +32,7 @@ describe('what a click on a highlight selects', () => {
         expect(planValueSelection(answer, ['reload', 'Reload'], false)).toEqual({
             field: 'match',
             elemNumbers: [4, 9],
+            labels: ['reload', 'Reload'],
             toggle: false,
             locked: false,
         });
@@ -41,6 +42,14 @@ describe('what a click on a highlight selects', () => {
     it('leaves out spellings it has no element number for, rather than selecting everything', () => {
         expect(planValueSelection(answer, ['unknown'], false).elemNumbers).toEqual([]);
         expect(planValueSelection({ field: 'match' }, ['reload'], false).elemNumbers).toEqual([]);
+    });
+
+    it('names only the spellings it selects, so a notice cannot name one that was not', () => {
+        // The case that named the wrong one: the first spelling has no value in the field, the
+        // second has. The notice was built from the first.
+        const plan = planValueSelection(answer, ['RELOAD', 'Reload'], false);
+        expect(plan.elemNumbers).toEqual([9]);
+        expect(plan.labels).toEqual(['Reload']);
     });
 
     it('knows a locked field refuses before asking the engine', () => {
@@ -56,6 +65,7 @@ describe('what a click on a legend chip selects', () => {
         expect(planCategorySelection(answer, 'script', false)).toEqual({
             field: 'pattern',
             elemNumbers: [5],
+            labels: ['script'],
             toggle: false,
             locked: false,
         });
@@ -76,6 +86,7 @@ describe('what a click on a legend chip selects', () => {
 
     it('selects nothing for a category it does not know, and knows a locked field', () => {
         expect(planCategorySelection(answer, 'nope', false).elemNumbers).toEqual([]);
+        expect(planCategorySelection(answer, 'nope', false).labels).toEqual([]);
         const locked = { ...answer, locked: { highlight: false, category: true } };
         expect(planCategorySelection(locked, 'ops', false).locked).toBe(true);
     });
@@ -130,7 +141,7 @@ describe('selectionNotice', () => {
 describe('selectionMadeNotice', () => {
     it('names the value and the field, because neither is anywhere else on the sheet', () => {
         // A click that failed has always spoken and a click that worked has always been silent.
-        expect(selectionMadeNotice('HlKeyword', 'reload', false)).toEqual({
+        expect(selectionMadeNotice('HlKeyword', ['reload'], false)).toEqual({
             level: 'info',
             text: 'Selected “reload” in HlKeyword',
         });
@@ -139,12 +150,24 @@ describe('selectionMadeNotice', () => {
     it('says nothing for a Ctrl or Cmd click, which may have added or removed', () => {
         // Which of the two it did is not something this can know, and a notice that guessed would
         // be worse than none.
-        expect(selectionMadeNotice('HlKeyword', 'reload', true)).toBeNull();
+        expect(selectionMadeNotice('HlKeyword', ['reload'], true)).toBeNull();
     });
 
     it('says nothing without a field or a value to name', () => {
-        expect(selectionMadeNotice('', 'reload', false)).toBeNull();
-        expect(selectionMadeNotice('HlKeyword', '', false)).toBeNull();
+        expect(selectionMadeNotice('', ['reload'], false)).toBeNull();
+        expect(selectionMadeNotice('HlKeyword', [], false)).toBeNull();
+        expect(selectionMadeNotice('HlKeyword', [''], false)).toBeNull();
         expect(selectionMadeNotice('HlKeyword', undefined, false)).toBeNull();
+    });
+
+    it('names both of two spellings, and counts past the first when there are more', () => {
+        // One short line whatever the highlight stands for: the notice is read at a glance, and
+        // disappears on its own a few seconds later.
+        expect(selectionMadeNotice('Author', ['Ada', 'ADA'], false).text).toBe(
+            'Selected “Ada” and “ADA” in Author'
+        );
+        expect(selectionMadeNotice('Author', ['Ada', 'ADA', 'ada'], false).text).toBe(
+            'Selected “Ada” and 2 more in Author'
+        );
     });
 });
