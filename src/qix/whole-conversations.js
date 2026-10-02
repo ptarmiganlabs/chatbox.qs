@@ -28,6 +28,32 @@ import { CONTEXT_GATE_CID, gateDimensionExpression } from './context-gate';
 export const WIDENED_TYPE = 'chatbox-widened';
 
 /**
+ * The session states already made in this browsing context.
+ *
+ * A session alternate state belongs to the engine session, which outlives the component that asked
+ * for it: nebula remounts a supernova for reasons of its own, and the state is still there when it
+ * does. Asking twice is refused — "Invalid parameters", parameter "Used state name", code 8 — and a
+ * refused engine call reaches the reader as Qlik Sense's own error dialog, whether or not the
+ * promise was caught. So the asking is remembered here, outside any component, and done once.
+ */
+const statesMade = new Set();
+
+/**
+ * Tell whether a refusal means the state is already there.
+ *
+ * The engine does not say so in words a caller can rely on: there is no dedicated error code, the
+ * message is the generic "Invalid parameters", and only the parameter names what went wrong.
+ *
+ * @param {object} [error] - The engine's error.
+ * @returns {boolean} True when the name is taken, which is the outcome asked for.
+ */
+export function stateAlreadyExists(error) {
+    const text = `${error?.parameter ?? ''} ${error?.message ?? ''}`;
+    if (/already/i.test(text)) return true;
+    return error?.code === 8 && /state name/i.test(text);
+}
+
+/**
  * Name the session state for an object.
  *
  * One per object, so two chatboxes on a sheet never bound each other's cube.
@@ -72,15 +98,29 @@ export function gateDimension(gate) {
  */
 export async function ensureState({ app, objectId, logger }) {
     const name = stateNameFor(objectId);
+    if (statesMade.has(name)) return name;
     try {
         await app.addSessionAlternateState(name);
+        statesMade.add(name);
         return name;
     } catch (error) {
-        // Already there is not a failure: the state outlives one render, by design.
-        if (error?.code === 7005 || /already/i.test(error?.message ?? '')) return name;
+        // The name being taken is the outcome asked for, however the engine phrases it.
+        if (stateAlreadyExists(error)) {
+            statesMade.add(name);
+            return name;
+        }
         logger?.warn?.('whole conversations: the engine refused a session state:', error);
         return null;
     }
+}
+
+/**
+ * Forget which states were made, for tests that must start from nothing.
+ *
+ * @returns {void}
+ */
+export function forgetStates() {
+    statesMade.clear();
 }
 
 /**

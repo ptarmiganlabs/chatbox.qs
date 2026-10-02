@@ -679,6 +679,16 @@ export default function supernova(galaxy) {
                         });
                         if (!object || wholeRef.current.signature !== signature) {
                             await releaseWidened({ app, object, logger });
+                            // A mode that was asked for and did not happen says so. It used to
+                            // leave the toggle pressed over a conversation that had not widened,
+                            // which reads as a button that does nothing.
+                            if (!object && wholeRef.current.signature === signature) {
+                                setNotice({
+                                    level: 'error',
+                                    text: 'Whole conversations: the engine would not read the conversation in a state of its own',
+                                    id: ++noticeIdRef.current,
+                                });
+                            }
                             setWidenedVersion((version) => version + 1);
                             return;
                         }

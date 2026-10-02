@@ -647,3 +647,25 @@ quietly broken for as long as that button existed.
 what the conversation costs to tab past does not grow with it. The guard counts implicit stops too
 and compares a five-message conversation with a fifty-message one, rather than asserting a number.
 _Guard: `test/component/chatlog.test.jsx`, `test/component/chatlog-lanes-free.test.jsx`._
+
+## 52. The engine says "the state is already there" only in a parameter
+
+`AddSessionAlternateState` with a name that already exists is refused with **code 8**, the generic
+message **"Invalid parameters"**, and the one thing that says what went wrong in the `parameter`
+field: **"Used state name"**. Measured on Qlik Sense May 2026. There is no dedicated error code, so a
+caller testing `code` or `message` for the word "already" finds nothing.
+
+That mattered because a session alternate state belongs to the **engine session**, which outlives the
+component that asked for it: nebula remounts a supernova for its own reasons, and the state is still
+there when it does. The second ask was read as a refusal, no widened cube was built, and the whole
+mode silently did nothing — while the rejection reached the reader as Qlik Sense's own error dialog,
+caught promise or not.
+
+Worse, a cube whose `qStateName` names a state that does **not** exist is accepted without error. So
+guessing wrong in the other direction is silent too: no exception, just a cube read in a state nobody
+made.
+
+**Rule:** ask once per browsing context, remembered outside any component, and read the refusal by
+code 8 together with a parameter naming the state. A mode that was asked for and did not happen says
+so in a notice, rather than leaving the toggle pressed over a conversation that never widened.
+_Guard: `test/unit/whole-conversations.test.js`._

@@ -1,11 +1,13 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
     createWidened,
     ensureState,
+    forgetStates,
     gateDimension,
     gateIndexOf,
     releaseWidened,
     repairStoredGate,
+    stateAlreadyExists,
     stateNameFor,
     widenedDefinition,
 } from '../../src/qix/whole-conversations';
@@ -48,6 +50,10 @@ describe('gateDimension', () => {
 });
 
 describe('ensureState', () => {
+    beforeEach(() => {
+        forgetStates();
+    });
+
     it('creates the session state and answers its name', async () => {
         const app = { addSessionAlternateState: vi.fn().mockResolvedValue({}) };
         expect(await ensureState({ app, objectId: 'xy' })).toBe('cqs_xy');
@@ -219,5 +225,58 @@ describe('repairStoredGate', () => {
         const model = { getProperties: vi.fn().mockRejectedValue(new Error('no')) };
         expect(await repairStoredGate({ model, logger: { warn } })).toBe(false);
         expect(warn).toHaveBeenCalled();
+    });
+});
+
+describe('asking for the session state', () => {
+    beforeEach(() => {
+        forgetStates();
+    });
+
+    it('asks once per browsing context, however often a component remounts', async () => {
+        // The state belongs to the engine session, which outlives the component: nebula remounts a
+        // supernova for reasons of its own, and asking again is refused.
+        const app = { addSessionAlternateState: vi.fn().mockResolvedValue({}) };
+        expect(await ensureState({ app, objectId: 'xy' })).toBe('cqs_xy');
+        expect(await ensureState({ app, objectId: 'xy' })).toBe('cqs_xy');
+        expect(app.addSessionAlternateState).toHaveBeenCalledTimes(1);
+    });
+
+    it('reads the engine’s "name is taken" for what it is', async () => {
+        // Measured on Qlik Sense May 2026: no dedicated code, the generic message "Invalid
+        // parameters", and only the parameter says what was wrong.
+        const taken = Object.assign(new Error('Invalid parameters'), {
+            code: 8,
+            parameter: 'Used state name',
+        });
+        const app = { addSessionAlternateState: vi.fn().mockRejectedValue(taken) };
+        expect(await ensureState({ app, objectId: 'xy' })).toBe('cqs_xy');
+        // And it is remembered, so the refusal is not provoked a second time.
+        expect(await ensureState({ app, objectId: 'xy' })).toBe('cqs_xy');
+        expect(app.addSessionAlternateState).toHaveBeenCalledTimes(1);
+    });
+
+    it('still gives up on a refusal that is not about the name', async () => {
+        const warn = vi.fn();
+        const app = {
+            addSessionAlternateState: vi
+                .fn()
+                .mockRejectedValue(Object.assign(new Error('Access denied'), { code: 3 })),
+        };
+        expect(await ensureState({ app, objectId: 'xy', logger: { warn } })).toBeNull();
+        expect(warn).toHaveBeenCalled();
+    });
+});
+
+describe('stateAlreadyExists', () => {
+    it('recognises the taken name in either phrasing', () => {
+        expect(stateAlreadyExists({ code: 8, parameter: 'Used state name' })).toBe(true);
+        expect(stateAlreadyExists({ message: 'State already exists' })).toBe(true);
+    });
+
+    it('does not mistake another refusal for it', () => {
+        expect(stateAlreadyExists({ code: 3, message: 'Access denied' })).toBe(false);
+        expect(stateAlreadyExists({ code: 8, parameter: 'Invalid handle' })).toBe(false);
+        expect(stateAlreadyExists(null)).toBe(false);
     });
 });
