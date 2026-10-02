@@ -341,6 +341,14 @@ describe('highlights and categories sections', () => {
         }
     });
 
+    it('says when the overview ruler appears, since it has nothing to draw until then', () => {
+        // Without a highlight field and with nothing typed there are no ticks, so the switch looks
+        // broken: it is the one setting in the panel whose effect can be invisible.
+        const ruler = definition.items.appearance.items.showRuler;
+        expect(ruler.ref).toBe('chatbox.showRuler');
+        expect(ruler.description).toMatch(/only while there are some/);
+    });
+
     it('builds every switch in the panel with On and Off options', () => {
         const switches = walkAll(definition).filter(([, node]) => node.component === 'switch');
         expect(switches.length).toBeGreaterThan(0);

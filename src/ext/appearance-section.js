@@ -104,10 +104,15 @@ export function appearanceSection() {
                 defaultValue: TEXT_TOOL_DEFAULTS.showSearch,
             }),
             // Beside the conversation, with a tick where highlights or search matches are. It shows
-            // only while there are some, so it costs nothing without a highlight field or a search.
+            // only while there are some, so it costs nothing without a highlight field or a search —
+            // which the description says, because a switch that visibly does nothing reads as broken.
             showRuler: switchItem({
                 ref: 'chatbox.showRuler',
                 label: 'Show overview ruler',
+                description:
+                    'A tick beside the conversation wherever a highlight or a search match is. ' +
+                    'It appears only while there are some: set a highlight field, or search the ' +
+                    'messages, to see it.',
                 defaultValue: TEXT_TOOL_DEFAULTS.showRuler,
             }),
             // The conversation's text size: bodies, names, times, badges and chips. The bar keeps

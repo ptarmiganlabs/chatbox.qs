@@ -360,8 +360,9 @@ an arrow go through the highlights. Steps wrap around at either end, and the one
 the one outlined.
 
 The **overview ruler** beside the conversation shows where the matches or highlights are, a tick per
-place, in the categories' colours; hover to count them, click to go there. **Show overview ruler** under
-**Appearance** hides it.
+place, in the categories' colours; hover to count them, click to go there. It appears only while there
+are some, so an object with no highlight field and nothing typed never shows one, whatever **Show
+overview ruler** under **Appearance** says.
 
 | Keys                                                                | What they do                                                           |
 | ------------------------------------------------------------------- | ---------------------------------------------------------------------- |
