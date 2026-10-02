@@ -234,8 +234,11 @@ describe('ChatLog keyboard navigation', () => {
             />
         );
         // Every stop the list offers belongs to the focused message: its bubble, or a control
-        // inside that row. The scroller is neither.
-        for (const stop of tabbables(container)) {
+        // inside that row. The scroller is neither. And there is at least one — a loop over nothing
+        // passes, and a conversation with no stop at all is the other way this can break.
+        const stops = tabbables(container);
+        expect(stops.length).toBeGreaterThan(0);
+        for (const stop of stops) {
             expect(stop.closest('[data-row]'), stop.outerHTML.slice(0, 70)).not.toBeNull();
         }
     });
