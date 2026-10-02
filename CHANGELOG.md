@@ -1,5 +1,65 @@
 # Changelog
 
+## [0.6.0](https://github.com/ptarmiganlabs/chatbox.qs/compare/chatbox-qs-v0.5.1...chatbox-qs-v0.6.0) (2026-10-02)
+
+
+### ⚠ BREAKING CHANGES
+
+* F3, Shift+F3, Ctrl+G and Ctrl+Shift+G now step through the find box's matches and nothing else. Before 0.6.0 they stepped the highlighted keywords whenever the find box was empty, so pressing F3 to step keywords now does nothing. Step the keywords with Alt+Down and Alt+Up, or with the buttons in the keyword group of the bar above the conversation.
+
+### Features
+
+* a click on the avatar is a click on its message ([03d8e4d](https://github.com/ptarmiganlabs/chatbox.qs/commit/03d8e4dc35af8f6153ebef8c9c7a41854fcb9a34)), closes [#59](https://github.com/ptarmiganlabs/chatbox.qs/issues/59)
+* a toolbar in sections, with its own text size control ([4229f7b](https://github.com/ptarmiganlabs/chatbox.qs/commit/4229f7b3bc3d957bb3fe3cc9b9e0924a3ac6d700)), closes [#59](https://github.com/ptarmiganlabs/chatbox.qs/issues/59)
+* copy one message from a button under the pointer ([ba11e16](https://github.com/ptarmiganlabs/chatbox.qs/commit/ba11e16b30c0ed1275b9ac6ae6671ec3f6281faf)), closes [#59](https://github.com/ptarmiganlabs/chatbox.qs/issues/59)
+* F3 and Ctrl+G step the find box only; Alt+Down and Alt+Up step the keywords ([297a1a6](https://github.com/ptarmiganlabs/chatbox.qs/commit/297a1a67382b24fa95dca9800d1f3682179d735c))
+* lane headers that select, and buttons to step past the lanes that fit ([04ceec9](https://github.com/ptarmiganlabs/chatbox.qs/commit/04ceec97a6925a1589ee3dc8c4d13e1b88e252bb)), closes [#59](https://github.com/ptarmiganlabs/chatbox.qs/issues/59)
+* say when a selection worked, and stop hiding the summary that says so ([ec45273](https://github.com/ptarmiganlabs/chatbox.qs/commit/ec45273006c802c5756bf6838d3f7ed0f87d1347)), closes [#59](https://github.com/ptarmiganlabs/chatbox.qs/issues/59)
+* show whole conversations, not only the lines that match ([207cc8b](https://github.com/ptarmiganlabs/chatbox.qs/commit/207cc8baf798afb0cce7f4810c52f9f85996408c))
+* the set expressions that widen a selection to whole conversations ([3aac72b](https://github.com/ptarmiganlabs/chatbox.qs/commit/3aac72b6fd9b9aea288d5344dc9b3d5a9da7565e)), closes [#59](https://github.com/ptarmiganlabs/chatbox.qs/issues/59)
+
+
+### Bug Fixes
+
+* a click on a message Qlik Sense refuses says why, and ends the selection it emptied ([c181120](https://github.com/ptarmiganlabs/chatbox.qs/commit/c181120db6d8a60fd21722c0a9d60461fa63179c))
+* a keyword picks the conversations, not the lines that said so ([9a2725b](https://github.com/ptarmiganlabs/chatbox.qs/commit/9a2725b06d031f55740ad63443b9ed6532824a94)), closes [#59](https://github.com/ptarmiganlabs/chatbox.qs/issues/59)
+* a lane header Qlik Sense refuses says so, and ends the selection it emptied ([7513f60](https://github.com/ptarmiganlabs/chatbox.qs/commit/7513f60e6b7868f6e6f18bd89988ca6836af0ad2))
+* a state the engine lost, a lock it kept, and a gutter for the button ([ba7489b](https://github.com/ptarmiganlabs/chatbox.qs/commit/ba7489b5cead555bedd601b4ef518c4424df9539))
+* a stored-cube repair that failed is tried again ([1a33945](https://github.com/ptarmiganlabs/chatbox.qs/commit/1a339458b59189709cb7d47480f83c109a076129))
+* ask for the session state once, and read its refusal correctly ([f0b234c](https://github.com/ptarmiganlabs/chatbox.qs/commit/f0b234c5ca9b13b4b0f7f59340f04bee2e33b51a)), closes [#59](https://github.com/ptarmiganlabs/chatbox.qs/issues/59)
+* empty the session state, which is born holding the selections ([08279a9](https://github.com/ptarmiganlabs/chatbox.qs/commit/08279a9b7064b9079dd1c57061d4e8f8e02e4e75)), closes [#59](https://github.com/ptarmiganlabs/chatbox.qs/issues/59)
+* four defects the review found, and a guard that could not see one ([88d2f96](https://github.com/ptarmiganlabs/chatbox.qs/commit/88d2f962bfd1337301b0b490d0f9d5843ba4634f)), closes [#59](https://github.com/ptarmiganlabs/chatbox.qs/issues/59)
+* free a field whose own name is in brackets, and drop the gate's unused expressions ([02d1196](https://github.com/ptarmiganlabs/chatbox.qs/commit/02d119629dab71e5e565a52a8743c9c65fe322bc))
+* hold the lanes still while picking, and render what the object decides ([45546d1](https://github.com/ptarmiganlabs/chatbox.qs/commit/45546d1f0a3e6b3605d96f5b2fd8309e603b3191)), closes [#59](https://github.com/ptarmiganlabs/chatbox.qs/issues/59)
+* never patch the cube where the property panel can save it ([0c732c0](https://github.com/ptarmiganlabs/chatbox.qs/commit/0c732c0072ad6248362e22745d00db73fae066b6)), closes [#59](https://github.com/ptarmiganlabs/chatbox.qs/issues/59)
+* the cube exists whenever the mode is chosen ([3d71e1a](https://github.com/ptarmiganlabs/chatbox.qs/commit/3d71e1a0c0d022a596e4dc72bd6d8fc9ab8f6d9f)), closes [#59](https://github.com/ptarmiganlabs/chatbox.qs/issues/59)
+* the notice names only the values a keyword click selected ([6d6a354](https://github.com/ptarmiganlabs/chatbox.qs/commit/6d6a3540bfc8ffe4b81e94878067936eb19231b6))
+* the summary says what is on screen until the strict rows replace it ([55844ef](https://github.com/ptarmiganlabs/chatbox.qs/commit/55844ef6bf191c2d8b5db57ae51c67adceb88204))
+* two objects never share a session state's name ([fa414c7](https://github.com/ptarmiganlabs/chatbox.qs/commit/fa414c72aee070ce942ec738444722a4d0d0ef9f))
+* whole conversations says why it cannot widen an object in an alternate state ([13b5ac2](https://github.com/ptarmiganlabs/chatbox.qs/commit/13b5ac2e57007df3b46a93b06f5080f15ab00d2b))
+* widen a copy of the cube, and let a lane header select as Sense does ([9646e8e](https://github.com/ptarmiganlabs/chatbox.qs/commit/9646e8e8b90d70ad6a9976fc0f9f1cea9b7ce62c)), closes [#59](https://github.com/ptarmiganlabs/chatbox.qs/issues/59)
+
+
+### Miscellaneous
+
+* a breaking change bumps the minor version until 1.0, as in the sibling extensions ([5a2013e](https://github.com/ptarmiganlabs/chatbox.qs/commit/5a2013e313f87700b3a21bc18e6f99b5fadd862d))
+* the scroller guard fails when nothing is tabbable ([1ae87d9](https://github.com/ptarmiganlabs/chatbox.qs/commit/1ae87d903d09e715f1b723f2afbdb23201b07780))
+
+
+### Refactoring
+
+* clear the leftovers the review listed and left ([975cada](https://github.com/ptarmiganlabs/chatbox.qs/commit/975cadab257ee82e8e9d0cf7474e2321c8f566ea)), closes [#59](https://github.com/ptarmiganlabs/chatbox.qs/issues/59)
+
+
+### Documentation
+
+* say in the panel what Show whole conversations does ([949d442](https://github.com/ptarmiganlabs/chatbox.qs/commit/949d442d10efda2180861593943f96e6688c433d))
+* say when the overview ruler appears, rather than looking broken ([f08db04](https://github.com/ptarmiganlabs/chatbox.qs/commit/f08db0421a1a359b298d267a92f687e712db2b8c)), closes [#59](https://github.com/ptarmiganlabs/chatbox.qs/issues/59)
+* stage documentation drafts in to-doc-site, as the sibling projects do ([c85da40](https://github.com/ptarmiganlabs/chatbox.qs/commit/c85da405bd3c32e98628ec133d8d0bf2ff6bf389))
+* tell the release readme what 0.6.0 added ([a4b41df](https://github.com/ptarmiganlabs/chatbox.qs/commit/a4b41df25c374e47667e82f8fef3457a204d951c))
+* the bar in groups, text size, lane clicks and copying one message ([e96eeaf](https://github.com/ptarmiganlabs/chatbox.qs/commit/e96eeaf46d5bd48e079d3ea79294ef51d134c8a0)), closes [#59](https://github.com/ptarmiganlabs/chatbox.qs/issues/59)
+* what the engine actually does with an alternate state ([896e610](https://github.com/ptarmiganlabs/chatbox.qs/commit/896e6100a592c07b0eb4d835b6fb6127f1b2cd2f)), closes [#59](https://github.com/ptarmiganlabs/chatbox.qs/issues/59)
+
 ## [0.5.1](https://github.com/ptarmiganlabs/chatbox.qs/compare/chatbox-qs-v0.5.0...chatbox-qs-v0.5.1) (2026-09-17)
 
 
