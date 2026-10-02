@@ -39,7 +39,8 @@ stepping one of them does not make you lose your place in the other.
 
 - Shipped in ptarmiganlabs/chatbox.qs#61. Backfilled.
 - **This is the one draft in this batch that describes a behaviour change rather than an addition.**
-  It deserves a callout on whatever page covers keyboard shortcuts, and a line in the release notes:
-  release-please builds those from commit subjects, and none of them say a key changed meaning.
+  It deserves a callout on whatever page covers keyboard shortcuts. The 0.6.0 release notes carry it
+  under ⚠ BREAKING CHANGES, from a commit made for the purpose; if the site keeps release notes, link
+  this page from that entry.
 - Ported from textview.qs, which made the same change first. Check whether its own documentation
   words it better before rewriting this.
