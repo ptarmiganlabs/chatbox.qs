@@ -178,8 +178,14 @@ the reader usually meant is _which chats is Ada in_ — and for that, **Show who
   what everyone else starts with, and a change to it drops the reader's own choice.
 
 **It needs the people and conversation dimensions to be fields**, not expressions: freeing a field
-from a selection means naming it. Where one of them is an expression the button is disabled and says
-so, rather than widening some conversations and not others.
+from a selection means naming it, and bounding a conversation means selecting in one. Where one of them
+is an expression the button is disabled and says so, rather than widening some conversations and not
+others.
+
+**It needs the object in the default state.** It widens against the default state's selection, so an
+object that reads in an alternate state has the button disabled,
+saying which state it is in, rather than showing conversations chosen by selections it does not
+follow.
 
 Under the hood the object reads a **copy of its cube in an empty session alternate state** — the only way to
 re-read an expression as it is written, since the message body is your measure and nothing can be
@@ -211,6 +217,10 @@ Set under **Behaviour → Clicking a message**:
 
 A single value toggles, as a click in Sense always has. A set of values replaces that field's
 selection, because toggling a set flips each value on its own.
+
+A click Qlik Sense refuses — the field is locked — says so in the corner, naming the field, and
+ends the selection rather than leaving the confirm bar over nothing: when Sense refuses one value it
+lets go of every value picked in that selection, so there is nothing left to confirm.
 
 **A click on the avatar does what a click on the message does** — it is the same message, pointed at
 from a finger's width to the left. The picture stays out of the keyboard's way: the bubble beside it

@@ -575,7 +575,38 @@ export default function supernova(galaxy) {
                 const isMessageSelectable = (message) => selectionFor(message).length > 0;
 
                 /**
+                 * Name the dimension a selection step selects in, for a reader who is told it failed.
+                 *
+                 * The field behind it where there is one; what the dimension is called where it is an
+                 * expression, which the hypercube still selects in by column.
+                 *
+                 * @param {?object} step - The step, from buildSelection or buildLaneSelection.
+                 * @returns {string} The name.
+                 */
+                const dimensionName = (step) => {
+                    const column = columns.find(
+                        (candidate) => candidate.kind === 'dim' && candidate.col === step?.dimIdx
+                    );
+                    return fieldOfColumn(column) || column?.label || 'the dimension clicked';
+                };
+
+                /**
+                 * Say why a click through the object's selection mode selected nothing.
+                 *
+                 * @param {{outcome: string, step?: object}} result - From selectInObjectSession.
+                 * @returns {void}
+                 */
+                const tellRefusal = (result) => {
+                    const message = selectionNotice(dimensionName(result.step), result);
+                    if (message) setNotice({ ...message, id: ++noticeIdRef.current });
+                };
+
+                /**
                  * Apply a selection for a clicked message.
+                 *
+                 * Through the object's own selection mode, as a lane header does, and with the same
+                 * answer to a refusal: stardust has already emptied the session by then, so it is
+                 * ended rather than left open over nothing, and the corner says why (GOTCHAS 14).
                  *
                  * @param {object} message - The message that was clicked.
                  * @returns {Promise<void>} Resolves once the selection is sent.
@@ -584,22 +615,8 @@ export default function supernova(galaxy) {
                     if (!canSelect || !selections) return;
                     const steps = selectionFor(message);
                     if (!steps.length) return;
-
-                    try {
-                        if (!selections.isActive()) await selections.begin(['/qHyperCubeDef']);
-                        for (const { dimIdx, values, toggle } of steps) {
-                            const ok = await selections.select({
-                                method: 'selectHyperCubeValues',
-                                params: ['/qHyperCubeDef', dimIdx, values, toggle],
-                            });
-                            // stardust resets every selection made in the session
-                            // when a call fails, so a later step must not run on
-                            // top of what is left: the steps succeed or fail together.
-                            if (ok === false) break;
-                        }
-                    } catch (err) {
-                        logger.warn('selection failed:', err);
-                    }
+                    const result = await selectInObjectSession({ selections, steps, logger });
+                    if (result.outcome !== SELECTION_OUTCOMES.SELECTED) tellRefusal(result);
                 };
 
                 if (!conversation.messages.length) {
@@ -651,6 +668,8 @@ export default function supernova(galaxy) {
                 const gate = buildContextGate(byRole, {
                     highlightField: toolSettings.highlight.field,
                     categoryField: toolSettings.category.field,
+                    // The state as the layout reports it, which is the one the object reads in.
+                    objectState: stateNameOf(staleLayout),
                 });
                 // Chosen is all it takes. There was a short-circuit here that skipped widening
                 // while nothing was selected, on the grounds that the widened cube would then hold
@@ -776,10 +795,9 @@ export default function supernova(galaxy) {
                  * did not happen.
                  *
                  * @param {object} plan - From planValueSelection or planCategorySelection.
-                 * @param {string} [label] - The value or category the reader clicked, for the notice.
                  * @returns {Promise<void>} Resolves once the selection is sent.
                  */
-                const pick = async (plan, label) => {
+                const pick = async (plan) => {
                     const result = plan.locked
                         ? { outcome: 'locked' }
                         : await selectInFieldBesideObjectSelections({
@@ -795,7 +813,7 @@ export default function supernova(galaxy) {
                     const message =
                         selectionNotice(plan.field, result) ??
                         (result?.outcome === SELECTION_OUTCOMES.SELECTED
-                            ? selectionMadeNotice(plan.field, label, plan.toggle)
+                            ? selectionMadeNotice(plan.field, plan.labels, plan.toggle)
                             : null);
                     if (message) setNotice({ ...message, id: ++noticeIdRef.current });
                 };
@@ -810,7 +828,7 @@ export default function supernova(galaxy) {
                      * @returns {Promise<void>} Resolves once the selection is sent.
                      */
                     onSelectValues: (values, toggle) =>
-                        pick(planValueSelection(highlightView.answer, values, toggle), values?.[0]),
+                        pick(planValueSelection(highlightView.answer, values, toggle)),
                     /**
                      * Select a category in the category field.
                      *
@@ -819,7 +837,7 @@ export default function supernova(galaxy) {
                      * @returns {Promise<void>} Resolves once the selection is sent.
                      */
                     onSelectCategory: (name, toggle) =>
-                        pick(planCategorySelection(highlightView.answer, name, toggle), name),
+                        pick(planCategorySelection(highlightView.answer, name, toggle)),
                 };
 
                 // Never in an export, whose server reports every interaction as allowed, nor in
@@ -834,10 +852,6 @@ export default function supernova(galaxy) {
                 // mode, as a filter pane does: pick one header, then another, then confirm or
                 // cancel them together. A thread dimension that is an expression still selects —
                 // the hypercube addresses a column, not a field name.
-                const laneField =
-                    fieldOfColumn(byRole[ROLES.THREAD]) ||
-                    byRole[ROLES.THREAD]?.label ||
-                    'the conversation dimension';
                 const lanePicking =
                     canSelectLanes && board && byRole[ROLES.THREAD]
                         ? {
@@ -873,8 +887,7 @@ export default function supernova(galaxy) {
                                   }
                                   // And it says so, as a click on a keyword does: a header that
                                   // stays grey under the pointer reads as a click that missed.
-                                  const message = selectionNotice(laneField, result);
-                                  if (message) setNotice({ ...message, id: ++noticeIdRef.current });
+                                  tellRefusal(result);
                               },
                           }
                         : null;

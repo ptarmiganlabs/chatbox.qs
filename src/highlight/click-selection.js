@@ -48,17 +48,24 @@ export function categoryClickHint(entry, { locked, field, selectedCount }) {
  * @param {object} answer - The highlight source's answer, with `valueElements`.
  * @param {string[]} values - The spellings the highlight stands for.
  * @param {boolean} toggle - Whether Ctrl or Cmd was held.
- * @returns {{field: string, elemNumbers: number[], toggle: boolean, locked: boolean}} The selection;
- *     `locked` when the field refuses selections anyway.
+ * @returns {{field: string, elemNumbers: number[], labels: string[], toggle: boolean,
+ *     locked: boolean}} The selection; `labels` are the spellings it selects, which leaves out any
+ *     with no element number, and `locked` is set when the field refuses selections anyway.
  */
 export function planValueSelection(answer, values, toggle) {
     const elements = answer?.valueElements;
-    const elemNumbers = (Array.isArray(values) ? values : [])
-        .map((value) => (elements instanceof Map ? elements.get(value) : undefined))
-        .filter((number) => Number.isInteger(number) && number >= 0);
+    // Each spelling with the number it selects by, so the two lists cannot fall out of step: a
+    // notice that named a spelling with no number would name a value that was never selected.
+    const chosen = (Array.isArray(values) ? values : [])
+        .map((value) => ({
+            value,
+            number: elements instanceof Map ? elements.get(value) : undefined,
+        }))
+        .filter(({ number }) => Number.isInteger(number) && number >= 0);
     return {
         field: answer?.field ?? '',
-        elemNumbers,
+        elemNumbers: chosen.map(({ number }) => number),
+        labels: chosen.map(({ value }) => value),
         toggle: Boolean(toggle),
         locked: answer?.locked?.highlight === true,
     };
@@ -70,7 +77,8 @@ export function planValueSelection(answer, values, toggle) {
  * @param {object} answer - The highlight source's answer, with `categories`.
  * @param {string} name - The chip's category.
  * @param {boolean} toggle - Whether Ctrl or Cmd was held.
- * @returns {{field: string, elemNumbers: number[], toggle: boolean, locked: boolean}} The selection;
+ * @returns {{field: string, elemNumbers: number[], labels: string[], toggle: boolean,
+ *     locked: boolean}} The selection; `labels` names the category when there is one to select, and
  *     clicking the only selected category toggles it off.
  */
 export function planCategorySelection(answer, name, toggle) {
@@ -79,9 +87,11 @@ export function planCategorySelection(answer, name, toggle) {
     const category = list.find((entry) => entry.name === name);
     const selectedCount = list.filter((entry) => entry.selected).length;
     const elemNumber = category?.elemNumber;
+    const elemNumbers = Number.isInteger(elemNumber) && elemNumber >= 0 ? [elemNumber] : [];
     return {
         field: categories?.field ?? '',
-        elemNumbers: Number.isInteger(elemNumber) && elemNumber >= 0 ? [elemNumber] : [],
+        elemNumbers,
+        labels: elemNumbers.length ? [name] : [],
         toggle: Boolean(toggle) || (category?.selected === true && selectedCount === 1),
         locked: answer?.locked?.category === true,
     };
@@ -137,12 +147,23 @@ export function selectionNotice(field, result) {
  * A Ctrl or Cmd click says nothing. It adds or removes, and which of the two it did is not something
  * this can know — a notice that guessed would be worse than none.
  *
+ * It names what was selected and nothing else — the plan's `labels`, which leave out a spelling the
+ * field had no value for. One or two are named; more are counted after the first, so the notice stays
+ * one short line.
+ *
  * @param {string} field - The field selected in.
- * @param {string} label - The value or category the reader clicked.
+ * @param {string[]} labels - The values or the category selected, from the plan.
  * @param {boolean} toggle - Whether Ctrl or Cmd was held.
  * @returns {?{text: string, level: string}} The notice, or null where there is nothing to say.
  */
-export function selectionMadeNotice(field, label, toggle) {
-    if (toggle || !field || !label) return null;
-    return { level: 'info', text: `Selected \u201c${label}\u201d in ${field}` };
+export function selectionMadeNotice(field, labels, toggle) {
+    const names = (Array.isArray(labels) ? labels : []).filter(
+        (label) => typeof label === 'string' && label !== ''
+    );
+    if (toggle || !field || names.length === 0) return null;
+    const quoted = names.map((name) => `\u201c${name}\u201d`);
+    let what = quoted[0];
+    if (quoted.length === 2) what = `${quoted[0]} and ${quoted[1]}`;
+    if (quoted.length > 2) what = `${quoted[0]} and ${quoted.length - 1} more`;
+    return { level: 'info', text: `Selected ${what} in ${field}` };
 }

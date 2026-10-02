@@ -46,8 +46,9 @@ export function conversationSection() {
                     'Select a person and see the conversations they are in, whole: their own ' +
                     'messages as answers, the rest dimmed as context. Selections on the people, ' +
                     'highlight and category fields stop narrowing; every other selection still ' +
-                    'narrows. Needs Message ID and the people dimensions to be fields, not ' +
-                    'expressions. Readers can also turn it on and off in the bar.',
+                    'narrows. Needs Message ID, the people and the conversation dimensions to be ' +
+                    'fields, not expressions, and the object in the default state. Readers can ' +
+                    'also turn it on and off in the bar.',
                 defaultValue: TEXT_TOOL_DEFAULTS.wholeConversations,
             }),
             conversationModel: {

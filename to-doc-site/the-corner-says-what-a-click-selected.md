@@ -14,6 +14,11 @@ reader clicked. The corner now says what was selected and where, for example:
 
 _Selected “reload” in HlKeyword_
 
+A highlighted keyword can stand for several values in the field — the same word spelled with
+different capitals, when matching ignores case. The notice names the ones that were actually
+selected, and only those: _Selected “Reload” and “RELOAD” in HlKeyword_ for two, and _Selected
+“Reload” and 2 more in HlKeyword_ for more than two.
+
 ## What it does not change
 
 - **A Ctrl+click or Cmd+click says nothing.** It adds a value or removes one, and the object cannot
@@ -34,6 +39,6 @@ _Selected “reload” in HlKeyword_
 - The last point answers a question a reader will ask — _why does this click select immediately when
   the lane header waits for the tick?_ It was investigated and is a limit of the host, not a choice.
   Keep it.
-- Known inaccuracy, tracked in ptarmiganlabs/chatbox.qs#62: a keyword standing for several spellings
-  names only the first in the notice, which may not be one that was selected. If that is fixed
-  before publishing, nothing here needs to change; if not, do not promise the notice is exact.
+- The notice used to name the first spelling a keyword stood for, which could be one with no value
+  in the field. That was fixed with ptarmiganlabs/chatbox.qs#62 before 0.6.0, so the page can
+  promise the notice is exact; check the release it shipped in.

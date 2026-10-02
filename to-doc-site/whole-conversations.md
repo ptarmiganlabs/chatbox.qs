@@ -47,17 +47,23 @@ Inside those conversations, these selections stop narrowing:
 
 ## What it needs
 
-**Message ID** and the people dimensions must be real fields rather than expressions. Freeing a
-field from a selection means naming it, and an expression has no name to use. Where one of them is
-an expression the toggle is disabled, and hovering it says which role is the problem, rather than
-widening some conversations and not others with nothing on screen to show it:
+**Message ID**, the people dimensions and the conversation dimension must be real fields rather than
+expressions. Freeing a field from a selection means naming it, bounding a conversation means
+selecting in one, and an expression has no name to use. **The object must also be in the default
+state**: the mode widens against the default state's selection, so an object that reads in an
+alternate state would show conversations chosen by selections
+it does not follow.
 
+Where any of that is not so, the toggle is disabled, and hovering it says what is in the way, rather
+than widening some conversations and not others with nothing on screen to show it:
+
+- _Whole conversations need the default state, not the alternate state Comparison._ — naming the
+  object's state.
 - _Whole conversations need a Message ID dimension on a field._
 - _Whole conversations need Participant on a field, not an expression._ — naming whichever roles
-  are expressions, for example _From and To_.
+  are expressions, for example _From and To_, or _Conversation_.
 
-An image or PDF export cannot use the mode and shows the strict conversation. The same is true of an
-object placed on a sheet that is already in a Qlik Sense alternate state.
+An image or PDF export cannot use the mode and shows the strict conversation.
 
 ## What it costs
 
@@ -83,10 +89,9 @@ sooner. The banner above the conversation says when it was.
   `selecting-a-conversation-from-its-lane-header.md` beside it.
 - Worth a screenshot: Ada selected, mode on, one lane showing dimmed context around two undimmed
   answers. Capture against the scratch app's **chatbox.qs highlights 2** sheet.
-- **Re-verify the alternate-state sentence before publishing.** Today an object in a Sense alternate
-  state shows the strict conversation, but its toggle is enabled and a click shows the notice _Whole
-  conversations: the engine would not read the conversation in a state of its own_.
-  ptarmiganlabs/chatbox.qs#62 proposes disabling the toggle with a reason instead; whichever ships
-  decides what this page says.
+- The alternate-state and conversation-dimension refusals landed with ptarmiganlabs/chatbox.qs#62's
+  last pull request. The state is read from the object's layout, which should report a state the
+  object inherits from its sheet as well as one set on the object; that inheritance has not been
+  checked against a real sheet. Check it before saying that a state set on the sheet counts too.
 - The undo-step sentence comes from `docs/GOTCHAS.md` entry 54, which measured it. On an error path
   the state is emptied again and adds another step; that is not worth a reader's attention.
