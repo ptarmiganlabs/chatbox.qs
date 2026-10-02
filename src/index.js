@@ -720,7 +720,13 @@ export default function supernova(galaxy) {
                         await refreshWidened(object);
                     })();
                 }
-                const wholeOn = widened !== null && signature !== '';
+                // Whether the rows on screen are the widened ones, which is what the summary in the
+                // bar describes — not whether the mode is still chosen. Turning it off clears the
+                // signature at once while the widened rows stay up until the strict ones arrive, a
+                // whole engine round trip later; reading the signature here took the summary away for
+                // that time and left the context messages dimmed with nothing to say why. The
+                // toggle shows the choice (`wholeChosen`); this follows the data.
+                const wholeOn = widened !== null;
 
                 // Conversations side by side: a board of lanes, whose order of messages everything below
                 // follows — the highlights, search, stepping and copying count messages by their index in
