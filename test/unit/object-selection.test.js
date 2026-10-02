@@ -51,9 +51,18 @@ describe('selectInObjectSession', () => {
         // leaves the session open: a confirm bar with nothing behind it.
         const selections = fakeSelections({ select: vi.fn().mockResolvedValue(false) });
         const result = await selectInObjectSession({ selections, steps: [step()] });
-        expect(result).toEqual({ outcome: SELECTION_OUTCOMES.REFUSED });
+        expect(result).toEqual({ outcome: SELECTION_OUTCOMES.REFUSED, step: step() });
         expect(selections.cancel).toHaveBeenCalled();
         expect(selections.isActive()).toBe(false);
+    });
+
+    it('says which step was refused, so the reader can be told which field', async () => {
+        // A message click can select in two fields, sender then recipient; the second refused is
+        // the one to name.
+        const select = vi.fn().mockResolvedValueOnce(true).mockResolvedValue(false);
+        const selections = fakeSelections({ select });
+        const result = await selectInObjectSession({ selections, steps: [step(1), step(3)] });
+        expect(result.step).toEqual(step(3));
     });
 
     it('ends it even when earlier picks opened it, which the refusal took away too', async () => {
@@ -82,7 +91,7 @@ describe('selectInObjectSession', () => {
             steps: [step()],
             logger: { warn },
         });
-        expect(result).toEqual({ outcome: SELECTION_OUTCOMES.ERROR, error });
+        expect(result).toEqual({ outcome: SELECTION_OUTCOMES.ERROR, error, step: step() });
         expect(selections.cancel).toHaveBeenCalled();
         expect(warn).toHaveBeenCalled();
     });
@@ -110,5 +119,13 @@ describe('selectInObjectSession', () => {
         });
         expect(result.outcome).toBe(SELECTION_OUTCOMES.REFUSED);
         expect(warn).toHaveBeenCalled();
+    });
+
+    it('names no step when the selection mode could not be opened at all', async () => {
+        const selections = fakeSelections();
+        selections.begin.mockRejectedValue(new Error('modal elsewhere'));
+        const result = await selectInObjectSession({ selections, steps: [step()] });
+        expect(result.outcome).toBe(SELECTION_OUTCOMES.ERROR);
+        expect(result.step).toBeNull();
     });
 });

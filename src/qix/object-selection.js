@@ -49,29 +49,31 @@ async function letGo(selections, logger) {
  * @param {Array<{dimIdx: number, values: number[], toggle: boolean}>} request.steps - From
  *     `buildLaneSelection` or `buildSelection`; at least one.
  * @param {{warn: Function}} [request.logger] - Where failures are reported.
- * @returns {Promise<{outcome: string, error?: object}>} `selected` when every step was taken;
- *     `refused` when the engine refused one, after which the session is over; `error` when a call
- *     threw.
+ * @returns {Promise<{outcome: string, error?: object, step?: object}>} `selected` when every step
+ *     was taken; `refused` when the engine refused one, after which the session is over; `error` when
+ *     a call threw. A refusal or an error carries the `step` it happened on — null when the session
+ *     itself could not be opened — so the reader can be told which field it was.
  */
 export async function selectInObjectSession({ selections, steps, logger }) {
     const began = !selections.isActive();
+    let step = null;
     try {
         if (began) await selections.begin([CUBE_PATH]);
-        for (const { dimIdx, values, toggle } of steps) {
+        for (step of steps) {
             const ok = await selections.select({
                 method: 'selectHyperCubeValues',
-                params: [CUBE_PATH, dimIdx, values, toggle],
+                params: [CUBE_PATH, step.dimIdx, step.values, step.toggle],
             });
             if (ok === false) {
                 await letGo(selections, logger);
-                return { outcome: SELECTION_OUTCOMES.REFUSED };
+                return { outcome: SELECTION_OUTCOMES.REFUSED, step };
             }
         }
         return { outcome: SELECTION_OUTCOMES.SELECTED };
     } catch (error) {
         logger?.warn?.('The selection failed:', error);
         if (began) await letGo(selections, logger);
-        return { outcome: SELECTION_OUTCOMES.ERROR, error };
+        return { outcome: SELECTION_OUTCOMES.ERROR, error, step };
     }
 }
 

@@ -185,9 +185,8 @@ list — the engine reads it as every value. A refusal ends the session (`select
 there is nothing left in it to confirm, and says why in the corner; a throw lets go only of a session
 the same click opened.
 
-_See `src/qix/selection.js`, `src/qix/object-selection.js`. Guard: `test/unit/object-selection.test.js`.
-A click on a message still only stops at the first `false`: it does not yet end the session or say
-anything._
+_See `src/qix/selection.js`, `src/qix/object-selection.js`, which a click on a message and a click on
+a lane header both run through. Guard: `test/unit/object-selection.test.js`._
 
 ## Highlighting, search and copying
 

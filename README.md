@@ -212,6 +212,10 @@ Set under **Behaviour → Clicking a message**:
 A single value toggles, as a click in Sense always has. A set of values replaces that field's
 selection, because toggling a set flips each value on its own.
 
+A click Qlik Sense refuses — the field is locked — says so in the corner, naming the field, and
+ends the selection rather than leaving the confirm bar over nothing: when Sense refuses one value it
+lets go of every value picked in that selection, so there is nothing left to confirm.
+
 **A click on the avatar does what a click on the message does** — it is the same message, pointed at
 from a finger's width to the left. The picture stays out of the keyboard's way: the bubble beside it
 already offers the action, and a second tab stop on every row is what the roving tabindex exists to
