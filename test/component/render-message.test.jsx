@@ -506,3 +506,118 @@ describe('MessageRow — kind chips', () => {
         expect(hiddenKindsTitle(['a', 'b'], false)).toBe('a, b');
     });
 });
+
+describe('MessageRow — the copy button', () => {
+    it('is left out until a copy handler is given', () => {
+        render(<MessageRow message={message()} showAuthor showAvatar selectable={false} />);
+        expect(screen.queryByRole('button', { name: 'Copy this message' })).toBeNull();
+    });
+
+    it('copies its own message, and the click is never a click on the message', () => {
+        const onCopy = vi.fn();
+        const onSelect = vi.fn();
+        const one = message({ body: 'the reload failed' });
+        render(
+            <MessageRow
+                message={one}
+                showAuthor
+                showAvatar
+                selectable
+                onSelect={onSelect}
+                onCopy={onCopy}
+            />
+        );
+        fireEvent.click(screen.getByRole('button', { name: 'Copy this message' }));
+        expect(onCopy).toHaveBeenCalledWith(one);
+        expect(onSelect).not.toHaveBeenCalled();
+    });
+
+    it('takes a tab stop only on the row that has one', () => {
+        // The conversation keeps a single tab stop; a button per message would put hundreds in the
+        // sheet, and tabbing past a long chat would take hundreds of presses.
+        const { rerender } = render(
+            <MessageRow message={message()} showAuthor selectable={false} onCopy={vi.fn()} />
+        );
+        expect(screen.getByRole('button', { name: 'Copy this message' })).toHaveAttribute(
+            'tabindex',
+            '-1'
+        );
+
+        rerender(
+            <MessageRow
+                message={message()}
+                showAuthor
+                selectable={false}
+                tabbable
+                onCopy={vi.fn()}
+            />
+        );
+        expect(screen.getByRole('button', { name: 'Copy this message' })).toHaveAttribute(
+            'tabindex',
+            '0'
+        );
+    });
+
+    it('is given room in the bubble, so it never covers the message it copies', () => {
+        // It sits in the bubble's own upper corner, over the text's column rather than over the
+        // padding, and a two-word message is narrower than the button. The gutter is held open
+        // whether the button is drawn or not: reflowing the text under the pointer is worse again.
+        const { container, rerender } = render(
+            <MessageRow message={message({ body: 'ok' })} index={0} showAuthor onCopy={vi.fn()} />
+        );
+        const bubble = container.querySelector('[data-message-index]');
+        expect(bubble.className).toMatch(/bubbleCopyRoom/);
+
+        rerender(<MessageRow message={message({ body: 'ok' })} index={0} showAuthor />);
+        expect(container.querySelector('[data-message-index]').className).not.toMatch(
+            /bubbleCopyRoom/
+        );
+    });
+});
+
+describe('MessageRow — the avatar', () => {
+    it('does what the bubble does, because it is part of the same message', () => {
+        const onSelect = vi.fn();
+        const one = message({ author: participant({ avatarUrl: null }) });
+        const { container } = render(
+            <MessageRow message={one} showAuthor showAvatar selectable onSelect={onSelect} />
+        );
+        const avatar = container.querySelector('[class*="avatarFallback"]');
+        expect(avatar).not.toBeNull();
+        fireEvent.click(avatar);
+        expect(onSelect).toHaveBeenCalledWith(one);
+    });
+
+    it('takes no tab stop and stays out of the accessibility tree', () => {
+        // The bubble beside it offers the same action to a keyboard; two ways in would be two tab
+        // stops per row, which is what the roving tabindex exists to prevent.
+        const { container } = render(
+            <MessageRow
+                message={message()}
+                showAuthor
+                showAvatar
+                selectable
+                tabbable
+                onSelect={vi.fn()}
+            />
+        );
+        const avatar = container.querySelector('[class*="avatarFallback"]');
+        expect(avatar).toHaveAttribute('aria-hidden', 'true');
+        expect(avatar.getAttribute('tabindex')).toBeNull();
+    });
+
+    it('does nothing at all where a click on the message does nothing', () => {
+        const onSelect = vi.fn();
+        const { container } = render(
+            <MessageRow
+                message={message()}
+                showAuthor
+                showAvatar
+                selectable={false}
+                onSelect={onSelect}
+            />
+        );
+        fireEvent.click(container.querySelector('[class*="avatarFallback"]'));
+        expect(onSelect).not.toHaveBeenCalled();
+    });
+});

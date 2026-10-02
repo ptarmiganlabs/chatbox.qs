@@ -95,7 +95,7 @@ export function themeVars(theme) {
         '--cqs-border': isDark ? '#4a4a4a' : DEFAULTS.border,
         '--cqs-bubble-bg': isDark ? '#2f3236' : DEFAULTS.bubble,
         '--cqs-bubble-own-bg': isDark ? '#26414f' : '#e3f1fb',
-        '--cqs-font': fontFamily,
+        '--cqs-font-family': fontFamily,
         '--cqs-radius': '10px',
         // Highlights, search matches and the bar above the conversation (from textview.qs).
         '--cqs-highlight': isDark ? 'rgba(255, 196, 0, 0.28)' : 'rgba(255, 196, 0, 0.35)',
@@ -106,6 +106,11 @@ export function themeVars(theme) {
         '--cqs-ruler': isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)',
         '--cqs-selected': '#009845',
         '--cqs-focus': isDark ? '#8cc4e6' : '#3f8ab3',
+        // A pressed toolbar button, and the tint behind a group of them. Both darken a light
+        // theme and lighten a dark one: one literal would make a pressed button on a dark theme
+        // darker than the bar it sits in, which reads as unpressed (textview.qs).
+        '--cqs-pressed': isDark ? 'rgba(255, 255, 255, 0.16)' : 'rgba(0, 0, 0, 0.08)',
+        '--cqs-groupbg': isDark ? 'rgba(255, 255, 255, 0.09)' : 'rgba(0, 0, 0, 0.055)',
     };
 }
 

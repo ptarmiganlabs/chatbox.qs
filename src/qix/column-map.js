@@ -12,6 +12,16 @@
  *     warning; positional binding breaks silently when they do.
  */
 
+import { normalizeFieldName } from './field-ref';
+
+/**
+ * The cId of the dimension a widened cube is bounded by.
+ *
+ * Defined here rather than imported from context-gate.js, which imports this module: the name is a
+ * contract between the two and belongs with the other cIds.
+ */
+export const CONTEXT_GATE_CID = 'd_cqs_scope';
+
 /** Role identifiers, used as the keys of a resolved role map. */
 export const ROLES = {
     MESSAGE_ID: 'messageId',
@@ -186,10 +196,14 @@ export function resolveRoles(layout, roleCIds = DEFAULT_CIDS, { conversationMode
         msr: columns.filter((c) => c.kind === 'msr'),
     };
 
-    // Positional fallback, matching the slot order the panel seeds for this model.
+    // Positional fallback, matching the slot order the panel seeds for this model. The
+    // whole-conversations gate is the object's own column and is left out of the slots entirely:
+    // it carries no role cId, so the fallback would otherwise hand it to whichever role is
+    // missing — and a gate bound as the recipient gives every message a recipient of "1".
+    const slots = pools.dim.filter((c) => c.cId !== CONTEXT_GATE_CID);
     const positional = {};
     dimensionRoleOrder(model).forEach((role, i) => {
-        positional[role] = pools.dim[i];
+        positional[role] = slots[i];
     });
     MEASURE_ROLE_ORDER.forEach((role, i) => {
         positional[role] = pools.msr[i];
@@ -212,7 +226,12 @@ export function resolveRoles(layout, roleCIds = DEFAULT_CIDS, { conversationMode
     for (const role of Object.values(ROLES)) {
         if (byRole[role]) continue;
         const column = positional[role];
-        if (column && !claimed.has(column.col) && !roleCIdSet.has(column.cId)) {
+        if (
+            column &&
+            !claimed.has(column.col) &&
+            !roleCIdSet.has(column.cId) &&
+            column.cId !== CONTEXT_GATE_CID
+        ) {
             byRole[role] = column;
             claimed.add(column.col);
         }
@@ -260,7 +279,19 @@ export function unassignedDimensions(columns, byRole) {
             .filter(Boolean)
             .map((c) => c.col)
     );
-    return columns.filter((c) => c.kind === 'dim' && !claimed.has(c.col));
+    return columns.filter(
+        (c) => c.kind === 'dim' && !claimed.has(c.col) && c.cId !== CONTEXT_GATE_CID
+    );
+}
+
+/**
+ * Find the column the whole-conversations gate answers in, by its cId and never by position.
+ *
+ * @param {object[]} columns - Column descriptors from {@link buildColumns}.
+ * @returns {?object} The gate's column, or null while the conversation is not widened.
+ */
+export function gateColumn(columns) {
+    return (columns ?? []).find((c) => c.kind === 'dim' && c.cId === CONTEXT_GATE_CID) ?? null;
 }
 
 /**
@@ -276,4 +307,24 @@ export function unassignedDimensions(columns, byRole) {
 export function dimensionIndex(column) {
     if (!column || column.kind !== 'dim') return -1;
     return column.col;
+}
+
+/**
+ * Name the field behind a dimension column, when there is one.
+ *
+ * A calculated dimension's `qGroupFieldDefs` holds its expression, not a field, and there is nothing
+ * there to select in or to name in a set expression. Saying so is the point: a caller that cannot
+ * tell the two apart offers a click that quietly selects nothing.
+ *
+ * @param {?object} column - A column from {@link buildColumns}.
+ * @returns {string} The field name, or '' for a calculated dimension, a measure or no column.
+ */
+export function fieldOfColumn(column) {
+    if (!column || column.kind !== 'dim') return '';
+    const defs = column.info?.qGroupFieldDefs;
+    if (!Array.isArray(defs) || defs.length === 0) return '';
+    const at = Number.isInteger(column.info?.qGroupPos) ? column.info.qGroupPos : 0;
+    const name = defs[at] ?? defs[0];
+    if (typeof name !== 'string' || name.trim() === '' || name.trim().startsWith('=')) return '';
+    return normalizeFieldName(name);
 }

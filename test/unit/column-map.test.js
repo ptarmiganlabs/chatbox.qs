@@ -9,6 +9,7 @@ import {
     dimensionRoleOrder,
     requiredRoles,
     resolveRoles,
+    unassignedDimensions,
 } from '../../src/qix/column-map';
 
 const layout = (dims, measures) => ({
@@ -282,5 +283,46 @@ describe('conversation models', () => {
         const participant = resolveRoles(converted, DEFAULT_CIDS);
         expect(participant.byRole[ROLES.THREAD].col).toBe(2);
         expect(participant.byRole[ROLES.RECIPIENT].col).toBe(3);
+    });
+});
+
+describe('the whole-conversations gate is never a role', () => {
+    /** A layout whose cube carries the gate dimension beside the real ones. */
+    const withGate = () => ({
+        qHyperCube: {
+            qDimensionInfo: [
+                { cId: 'd_msgid', qFallbackTitle: 'MsgId' },
+                { cId: 'd_author', qFallbackTitle: 'Author' },
+                { cId: 'd_cqs_scope', qFallbackTitle: '=Aggr(…)' },
+            ],
+            qMeasureInfo: [
+                { cId: 'm_text', qFallbackTitle: 'Text' },
+                { cId: 'm_dupcheck', qFallbackTitle: 'Rows' },
+            ],
+        },
+    });
+
+    it('never hands the gate to a role the positional fallback is filling', () => {
+        // An object saved by 0.6.0 carries a gate in its stored cube. It has no role cId, so the
+        // fallback would otherwise bind it — and a gate bound as the thread builds the lanes from
+        // "1" and "0", while a gate bound as the recipient gives every message a recipient.
+        const { byRole } = resolveRoles(withGate(), {}, {});
+        expect(byRole[ROLES.MESSAGE_ID].cId).toBe('d_msgid');
+        expect(byRole[ROLES.AUTHOR].cId).toBe('d_author');
+        expect(byRole[ROLES.THREAD]).toBeNull();
+        expect(byRole[ROLES.RECIPIENT]).toBeNull();
+    });
+
+    it('does not report the gate as a stray dimension', () => {
+        const layout = withGate();
+        const { columns, byRole } = resolveRoles(layout, {}, {});
+        expect(unassignedDimensions(columns, byRole)).toEqual([]);
+    });
+
+    it('still fills the slots positionally for a cube that has no gate', () => {
+        const layout = withGate();
+        layout.qHyperCube.qDimensionInfo[2] = { cId: null, qFallbackTitle: 'ThreadId' };
+        const { byRole } = resolveRoles(layout, {}, {});
+        expect(byRole[ROLES.THREAD].label).toBe('ThreadId');
     });
 });

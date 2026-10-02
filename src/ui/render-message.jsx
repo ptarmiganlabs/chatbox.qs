@@ -18,6 +18,7 @@ import { routeClick } from './click-route';
 import HighlightedText from './HighlightedText';
 import KindChips from './KindChips';
 import styles from './chat.module.css';
+import { ICONS, Icon } from './controls';
 
 /**
  * Initials for an avatar fallback.
@@ -61,6 +62,8 @@ function initials(label) {
  * @param {?object} [props.finds] - This message's search matches: `author`, `recipients` and `body`.
  * @param {?{max: number}} [props.kindChips] - How many of the message's kinds to show as chips above its
  *   text; null to show none.
+ * @param {?Function} [props.onCopy] - Copies this message, from a button that appears on hover;
+ *     null while the copy button is off, in an export, or in edit mode.
  * @returns {object} The rendered row.
  */
 export function MessageRow({
@@ -82,6 +85,7 @@ export function MessageRow({
     current = null,
     finds = null,
     kindChips = null,
+    onCopy = null,
 }) {
     /**
      * Find the current mark within one part of the message.
@@ -103,12 +107,17 @@ export function MessageRow({
         own ? styles.bubbleOwn : '',
         message.merged ? styles.bubbleMerged : '',
         selectable || onShowDetails ? styles.selectable : '',
+        // A gutter for the copy button, so it never covers the first line of a short message.
+        onCopy ? styles.bubbleCopyRoom : '',
         expanded ? styles.bubbleOpen : '',
         focused ? styles.bubbleFocused : '',
         // 'X' excluded and 'A' alternative are both "not currently possible".
         // Native Sense charts grey both; dimming only 'X' left alternative-state
         // values looking fully selectable.
         message.state === 'X' || message.state === 'A' ? styles.dimmed : '',
+        // A message the conversation was widened to reach: it is there to give the ones that match
+        // their context, and reads as context rather than as an answer.
+        message.context ? styles.dimmed : '',
     ]
         .filter(Boolean)
         .join(' ');
@@ -148,25 +157,32 @@ export function MessageRow({
 
     let avatar = null;
     if (showAvatar) {
+        // A reader who clicks the face is pointing at the message beside it, so the picture does
+        // what the bubble does. It stays out of the accessibility tree and takes no tab stop: the
+        // bubble offers the same action to a keyboard, and two ways in would be two stops per row.
+        const onAvatar = selectable || onShowDetails ? handleClick : undefined;
+        const avatarClass = `${styles.avatar}${onAvatar ? ` ${styles.selectable}` : ''}`;
         if (!showAuthor) {
             avatar = <div className={styles.avatarSpacer} aria-hidden="true" />;
         } else if (message.author?.avatarUrl) {
             avatar = (
                 <img
-                    className={styles.avatar}
+                    className={avatarClass}
                     src={message.author.avatarUrl}
                     alt=""
                     loading="lazy"
                     referrerPolicy="no-referrer"
                     style={{ '--cqs-accent': accent }}
+                    onClick={onAvatar}
                 />
             );
         } else {
             avatar = (
                 <div
-                    className={`${styles.avatar} ${styles.avatarFallback}`}
+                    className={`${avatarClass} ${styles.avatarFallback}`}
                     style={{ '--cqs-accent': accent }}
                     aria-hidden="true"
+                    onClick={onAvatar}
                 >
                     {initials(message.author?.label)}
                 </div>
@@ -216,6 +232,7 @@ export function MessageRow({
                     onClick={handleClick}
                     onKeyDown={handleKeyDown}
                     data-message-index={index}
+                    data-context={message.context ? 'true' : undefined}
                     role={selectable ? 'button' : undefined}
                     // Roving tabindex: only one row in the whole conversation is
                     // reachable by Tab; the rest are reachable by arrow key.
@@ -226,6 +243,25 @@ export function MessageRow({
                         onShowDetails || expanded !== undefined ? Boolean(expanded) : undefined
                     }
                 >
+                    {onCopy ? (
+                        <button
+                            type="button"
+                            className={styles.copyMessage}
+                            title="Copy this message"
+                            aria-label="Copy this message"
+                            // Roving with the focus, as Details does beside it: the focused row's
+                            // controls are reachable and no others, so tabbing past the conversation
+                            // costs the same whether it holds five messages or five thousand.
+                            tabIndex={tabbable ? 0 : -1}
+                            onClick={(event) => {
+                                // A click on it is never a click on the message.
+                                event.stopPropagation();
+                                onCopy(message);
+                            }}
+                        >
+                            <Icon paths={ICONS.copy} />
+                        </button>
+                    ) : null}
                     {kindChips && message.kinds?.length ? (
                         <KindChips
                             kinds={message.kinds}
@@ -284,6 +320,11 @@ export function MessageRow({
                                     type="button"
                                     className={styles.detailsLink}
                                     aria-expanded={Boolean(expanded)}
+                                    // The conversation contributes the focused row's controls and
+                                    // nothing else, so the stops it costs do not grow with the
+                                    // messages: a virtualized list draws twenty rows, and twenty
+                                    // Details buttons were twenty presses to tab past.
+                                    tabIndex={tabbable ? 0 : -1}
                                     onClick={(event) => {
                                         // The bubble itself is bound to selection.
                                         event.stopPropagation();

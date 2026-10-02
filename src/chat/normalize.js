@@ -22,6 +22,7 @@ import { ATTR_IDS, attrValue, buildAttrMap } from '../qix/attr-map';
 import {
     ROLES,
     conversationModelOf,
+    gateColumn,
     kpiColumns,
     resolveRoles,
     unassignedDimensions,
@@ -180,6 +181,10 @@ function readRecord(row, i, ctx) {
             num: cell.num(row[column.col]),
         })),
         state: cell.state(authorCell),
+        // While the conversation is widened, the gate answers 1 for a message that matches the
+        // selection and 0 for one that is only there to give it its context. Without the gate
+        // every message matches, because the cube holds nothing else.
+        context: ctx.gateCol ? cell.num(row[ctx.gateCol.col]) === 0 : false,
         rowIdx: cell.absoluteRow(ctx.area, i),
     };
 }
@@ -320,6 +325,8 @@ export function normalize({ layout, rows, props = {}, theme, area, phantomTail =
         attrMap: buildAttrMap(byRole[ROLES.MESSAGE_ID].info),
         // Measures beyond the text and the integrity probe are per-message KPIs.
         kpiCols: kpiColumns(columns, byRole),
+        // The whole-conversations gate, when the cube is widened; null when it is not.
+        gateCol: gateColumn(columns),
         bodyFormat: props.bodyFormat === 'markdown' ? 'markdown' : 'text',
         kindChips: readKindChipSettings(props.kindChips),
         area,

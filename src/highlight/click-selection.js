@@ -125,3 +125,24 @@ export function selectionNotice(field, result) {
         }
     }
 }
+
+/**
+ * Write what a selection that worked should say.
+ *
+ * A click that fails has always spoken and a click that works has always been silent, which is the
+ * wrong way round: the highlight field is usually in no object on the sheet, so the only evidence a
+ * keyword was selected at all is a chip in Sense's bar, far from where the reader clicked. Naming the
+ * field is the point of it.
+ *
+ * A Ctrl or Cmd click says nothing. It adds or removes, and which of the two it did is not something
+ * this can know — a notice that guessed would be worse than none.
+ *
+ * @param {string} field - The field selected in.
+ * @param {string} label - The value or category the reader clicked.
+ * @param {boolean} toggle - Whether Ctrl or Cmd was held.
+ * @returns {?{text: string, level: string}} The notice, or null where there is nothing to say.
+ */
+export function selectionMadeNotice(field, label, toggle) {
+    if (toggle || !field || !label) return null;
+    return { level: 'info', text: `Selected \u201c${label}\u201d in ${field}` };
+}

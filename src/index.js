@@ -30,7 +30,14 @@ import ext from './ext/index';
 import { normalize } from './chat/normalize';
 import { readConversationRows } from './qix/conversation-rows';
 import { ROLES, conversationModelOf, resolveRoles } from './qix/column-map';
-import { buildSelection } from './qix/selection';
+import { buildContextGate, gateDimensionExpression, gateProblemText } from './qix/context-gate';
+import {
+    createWidened,
+    ensureState,
+    releaseWidened,
+    repairStoredGate,
+} from './qix/whole-conversations';
+import { buildLaneSelection, buildSelection } from './qix/selection';
 import { describeAssignments } from './qix/role-labels';
 import { syncAttributeExpressions } from './qix/sync-attrs';
 import { createTimeOrder } from './qix/time-order';
@@ -41,7 +48,7 @@ import {
     writeLaneSnapshot,
     writeSnapshot,
 } from './ui/snapshot';
-import { createBoardCache, laneKeys, readLaneSettings } from './chat/lanes';
+import { createBoardCache, laneKeys, laneWindowStart, readLaneSettings } from './chat/lanes';
 import { reloadingView } from './ui/reload-view';
 import { createHighlightLoader } from './qix/highlight-loader';
 import { loadHighlightResult } from './highlight/highlight-result';
@@ -50,10 +57,15 @@ import { createConversationFinder } from './highlight/conversation-finder';
 import {
     planCategorySelection,
     planValueSelection,
+    selectionMadeNotice,
     selectionNotice,
 } from './highlight/click-selection';
 import { readTextToolSettings } from './highlight/settings';
-import { selectInFieldBesideObjectSelections, stateNameOf } from './qix/field-selection';
+import {
+    SELECTION_OUTCOMES,
+    selectInFieldBesideObjectSelections,
+    stateNameOf,
+} from './qix/field-selection';
 import { render, destroy } from './ui/chat-renderer';
 import ChatLog from './ui/ChatLog';
 import { Empty, Failed, Loading, NotConfigured, emptyStateMessage } from './ui/states';
@@ -61,6 +73,7 @@ import { themeVars } from './ui/theme-vars';
 import { extensionState } from './util/extension-state';
 import logger, { PACKAGE_VERSION } from './util/logger';
 import { copyConversation } from './export/copy-conversation';
+import { copyMessage } from './export/copy-message';
 
 /** How long a notice stays in the corner, in milliseconds. */
 const NOTICE_MS = 5000;
@@ -208,6 +221,75 @@ export default function supernova(galaxy) {
                     projections: highlightViewRef.current.projections,
                 });
             }
+            // Whole conversations: the reader's own choice, null while they follow the setting,
+            // and the widened cube beside the object's own. The version is bumped when that cube
+            // appears, changes or goes, which is what fetches the rows again.
+            const [wholePicked, setWholePicked] = useState(null);
+            const [widenedVersion, setWidenedVersion] = useState(0);
+            // The lane headers picked in the selection session that is still open. Sense shows
+            // a chart's picked values in green; a board that showed nothing would leave the
+            // reader counting clicks to know what they had chosen.
+            const [pickedLanes, setPickedLanes] = useState(null);
+            const wholeRef = useRef({
+                signature: '',
+                stateName: null,
+                from: null,
+                repaired: false,
+                object: null,
+                layout: null,
+                onChanged: null,
+                stalled: false,
+            });
+
+            /**
+             * Let go of the widened cube: stop listening to it, and tell the engine to drop it.
+             *
+             * A session object outlives the component that made it, and so does a listener bound to
+             * one, so an object left on a sheet the reader walked away from would keep a hypercube
+             * over the whole message table resident for the rest of the session.
+             *
+             * @returns {Promise<void>} Resolves once the engine has been told.
+             */
+            const detachWidened = async () => {
+                const held = wholeRef.current;
+                const object = held.object;
+                const onChanged = held.onChanged;
+                held.object = null;
+                held.layout = null;
+                held.onChanged = null;
+                if (!object) return;
+                try {
+                    object.removeListener?.('changed', onChanged);
+                } catch (err) {
+                    logger.warn('whole conversations: could not stop listening:', err);
+                }
+                await releaseWidened({ app, object, logger });
+            };
+
+            /**
+             * Read the widened cube's layout again and fetch the rows it now holds.
+             *
+             * @param {?object} object - The widened session object, or null.
+             * @returns {Promise<void>} Resolves once the version is bumped.
+             */
+            const refreshWidened = async (object) => {
+                if (!object || wholeRef.current.object !== object) {
+                    setWidenedVersion((version) => version + 1);
+                    return;
+                }
+                try {
+                    wholeRef.current.layout = await object.getLayout();
+                } catch {
+                    wholeRef.current.layout = null;
+                }
+                setWidenedVersion((version) => version + 1);
+            };
+
+            // How far down the ranking the lanes shown start. The reader steps it; it is never
+            // reset on a selection, because buildBoard clamps it to what there is, and a reader who
+            // stepped to older conversations has said where they want to be.
+            const [laneOffset, setLaneOffset] = useState(0);
+
             const queryRef = useRef('');
             const handleQueryRef = useRef(null);
             if (!handleQueryRef.current) {
@@ -306,6 +388,14 @@ export default function supernova(galaxy) {
             const [page, fetchError] = usePromise(async () => {
                 if (!model || !staleLayout?.qHyperCube) return null;
                 const runId = ++runIdRef.current;
+                // The widened cube when there is one; the object's own otherwise. Read from the ref
+                // so a cube that arrives between renders is used as soon as the version says so.
+                const wide =
+                    wholeRef.current.object && wholeRef.current.layout
+                        ? { model: wholeRef.current.object, layout: wholeRef.current.layout }
+                        : null;
+                const readModel = wide?.model ?? model;
+                const readLayout = wide?.layout ?? staleLayout;
                 setProgress(null);
                 // The messages are shown in the cube's order, so sort the cube by the timestamp
                 // before any row is read (src/qix/time-order.js). A patch changes the layout, and
@@ -320,8 +410,8 @@ export default function supernova(galaxy) {
                 // Up to Maximum messages: the newest rows for Newest first and lanes, past
                 // any phantom rows at the end of the cube.
                 const result = await readConversationRows({
-                    model,
-                    layout: staleLayout,
+                    model: readModel,
+                    layout: readLayout,
                     settings,
                     /**
                      * Report whether this run has been superseded.
@@ -342,8 +432,8 @@ export default function supernova(galaxy) {
                 // keeps the PREVIOUS resolved value while a new promise is in
                 // flight, so without this the old rows are normalized against
                 // the new layout's column map — silently mismatched columns.
-                return { ...result, derivedFrom: staleLayout };
-            }, [staleLayout, model, settings.maxMessages]);
+                return { ...result, derivedFrom: readLayout };
+            }, [staleLayout, model, settings.maxMessages, widenedVersion]);
 
             // The highlight values load beside the rows, in usePromise for the same reason: nebula
             // waits for it before it declares the render complete. The conversation does not wait for
@@ -380,7 +470,16 @@ export default function supernova(galaxy) {
                     return undefined;
                 }
 
-                const { columns, byRole, missing } = resolveRoles(staleLayout, settings.roles, {
+                // The widened cube when there is one, the object's own otherwise. Its layout
+                // carries the same roles by cId, plus the gate column normalize reads. Settings
+                // always come from the object: the widened cube holds a hypercube and nothing else.
+                const widened =
+                    wholeRef.current.object && wholeRef.current.layout
+                        ? { model: wholeRef.current.object, layout: wholeRef.current.layout }
+                        : null;
+                const sourceLayout = widened?.layout ?? staleLayout;
+
+                const { columns, byRole, missing } = resolveRoles(sourceLayout, settings.roles, {
                     conversationModel,
                 });
                 if (missing.length) {
@@ -401,7 +500,7 @@ export default function supernova(galaxy) {
                     return undefined;
                 }
 
-                if (!page || page.derivedFrom !== staleLayout) {
+                if (!page || page.derivedFrom !== sourceLayout) {
                     const reloading = reloadingView(lastViewRef.current, {
                         rect,
                         keyboard,
@@ -424,15 +523,15 @@ export default function supernova(galaxy) {
                 if (
                     cached === null ||
                     cached.page !== page ||
-                    cached.layout !== staleLayout ||
+                    cached.layout !== sourceLayout ||
                     cached.themeName !== themeName
                 ) {
                     conversationCacheRef.current = {
                         page,
-                        layout: staleLayout,
+                        layout: sourceLayout,
                         themeName,
                         conversation: normalize({
-                            layout: staleLayout,
+                            layout: sourceLayout,
                             rows: page.rows,
                             props: settings,
                             theme,
@@ -515,6 +614,113 @@ export default function supernova(galaxy) {
                     return undefined;
                 }
 
+                // Whole conversations. The setting is what a developer chose; the reader's own
+                // choice sits over it and is dropped the moment the setting itself changes, the way
+                // the text size resolves. Never in an export: a snapshot is drawn on a server with
+                // no engine to make a state on.
+                const toolSettings = readTextToolSettings(settings);
+                if (wholeRef.current.from !== toolSettings.wholeConversations) {
+                    wholeRef.current.from = toolSettings.wholeConversations;
+                    if (wholePicked !== null) setWholePicked(null);
+                }
+                // An object saved by an earlier build with the gate patched into it is put right
+                // here, where its properties may be written at all. Once per session.
+                if (interactions?.edit && !wholeRef.current.repaired) {
+                    wholeRef.current.repaired = true;
+                    repairStoredGate({ model, logger });
+                }
+
+                // The selection session is over: the headers are no longer anybody's pick.
+                if (pickedLanes !== null && !selections?.isActive?.()) setPickedLanes(null);
+
+                // A selection confirmed or cancelled while the board was waiting: catch up now.
+                if (wholeRef.current.stalled && !selections?.isActive?.()) {
+                    wholeRef.current.stalled = false;
+                    refreshWidened(wholeRef.current.object);
+                }
+
+                const gate = buildContextGate(byRole, {
+                    highlightField: toolSettings.highlight.field,
+                    categoryField: toolSettings.category.field,
+                });
+                // Chosen is all it takes. There was a short-circuit here that skipped widening
+                // while nothing was selected, on the grounds that the widened cube would then hold
+                // exactly what the object's own does and its gate is an Aggr over every message in
+                // the app. It bought about 80 ms on a 12,000-message app and cost the invariant
+                // everything else rests on: that choosing the mode means the cube exists. Without
+                // it the first lane header picked was itself the selection that brought the cube
+                // into being, and whether the mode engaged at all came to depend on reading the
+                // selection state out of a layout correctly. Both are worse than the 80 ms.
+                const wholeChosen =
+                    (wholePicked ?? toolSettings.wholeConversations) && !isSnapshot(staleLayout);
+                const signature = wholeChosen && !gate.problem ? gateDimensionExpression(gate) : '';
+                if (signature !== wholeRef.current.signature) {
+                    wholeRef.current.signature = signature;
+                    // Fire and forget: the widened cube arriving bumps a version, which fetches.
+                    (async () => {
+                        await detachWidened();
+                        if (signature === '' || wholeRef.current.signature !== signature) {
+                            setWidenedVersion((version) => version + 1);
+                            return;
+                        }
+                        wholeRef.current.stateName =
+                            wholeRef.current.stateName ??
+                            (await ensureState({ app, objectId: staleLayout?.qInfo?.qId, logger }));
+                        const object = await createWidened({
+                            app,
+                            model,
+                            stateName: wholeRef.current.stateName,
+                            gate,
+                            logger,
+                        });
+                        if (!object || wholeRef.current.signature !== signature) {
+                            await releaseWidened({ app, object, logger });
+                            // The state this object remembered may be one the engine no longer has;
+                            // `createWidened` has already forgotten it where that is why it failed,
+                            // and the ask is cheap where it is not.
+                            if (!object) wholeRef.current.stateName = null;
+                            // A mode that was asked for and did not happen says so. It used to
+                            // leave the toggle pressed over a conversation that had not widened,
+                            // which reads as a button that does nothing.
+                            if (!object && wholeRef.current.signature === signature) {
+                                setNotice({
+                                    level: 'error',
+                                    text: 'Whole conversations: the engine would not read the conversation in a state of its own',
+                                    id: ++noticeIdRef.current,
+                                });
+                            }
+                            setWidenedVersion((version) => version + 1);
+                            return;
+                        }
+                        // Its own changes matter: a selection changes which conversations are in
+                        // scope without changing the object's own cube at all.
+                        /**
+                         * Read the widened cube again when the engine says it changed.
+                         *
+                         * @returns {Promise<void>} Resolves once the rows are asked for.
+                         */
+                        const onChanged = async () => {
+                            // Not while the reader is still choosing. Nebula freezes the object's
+                            // own layout in the modal state so a chart does not redraw from under
+                            // the pointer; the widened cube is a different object and is not
+                            // frozen, so a first lane header picked would take the others off the
+                            // board before a second could be picked. The board waits, as the rest
+                            // of the object does, and catches up when the selection is confirmed
+                            // or cancelled.
+                            if (selections?.isActive?.()) {
+                                wholeRef.current.stalled = true;
+                                return;
+                            }
+                            await refreshWidened(object);
+                        };
+                        object.on('changed', onChanged);
+                        wholeRef.current.onChanged = onChanged;
+                        wholeRef.current.object = object;
+                        await refreshWidened(object);
+                    })();
+                }
+                const wholeOn = widened !== null && signature !== '';
+
                 // Conversations side by side: a board of lanes, whose order of messages everything below
                 // follows — the highlights, search, stepping and copying count messages by their index in
                 // it. An export shows the lanes a snapshot recorded, not the ones its size would fit.
@@ -527,6 +733,7 @@ export default function supernova(galaxy) {
                     width: rect?.width ?? 0,
                     keys: readLaneSnapshot(staleLayout)?.keys ?? null,
                     gapSec: settings.groupGapSec,
+                    offset: laneOffset,
                 });
                 const shown = board ? { ...conversation, messages: board.messages } : conversation;
 
@@ -554,9 +761,10 @@ export default function supernova(galaxy) {
                  * did not happen.
                  *
                  * @param {object} plan - From planValueSelection or planCategorySelection.
+                 * @param {string} [label] - The value or category the reader clicked, for the notice.
                  * @returns {Promise<void>} Resolves once the selection is sent.
                  */
-                const pick = async (plan) => {
+                const pick = async (plan, label) => {
                     const result = plan.locked
                         ? { outcome: 'locked' }
                         : await selectInFieldBesideObjectSelections({
@@ -568,7 +776,12 @@ export default function supernova(galaxy) {
                               toggle: plan.toggle,
                               logger,
                           });
-                    const message = selectionNotice(plan.field, result);
+                    // A click that worked says so too, not only one that failed.
+                    const message =
+                        selectionNotice(plan.field, result) ??
+                        (result?.outcome === SELECTION_OUTCOMES.SELECTED
+                            ? selectionMadeNotice(plan.field, label, plan.toggle)
+                            : null);
                     if (message) setNotice({ ...message, id: ++noticeIdRef.current });
                 };
 
@@ -582,7 +795,7 @@ export default function supernova(galaxy) {
                      * @returns {Promise<void>} Resolves once the selection is sent.
                      */
                     onSelectValues: (values, toggle) =>
-                        pick(planValueSelection(highlightView.answer, values, toggle)),
+                        pick(planValueSelection(highlightView.answer, values, toggle), values?.[0]),
                     /**
                      * Select a category in the category field.
                      *
@@ -591,12 +804,125 @@ export default function supernova(galaxy) {
                      * @returns {Promise<void>} Resolves once the selection is sent.
                      */
                     onSelectCategory: (name, toggle) =>
-                        pick(planCategorySelection(highlightView.answer, name, toggle)),
+                        pick(planCategorySelection(highlightView.answer, name, toggle), name),
                 };
+
+                // Never in an export, whose server reports every interaction as allowed, nor in
+                // edit mode — the same gate a click on a message passes.
+                const canSelectLanes =
+                    !isSnapshot(staleLayout) &&
+                    interactions?.active !== false &&
+                    Boolean(interactions?.select) &&
+                    !interactions?.edit;
+
+                // A lane header selects its conversation through the object's own selection
+                // mode, as a filter pane does: pick one header, then another, then confirm or
+                // cancel them together. A thread dimension that is an expression still selects —
+                // the hypercube addresses a column, not a field name.
+                const lanePicking =
+                    canSelectLanes && board && byRole[ROLES.THREAD]
+                        ? {
+                              hint: 'Selects this conversation. Pick several, then confirm.',
+                              picked: pickedLanes,
+                              /**
+                               * Select a lane's conversation beside any already picked.
+                               *
+                               * @param {object} lane - The lane whose header was clicked.
+                               * @returns {Promise<void>} Resolves once the selection is sent.
+                               */
+                              onPick: async (lane) => {
+                                  const steps = buildLaneSelection({ lane, byRole });
+                                  if (!steps.length || !selections) return;
+                                  try {
+                                      if (!selections.isActive())
+                                          await selections.begin(['/qHyperCubeDef']);
+                                      let applied = false;
+                                      for (const { dimIdx, values, toggle } of steps) {
+                                          const ok = await selections.select({
+                                              method: 'selectHyperCubeValues',
+                                              params: ['/qHyperCubeDef', dimIdx, values, toggle],
+                                          });
+                                          if (ok === false) break;
+                                          applied = true;
+                                      }
+                                      // Only a selection the engine took is drawn as picked. A
+                                      // locked field answers false, and a header green over a
+                                      // selection that never happened is worse than no feedback —
+                                      // the reader would confirm what they believe they chose.
+                                      if (!applied) return;
+                                      setPickedLanes((picked) => {
+                                          const next = new Set(picked ?? []);
+                                          if (next.has(lane.key)) next.delete(lane.key);
+                                          else next.add(lane.key);
+                                          return next;
+                                      });
+                                  } catch (err) {
+                                      logger.warn('lane selection failed:', err);
+                                  }
+                              },
+                          }
+                        : null;
+
+                // Stepping the window of conversations: only where there are more than fit, and
+                // never in an export, which shows the lanes its snapshot recorded.
+                const laneSteps =
+                    board && board.total > board.lanes.length && !isSnapshot(staleLayout)
+                        ? {
+                              first: board.first,
+                              shown: board.lanes.length,
+                              total: board.total,
+                              /**
+                               * Move the window of conversations.
+                               *
+                               * @param {number} direction - 1 for later in the ranking, -1 for earlier.
+                               * @returns {void}
+                               */
+                              onStep: (direction) => {
+                                  setLaneOffset(
+                                      laneWindowStart(
+                                          board.first + direction * board.lanes.length,
+                                          board.lanes.length,
+                                          board.total
+                                      )
+                                  );
+                              },
+                          }
+                        : null;
+
+                // The toggle in the bar. Disabled rather than hidden where the cube cannot be
+                // widened: a control that vanishes teaches nobody why.
+                const wholeControl = isSnapshot(staleLayout)
+                    ? null
+                    : {
+                          on: wholeChosen,
+                          widened: wholeOn,
+                          disabled: Boolean(gate.problem),
+                          reason: gateProblemText(gate.problem, conversationModel),
+                          /**
+                           * Flip the mode for this reader, for as long as the object is open.
+                           *
+                           * @returns {void}
+                           */
+                          onToggle: () =>
+                              setWholePicked(!(wholePicked ?? toolSettings.wholeConversations)),
+                      };
 
                 const view = {
                     conversation: shown,
                     board,
+                    lanePicking,
+                    laneSteps,
+                    whole: wholeControl,
+                    /**
+                     * Copy one message, and say how it went.
+                     *
+                     * @param {object} message - The message under the pointer.
+                     * @returns {Promise<void>} Resolves once the notice is set.
+                     */
+                    onCopyMessage: async (message) => {
+                        const result = await copyMessage({ message });
+                        if (result) setNotice({ ...result, id: ++noticeIdRef.current });
+                    },
                     // Lanes switched on without a thread to put in them: said in a banner, since the
                     // conversation then shows as one.
                     laneNotice:
@@ -649,7 +975,28 @@ export default function supernova(galaxy) {
                 highlightResult,
                 companionVersion,
                 notice,
+                // State the object holds itself. Without these the render runs only when the engine
+                // says something changed, and a button that changes nothing else — the whole
+                // conversations toggle, the lane stepper — does nothing at all.
+                wholePicked,
+                widenedVersion,
+                pickedLanes,
+                laneOffset,
             ]);
+
+            // Let go of the widened cube when the object leaves the sheet. Its own effect, because
+            // it belongs to the app handle rather than to the element the view renders into.
+            useEffect(() => {
+                /**
+                 * Release the widened cube and stop listening to it.
+                 *
+                 * @returns {void}
+                 */
+                return () => {
+                    wholeRef.current.signature = '';
+                    detachWidened();
+                };
+            }, [app]);
 
             // Tear the root down when the object is removed from the sheet.
             useEffect(() => {

@@ -58,6 +58,9 @@ export function laneCaption(board, meta = {}) {
  *   lane draws, as it changes.
  * @param {function(?number): ?object} [props.renderRuler] - Renders the overview ruler: a lane's, by lane
  *   number, with free scrolling; the one beside the rows, given null, with linked scrolling.
+ * @param {?object} [props.picking] - How a lane header selects its conversation: `tabbable`,
+ *   `hint`, `picked` (the keys picked in the open selection session, or null) and `onPick(lane)`;
+ *   null while headers do not select.
  * @returns {object} The rendered lanes.
  */
 export function LaneBoard({
@@ -70,6 +73,7 @@ export function LaneBoard({
     live = true,
     busy = false,
     caption = null,
+    picking = null,
     onKeyDown,
     onRange,
     renderRuler,
@@ -234,12 +238,35 @@ export function LaneBoard({
      * @param {object} lane - The lane.
      * @returns {object} The header.
      */
-    const header = (lane) => (
-        <div className={styles.laneHeader} title={lane.label}>
-            <span className={styles.laneName}>{lane.label}</span>
-            <span className={styles.laneCount}>{formatCount(lane.count)}</span>
-        </div>
-    );
+    const header = (lane) => {
+        const content = (
+            <>
+                <span className={styles.laneName}>{lane.label}</span>
+                <span className={styles.laneCount}>{formatCount(lane.count)}</span>
+            </>
+        );
+        // A lane with no value behind it — the one for messages without a conversation — has
+        // nothing to select, and neither has a thread dimension that is an expression.
+        if (picking === null || lane.elem < 0) {
+            return (
+                <div className={styles.laneHeader} title={lane.label}>
+                    {content}
+                </div>
+            );
+        }
+        return (
+            <button
+                type="button"
+                className={styles.laneHeader}
+                aria-pressed={picking.picked ? picking.picked.has(lane.key) : undefined}
+                tabIndex={picking.tabbable ? 0 : -1}
+                title={`${lane.label}\n${picking.hint}`}
+                onClick={() => picking.onPick(lane)}
+            >
+                {content}
+            </button>
+        );
+    };
 
     if (board.rows) {
         const { rows, laneOf, lanes } = board;

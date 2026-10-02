@@ -93,6 +93,23 @@ export function stepDirection(event) {
 }
 
 /**
+ * Read a key press that steps through the keywords: Alt and an arrow, up or down.
+ *
+ * The browser's find has no claim on these, and plain arrows are left to the text so a reader can
+ * still scroll with them. F3 and Ctrl+G mean the find box and nothing else, so neither key ever
+ * depends on whether something is typed (textview.qs 1.2.0).
+ *
+ * @param {object} event - The keyboard event: `key`, `ctrlKey`, `metaKey`, `altKey`.
+ * @returns {?number} 1 for the next keyword, -1 for the previous one, null for any other key.
+ */
+export function keywordStepDirection(event) {
+    if (!event || !event.altKey || event.ctrlKey || event.metaKey) return null;
+    if (event.key === 'ArrowDown') return 1;
+    if (event.key === 'ArrowUp') return -1;
+    return null;
+}
+
+/**
  * Tell whether a key press asks for the search box: Ctrl+F, or Cmd+F on a Mac.
  *
  * @param {object} event - The keyboard event.

@@ -76,13 +76,27 @@ describe('counterText', () => {
         );
     });
 
-    it('counts search matches before the first step, and leaves highlights to the summary', () => {
+    it('counts search matches before the first step', () => {
         expect(counterText({ kind: 'find', index: -1, count: 12 })).toBe('12 matches');
         expect(counterText({ kind: 'find', index: -1, count: 1 })).toBe('1 match');
         expect(counterText({ kind: 'find', index: -1, count: 0 })).toBe('No matches');
         expect(counterText({ kind: 'find', index: -1, count: 9, truncated: true })).toBe(
             '9+ matches'
         );
-        expect(counterText({ kind: 'highlight', index: -1, count: 12 })).toBe('');
+    });
+
+    it('counts the keywords in their own group, where the word is the label beside it', () => {
+        // The keyword group says what it steps through; repeating "highlights" in a pill labelled
+        // Keywords would spend the width on a word the reader can already see.
+        expect(counterText({ kind: 'highlight', index: -1, count: 12 })).toBe('12');
+        expect(counterText({ kind: 'highlight', index: -1, count: 0 })).toBe('None');
+        expect(counterText({ kind: 'highlight', index: -1, count: 9, truncated: true })).toBe('9+');
+        expect(counterText({ kind: 'highlight', index: 2, count: 7 })).toBe('3 of 7');
+    });
+
+    it('answers nothing where nothing was asked', () => {
+        // An empty search box has put no question, so its counter says nothing at all.
+        expect(counterText({ kind: 'find', index: -1, count: 0, asked: false })).toBe('');
+        expect(counterText({ kind: 'highlight', index: 1, count: 7, asked: false })).toBe('');
     });
 });

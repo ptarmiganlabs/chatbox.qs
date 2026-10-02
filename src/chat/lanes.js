@@ -173,6 +173,22 @@ export function rankLanes(messages) {
 }
 
 /**
+ * Clamp where the window of lanes starts, so it always holds as many as fit.
+ *
+ * Stepping past the end would leave a half-empty board and a reader with nowhere to step back from.
+ *
+ * @param {number} offset - How far down the ranking to start.
+ * @param {number} fit - How many lanes fit.
+ * @param {number} total - How many conversations there are.
+ * @returns {number} Where to start, from 0 to `total - fit`.
+ */
+export function laneWindowStart(offset, fit, total) {
+    const last = Math.max(0, total - fit);
+    const at = Number.isFinite(offset) ? Math.floor(offset) : 0;
+    return Math.min(Math.max(0, at), last);
+}
+
+/**
  * Work out how many lanes fit.
  *
  * @param {number} width - The object's width in pixels; 0 before it is measured.
@@ -238,20 +254,29 @@ export function packRows(laneOf, starts, { times = null, gapMs = Infinity } = {}
  *     place of ranking and fitting.
  * @param {*} [options.gapSec] - *Group messages within*, in seconds: how close in time messages side by
  *     side in a linked row must be; {@link DEFAULT_GAP_SEC} when it is not a number of 0 or more.
+ * @param {number} [options.offset] - How far down the ranking the lanes shown start, for stepping past
+ *     the ones that fit. Clamped so the window never runs off the end.
  * @returns {object} `scroll`, `total` (conversations), `lanes` (each with `key`, `label`, `elem`, `count`,
  *     `start` — its first board index in free scrolling, -1 in linked —, `indices` and `messages`),
- *     `messages` in board order, `laneOf`, `posInLane`, `prevInLane` (-1 at a lane's first message) and,
- *     for linked scrolling, `rows` and `dayStarts` (null for free scrolling).
+ *     `messages` in board order, `laneOf`, `posInLane`, `prevInLane` (-1 at a lane's first message),
+ *     `first` (where the lanes shown start in the ranking) and, for linked scrolling, `rows` and
+ *     `dayStarts` (null for free scrolling).
  */
-export function buildBoard(messages, { max, scroll, width = 0, keys = null, gapSec }) {
+export function buildBoard(messages, { max, scroll, width = 0, keys = null, gapSec, offset = 0 }) {
     const list = Array.isArray(messages) ? messages : [];
     const ranked = rankLanes(list);
     let chosen = [];
+    let first = 0;
     if (Array.isArray(keys) && keys.length > 0) {
         const byKey = new Map(ranked.map((lane) => [lane.key, lane]));
         chosen = keys.map((key) => byKey.get(key)).filter(Boolean);
+        first = chosen.length > 0 ? ranked.indexOf(chosen[0]) : 0;
     }
-    if (chosen.length === 0) chosen = ranked.slice(0, fitLaneCount(width, clampLaneMax(max)));
+    if (chosen.length === 0) {
+        const fit = fitLaneCount(width, clampLaneMax(max));
+        first = laneWindowStart(offset, fit, ranked.length);
+        chosen = ranked.slice(first, first + fit);
+    }
 
     const laneIndex = new Map(chosen.map((lane, index) => [lane.key, index]));
     const members = chosen.map(() => []);
@@ -292,6 +317,7 @@ export function buildBoard(messages, { max, scroll, width = 0, keys = null, gapS
     return {
         scroll: linked ? 'linked' : 'free',
         total: ranked.length,
+        first,
         lanes,
         messages: boardMessages,
         laneOf,
@@ -327,10 +353,19 @@ function gapSecondsOf(value) {
  * @param {number} [request.width] - The object's width.
  * @param {?Array<string>} [request.keys] - The lanes a snapshot recorded.
  * @param {*} [request.gapSec] - The *Group messages within* setting, in seconds.
+ * @param {number} [request.offset] - How far down the ranking the lanes shown start.
  * @returns {?object} The board from {@link buildBoard}; null with lanes off, no thread dimension or no
  *     messages.
  */
-export function laneBoardFor({ messages, settings, hasThread, width = 0, keys = null, gapSec }) {
+export function laneBoardFor({
+    messages,
+    settings,
+    hasThread,
+    width = 0,
+    keys = null,
+    gapSec,
+    offset = 0,
+}) {
     if (!settings?.show || !hasThread || !messages?.length) return null;
     return buildBoard(messages, {
         max: settings.max,
@@ -338,6 +373,7 @@ export function laneBoardFor({ messages, settings, hasThread, width = 0, keys = 
         width,
         keys,
         gapSec,
+        offset,
     });
 }
 
@@ -380,7 +416,15 @@ export function createBoardCache() {
          * @returns {?object} The board, or null without lanes.
          */
         get(request) {
-            const { messages, settings, hasThread, width = 0, keys = null, gapSec } = request;
+            const {
+                messages,
+                settings,
+                hasThread,
+                width = 0,
+                keys = null,
+                gapSec,
+                offset = 0,
+            } = request;
             const signature = [
                 settings?.show === true,
                 Boolean(hasThread),
@@ -388,6 +432,7 @@ export function createBoardCache() {
                 settings?.scroll,
                 gapSecondsOf(gapSec),
                 fitLaneCount(width, clampLaneMax(settings?.max)),
+                offset,
                 Array.isArray(keys) ? keys.join(SEP) : '',
             ].join(SEP);
             if (last !== null && last.messages === messages && last.signature === signature) {

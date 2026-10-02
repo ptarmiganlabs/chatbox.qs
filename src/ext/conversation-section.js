@@ -9,6 +9,7 @@
  */
 import { LANE_DEFAULTS, LANE_MAX } from '../chat/lanes';
 import { CONVERSATION_MODELS } from '../qix/column-map';
+import { TEXT_TOOL_DEFAULTS } from '../highlight/settings';
 import { switchItem } from './items';
 
 /**
@@ -31,6 +32,24 @@ export function conversationSection() {
         type: 'items',
         label: 'Conversation',
         items: {
+            // Selecting a participant narrows the conversation to their own lines, which is what
+            // Qlik was asked for and rarely what the reader meant. On, the object reads the whole
+            // exchange back and draws the lines that match as answers, the rest as context.
+            //
+            // Described rather than left to its label: it changes which rows appear, and where a
+            // dimension is an expression it cannot work at all — a switch that visibly does nothing
+            // reads as broken, the same reason the overview ruler carries one.
+            wholeConversations: switchItem({
+                ref: 'chatbox.wholeConversations',
+                label: 'Show whole conversations',
+                description:
+                    'Select a person and see the conversations they are in, whole: their own ' +
+                    'messages as answers, the rest dimmed as context. Selections on the people, ' +
+                    'highlight and category fields stop narrowing; every other selection still ' +
+                    'narrows. Needs Message ID and the people dimensions to be fields, not ' +
+                    'expressions. Readers can also turn it on and off in the bar.',
+                defaultValue: TEXT_TOOL_DEFAULTS.wholeConversations,
+            }),
             conversationModel: {
                 ref: 'chatbox.conversationModel',
                 type: 'string',

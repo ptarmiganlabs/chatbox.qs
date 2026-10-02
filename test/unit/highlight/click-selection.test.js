@@ -7,6 +7,7 @@ import {
     planValueSelection,
     selectionNotice,
     valueClickHint,
+    selectionMadeNotice,
 } from '../../../src/highlight/click-selection';
 
 const answer = {
@@ -123,5 +124,27 @@ describe('selectionNotice', () => {
             level: 'error',
             text: 'Could not select in match: the selection in progress could not be confirmed',
         });
+    });
+});
+
+describe('selectionMadeNotice', () => {
+    it('names the value and the field, because neither is anywhere else on the sheet', () => {
+        // A click that failed has always spoken and a click that worked has always been silent.
+        expect(selectionMadeNotice('HlKeyword', 'reload', false)).toEqual({
+            level: 'info',
+            text: 'Selected “reload” in HlKeyword',
+        });
+    });
+
+    it('says nothing for a Ctrl or Cmd click, which may have added or removed', () => {
+        // Which of the two it did is not something this can know, and a notice that guessed would
+        // be worse than none.
+        expect(selectionMadeNotice('HlKeyword', 'reload', true)).toBeNull();
+    });
+
+    it('says nothing without a field or a value to name', () => {
+        expect(selectionMadeNotice('', 'reload', false)).toBeNull();
+        expect(selectionMadeNotice('HlKeyword', '', false)).toBeNull();
+        expect(selectionMadeNotice('HlKeyword', undefined, false)).toBeNull();
     });
 });

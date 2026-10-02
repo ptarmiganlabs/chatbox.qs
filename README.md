@@ -128,6 +128,14 @@ many messages it has.
 - **Free scrolling** gives each lane its own list and scrollbar, packed without gaps, and each keeps its
   place when a selection changes the others.
 - Messages without a thread share a **(no conversation)** lane.
+- **A click on a lane's header selects that conversation**, through the object's own selection mode:
+  pick one header, then another, then confirm or cancel them together, exactly as a filter pane works.
+  A header you have picked is drawn in green, and a second click on it takes it back. The lanes stay
+  as they were until you confirm, so there is always something left to pick. The **(no conversation)**
+  lane has no value behind it and is not clickable.
+- **When there are more conversations than fit**, the bar steps through them: **◂ 1–4 of 12 ▸**, a
+  windowful at a time, down the same ranking. A selection that leaves fewer conversations pulls the
+  window back on its own; otherwise it stays where you put it.
 - Needs a _Conversation / thread_ dimension; without one, a banner says so and the conversation shows as
   one.
 
@@ -145,6 +153,49 @@ and the line above the lanes always says so, e.g.
 **3 conversations among the newest 5,000 of 9,000 rows** when every conversation read has a lane — an
 older one that was not read may be missing a lane.
 
+## Whole conversations
+
+Select `Author = Ada` and Qlik answers the question it was asked: the lines Ada wrote. The question
+the reader usually meant is _which chats is Ada in_ — and for that, **Show whole conversations** under
+**Conversation** reads the exchange back.
+
+- A conversation is in scope when **any** of its messages survives the selection. Inside those
+  conversations the selections on **Participant**, **From** and **To** stop narrowing, so the replies
+  Ada answered and the answers she got come back with her own messages.
+- **The highlight field and the category field stop narrowing too.** A keyword picks out which
+  conversations are worth reading, not which lines of them: select the category _ops_ and you get the
+  chats where ops came up, whole, with the ops keywords marked — not the four lines that said so.
+- **Every other selection still narrows.** Pick a date as well and you see that day's messages of
+  Ada's chats, not the whole history.
+- The messages that match the selection are drawn as they always are; the rest are dimmed, because
+  they are there to give the others their context. The bar says which is which, e.g. **24 messages in
+  3 conversations · 8 match the selection**.
+- A message belonging to no conversation is governed by the people rule alone: there is no
+  conversation of its own for it to be in scope of.
+- The button in the bar flips it for one reader, for as long as the object is open; the setting is
+  what everyone else starts with, and a change to it drops the reader's own choice.
+
+**It needs the people and conversation dimensions to be fields**, not expressions: freeing a field
+from a selection means naming it. Where one of them is an expression the button is disabled and says
+so, rather than widening some conversations and not others.
+
+Under the hood the object reads a **copy of its cube in an empty session alternate state** — the only way to
+re-read an expression as it is written, since the message body is your measure and nothing can be
+injected into it. The object's own cube is untouched and stays in the default state, so selections
+behave exactly as they always have. Nothing is written to the app: the state and the copy both live
+only in your session, the state never appears among the app's alternate states, it never shows in the
+selection bar, and nothing is ever selected in it. An image or PDF export is drawn without an engine,
+so it shows the strict conversation.
+
+A widened conversation holds more messages than a narrow one, so **Maximum messages** is reached
+sooner; the banner says when it was.
+
+**What it costs.** The widened cube is bounded by an expression over the message id, so the engine
+weighs every message in the app, not only the ones **Maximum messages** reads. On a 12,000-message
+app that is under a tenth of a second; it grows with the table, so on a very large one expect the
+first draw after a selection to take noticeably longer than the strict view. The cost is the same
+whether or not anything is selected: the mode being on is what builds the widened cube.
+
 ## Clicking a message
 
 Set under **Behaviour → Clicking a message**:
@@ -158,6 +209,11 @@ Set under **Behaviour → Clicking a message**:
 
 A single value toggles, as a click in Sense always has. A set of values replaces that field's
 selection, because toggling a set flips each value on its own.
+
+**A click on the avatar does what a click on the message does** — it is the same message, pointed at
+from a finger's width to the left. The picture stays out of the keyboard's way: the bubble beside it
+already offers the action, and a second tab stop on every row is what the roving tabindex exists to
+prevent.
 
 Per-message metadata is configured under **Message metadata** in the property panel. Each expression
 must aggregate — `Only([Field])`, not a bare field reference. A leading `=`, which the expression editor
@@ -248,7 +304,11 @@ Set under **Categories**, which appears once a highlight field is set:
 - A click on a highlight selects its value in the highlight field — every spelling it stands for — and
   a click on a legend chip selects its category. Ctrl+click or Cmd+click adds or removes; clicking the
   only selected chip clears it. These select directly, like a filter pane: a selection pending in the
-  object's own selection mode is confirmed first.
+  object's own selection mode is confirmed first. They cannot be held pending behind Sense's own
+  confirm tick, which belongs to the values in an object's own hypercube, and the highlight field is
+  not one of them. The corner says what was selected and in which field, since that field is often in
+  no object on the sheet; a Ctrl or Cmd click says nothing, because whether it added or removed is not
+  something the object can tell.
 - A highlight inside a link leaves the click to the link.
 - Nothing is selected in edit mode, in an image or PDF export, or while **Select by clicking a
   highlight** is off. A click that selects nothing — a locked field, an engine error — says why in the
@@ -286,28 +346,66 @@ searched. Nothing is selected.
   current. The query stays when a selection changes the conversation.
 - **Show search box** under **Appearance** hides it.
 
+## The bar above the conversation
+
+The controls sit in groups, each a tinted pill, so one is never mistaken for another:
+
+- **The find box** — what is typed, how many matches there are, and **▲ ▼** to step them.
+- **Keywords** — a swatch drawn as this conversation's highlights are drawn, how many there are, and
+  **◂ ▸** to step them. It appears once a highlight field is set.
+- **Conversations** — **◂ 1–4 of 12 ▸**, with conversations side by side and more of them than fit.
+- **Text size**, and whatever else the view offers.
+
+On a narrow object the groups move below the highlight summary rather than squeezing it.
+
+### Text size
+
+**Text size** sets how large the conversation is drawn: the message bodies, the names, the times, the
+badges and the kind chips. The bar keeps its own size, so the controls never move under the pointer as
+you try sizes, and **Density** goes on deciding spacing, padding and avatars.
+
+- **Follow density** is the default and is what the object has always done: 13, 12 or 11 px as the
+  density resolves.
+- **Text size** under **Appearance** sets what a reader starts with; the control in the bar is their
+  own, for as long as the object is open, and gives way the moment the setting itself changes.
+- **Show text size control** under **Appearance** takes it out of the bar.
+
 ## Stepping and the overview ruler
 
-The step buttons, F3 and Ctrl+G go through the search matches while a query is typed, and through the
-highlights otherwise, across the whole conversation. Steps wrap around at either end.
+The find box and the keywords are stepped separately, each keeping its own place and its own counter.
+The find box's buttons, F3 and Ctrl+G go through the search matches; the keyword buttons and Alt with
+an arrow go through the highlights. Steps wrap around at either end, and the one you stepped to last is
+the one outlined.
 
 The **overview ruler** beside the conversation shows where the matches or highlights are, a tick per
-place, in the categories' colours; hover to count them, click to go there. **Show overview ruler** under
-**Appearance** hides it.
+place, in the categories' colours; hover to count them, click to go there. It appears only while there
+are some, so an object with no highlight field and nothing typed never shows one, whatever **Show
+overview ruler** under **Appearance** says.
 
 | Keys                                                                | What they do                                                           |
 | ------------------------------------------------------------------- | ---------------------------------------------------------------------- |
 | **Ctrl+F** (**Cmd+F**)                                              | Goes to the search box, from inside the object.                        |
 | **Enter** / **Shift+Enter** in the search box                       | The next or the previous match.                                        |
-| **F3** / **Shift+F3**, **Ctrl+G** / **Ctrl+Shift+G** (Cmd on a Mac) | The next or the previous match, or highlight when nothing is typed.    |
+| **F3** / **Shift+F3**, **Ctrl+G** / **Ctrl+Shift+G** (Cmd on a Mac) | The next or the previous search match.                                 |
+| **Alt+↓** / **Alt+↑**                                               | The next or the previous highlight.                                    |
 | **Enter** on a message                                              | Selects the value of the highlight stepped to; otherwise, details.     |
 | **←** / **→** on a message, with conversations side by side         | The neighbouring lane's message: in the same row, or where it is read. |
 | **Escape**                                                          | Clears the search, lets go of the highlight, then leaves the object.   |
+
+Before 0.6.0 one pair of buttons stepped both, and F3 meant the search matches while something was
+typed and the highlights otherwise — one key with two meanings, depending on a box you may not have
+been looking at. F3 and Ctrl+G now mean the find box and nothing else.
 
 ## Copying a conversation
 
 Right-click the object for **Copy conversation as text** or **Copy conversation as JSON**. Both copy the
 messages the object shows under the current selections, in the order shown.
+
+**One message on its own** is copied from the button in the bubble's upper corner, which appears
+under the pointer or the keyboard. It copies the two lines a whole transcript gives that message — the sender, every recipient
+and the time, then the message as it was written — so a message copied alone reads like a message
+copied among the rest. **Show copy button on messages** under **Appearance** takes it away, and an
+image or PDF export never has it.
 
 - **Text** is a transcript: the date (YYYY-MM-DD) where a new day starts, the day its separator shows,
   then for each message a line with the sender, every recipient and the time as the object shows it,
@@ -354,6 +452,13 @@ server to be seen, which is why the panel's shape is unit-tested.
 
 See [docs/GOTCHAS.md](docs/GOTCHAS.md) for the engine and toolchain traps this extension has already
 hit, each of which produced silently wrong output rather than an error.
+
+A change that a user would notice also gets a documentation draft in
+[to-doc-site/](to-doc-site/), in the same commit as the change;
+[to-doc-site/README.md](to-doc-site/README.md) says what counts and how to write one. There is no
+documentation site yet, so this file and the readme inside the release archive
+([release-config/readme-template.txt](release-config/readme-template.txt)) are what a user actually
+reads — a draft does not excuse leaving either of them stale.
 
 ## Requirements
 

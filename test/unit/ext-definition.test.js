@@ -203,7 +203,11 @@ describe('conversations side by side', () => {
     const laneItems = ['lanesShow', 'lanesHelp', 'lanesMax', 'lanesScroll'];
 
     it('follows the conversation model, in the Conversation section', () => {
-        expect(Object.keys(items)).toEqual(['conversationModel', ...laneItems]);
+        expect(Object.keys(items)).toEqual([
+            'wholeConversations',
+            'conversationModel',
+            ...laneItems,
+        ]);
     });
 
     it('binds under chatbox.lanes, with the defaults from src/chat/lanes.js, covering them all', () => {
@@ -290,7 +294,8 @@ describe('highlights and categories sections', () => {
 
     const highlights = definition.items.highlights;
     const categories = definition.items.categories;
-    const TEXT_TOOL_REF = /^chatbox\.((highlight|match|category)\.|showRuler$|showSearch$)/;
+    const TEXT_TOOL_REF =
+        /^chatbox\.((highlight|match|category)\.|showRuler$|showSearch$|showTextSize$|showMessageCopy$|wholeConversations$|fontSize$)/;
     const SECTION_REF = /^chatbox\.(highlight|match|category)\./;
 
     it('sit after the message metadata and before the details', () => {
@@ -334,6 +339,14 @@ describe('highlights and categories sections', () => {
         for (const path of leafPaths(TEXT_TOOL_DEFAULTS)) {
             expect(refs.has(`chatbox.${path}`), path).toBe(true);
         }
+    });
+
+    it('says when the overview ruler appears, since it has nothing to draw until then', () => {
+        // Without a highlight field and with nothing typed there are no ticks, so the switch looks
+        // broken: it is the one setting in the panel whose effect can be invisible.
+        const ruler = definition.items.appearance.items.showRuler;
+        expect(ruler.ref).toBe('chatbox.showRuler');
+        expect(ruler.description).toMatch(/only while there are some/);
     });
 
     it('builds every switch in the panel with On and Off options', () => {

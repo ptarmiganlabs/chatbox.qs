@@ -178,3 +178,32 @@ export function describeSpan(span, styles) {
         },
     };
 }
+
+/** The most colours a swatch is striped in: past four, the stripes say nothing a reader can read. */
+export const SWATCH_STRIPES = 4;
+
+/**
+ * Draw the keyword group's swatch as this conversation's highlights are drawn.
+ *
+ * The group says what it steps through without a word, and can never be taken for the find box
+ * beside it. Only categories that actually occur are shown, so a swatch never promises a colour the
+ * conversation does not hold.
+ *
+ * @param {object} styles - From {@link categoryStyles}.
+ * @param {?{byCategory: Map<string, number>, none: number}} counts - The highlight counts.
+ * @returns {?object} Custom properties for the swatch, or null while categories are not in use or
+ *     nothing is highlighted.
+ */
+export function swatchStyle(styles, counts) {
+    if (!styles?.enabled) return null;
+    const used = styles.order
+        .filter((name) => (counts?.byCategory?.get(name) ?? 0) > 0)
+        .map((name) => styles.byName.get(name));
+    if ((counts?.none ?? 0) > 0) used.push(styles.none);
+    if (used.length === 0) return null;
+    const shown = used.slice(0, SWATCH_STRIPES);
+    return {
+        '--cqs-mark-fill': shown[0].fill,
+        '--cqs-mark-line': stripes(shown.map((part) => part.line)),
+    };
+}

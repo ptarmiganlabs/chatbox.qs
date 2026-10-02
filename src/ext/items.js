@@ -25,10 +25,11 @@ export const ON_OFF = [
  * @param {string} options.ref - The property path, under `chatbox.`.
  * @param {string} options.label - The label shown in the panel.
  * @param {boolean} options.defaultValue - The default.
+ * @param {string} [options.description] - What it does, under the label.
  * @param {function(object): boolean} [options.show] - When to show the item.
  * @returns {object} The item definition.
  */
-export function switchItem({ ref, label, defaultValue, show }) {
+export function switchItem({ ref, label, defaultValue, description, show }) {
     const item = {
         type: 'boolean',
         component: 'switch',
@@ -38,6 +39,7 @@ export function switchItem({ ref, label, defaultValue, show }) {
         options: ON_OFF.map((option) => ({ ...option })),
         defaultValue,
     };
+    if (description) item.description = description;
     if (show) item.show = show;
     return item;
 }

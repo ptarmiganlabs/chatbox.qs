@@ -1,7 +1,12 @@
 /**
  * Appearance settings.
  */
-import { TEXT_TOOL_DEFAULTS } from '../highlight/settings';
+import {
+    AUTO_FONT_SIZE,
+    FONT_SIZES,
+    TEXT_TOOL_DEFAULTS,
+    fontSizeLabel,
+} from '../highlight/settings';
 import { ON_OFF, switchItem } from './items';
 
 /**
@@ -99,11 +104,42 @@ export function appearanceSection() {
                 defaultValue: TEXT_TOOL_DEFAULTS.showSearch,
             }),
             // Beside the conversation, with a tick where highlights or search matches are. It shows
-            // only while there are some, so it costs nothing without a highlight field or a search.
+            // only while there are some, so it costs nothing without a highlight field or a search —
+            // which the description says, because a switch that visibly does nothing reads as broken.
             showRuler: switchItem({
                 ref: 'chatbox.showRuler',
                 label: 'Show overview ruler',
+                description:
+                    'A tick beside the conversation wherever a highlight or a search match is. ' +
+                    'It appears only while there are some: set a highlight field, or search the ' +
+                    'messages, to see it.',
                 defaultValue: TEXT_TOOL_DEFAULTS.showRuler,
+            }),
+            // The conversation's text size: bodies, names, times, badges and chips. The bar keeps
+            // its own size, so the controls do not move when a reader changes this.
+            fontSize: {
+                ref: 'chatbox.fontSize',
+                type: 'number',
+                component: 'dropdown',
+                label: 'Text size',
+                options: [AUTO_FONT_SIZE, ...FONT_SIZES].map((size) => ({
+                    value: size,
+                    label: fontSizeLabel(size),
+                })),
+                defaultValue: TEXT_TOOL_DEFAULTS.fontSize,
+            },
+            // The reader's own text size control, in the bar. Switching it off makes the size above
+            // the only one, which is what a small tile usually wants.
+            showTextSize: switchItem({
+                ref: 'chatbox.showTextSize',
+                label: 'Show text size control',
+                defaultValue: TEXT_TOOL_DEFAULTS.showTextSize,
+            }),
+            // A button that appears on a message under the pointer and copies that message alone.
+            showMessageCopy: switchItem({
+                ref: 'chatbox.showMessageCopy',
+                label: 'Show copy button on messages',
+                defaultValue: TEXT_TOOL_DEFAULTS.showMessageCopy,
             }),
         },
     };

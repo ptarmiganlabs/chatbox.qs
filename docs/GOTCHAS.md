@@ -460,3 +460,274 @@ highest ids; a sort in the browser could only reorder rows the limit had already
 it as a soft patch — session only, and allowed without edit rights, so a published app is sorted for every
 reader — once per object, before any row is read, and never in a snapshot. _Guard:
 `test/unit/time-order.test.js`, `test/unit/sync-attrs.test.js`._
+
+## 38. One custom property was the font family and the font size at once
+
+`themeVars` set `--cqs-font` to the theme's font family, and each density class set it to a font size.
+`.root` read it as both, so `font-family: 13px` was invalid at computed-value time and the themed
+family had never applied — silently, because the declaration is simply dropped and the family then
+inherits from the Sense client, which looks right.
+
+**Rule:** `--cqs-font-family` and `--cqs-font-size` are separate, with `--cqs-read-size` over the
+second for the reader's own pick. _Guard: `test/unit/theme-vars.test.js`,
+`test/component/chatlog-toolbar.test.jsx`._
+
+## 39. A key that steps one thing while something is typed and another thing otherwise
+
+The step buttons, F3 and Ctrl+G used to go through the search matches while a query was typed and the
+highlights otherwise. One key, two meanings, decided by a box the reader may not have been looking at —
+and a single current stop, so stepping the highlights lost the reader's place among the matches.
+
+**Rule:** two groups, each with its own buttons, counter and place, and keys that never cross: F3 and
+Ctrl+G for the find box, Alt with an arrow for the keywords. A place is dropped by comparing the stops
+it was found among **by identity**, which both finders already keep stable while nothing has changed,
+so no path has to invalidate anything by hand. Only the group stepped to last is outlined.
+_Guard: `test/component/chatlog-stepping.test.jsx`, `test/component/chatlog-search.test.jsx`._
+
+## 40. Alt and an arrow is still an arrow to the list
+
+The list moves focus on a plain arrow. Adding Alt+Arrow for the keywords meant one press both stepped
+to a keyword and moved focus to the next message, which then scrolled away from the keyword.
+
+**Rule:** the list's key handler returns at once for a press the root will read as a keyword step.
+_Guard: `test/component/chatlog-stepping.test.jsx`._
+
+## 41. A cube in an alternate state is the only way to re-read someone else's expression
+
+Selecting a participant narrows a conversation to that person's own lines. Widening it back to the
+whole exchange means evaluating the cube under a different selection, and the message body is the
+user's own measure — `Only([MsgText])` — into which no set expression can be injected without parsing
+it. Measured on Qlik Sense May 2026, against the scratch app:
+
+- `Doc.AddSessionAlternateState` succeeds at runtime and the state is **not** in `qStateNames`, so the
+  client's selection bar never shows it and nothing is written to the app.
+- A cube whose `qHyperCubeDef.qStateName` names that state honours the state's own selections and
+  ignores the default state's: with `Author = Priya` selected, the same cube answered 2 rows in `$`
+  and 14 in the state.
+- `{$}` and `{$<[Author]=>}` read from inside the state see the real selection, so the gate below can
+  be written at all.
+- A **soft patch** of `/qHyperCubeDef/qStateName` applies for the session only:
+  `getEffectiveProperties` reports it, `getProperties` never does, and removing the patch restores the
+  object exactly.
+
+**Rule:** the mode is a session alternate state plus a soft patch, and never a saved property.
+
+## 42. Selecting in an alternate state still pushes an undo step
+
+The obvious way to bound the state's cube to the conversations in scope is to select them in the
+state. It works, and the default state's selection object is untouched — but `qBackCount` went from 2
+to 3. Sense's back button would then undo the object's own bookkeeping: the reader presses back, their
+own selection does not change, the object re-applies, and they can never step past it.
+
+**Rule:** nothing is ever selected in the state. The cube is bounded by a null-suppressed calculated
+dimension appended to it, which the engine drops the out-of-scope rows by:
+
+```
+=Aggr(If(Count({$<[Author]=>} [MsgId]) > 0
+     and (IsNull(Only([ThreadId]))
+          or Count({1<[ThreadId] = P({$} [ThreadId])>} [MsgId]) > 0), 1), [MsgId])
+```
+
+Appended rather than put in place of the message id, because a calculated dimension's `qElemNumber` is
+the Aggr's own index and every selection by element number would then be wrong. Measured on the
+12,000-row fixture: first page 143 ms against 93 ms for the strict cube, and paging no slower. The
+widened cube can be far larger than the strict one — 4,000 rows became 12,000 — so **Maximum messages**
+bites sooner, which the existing banner already reports.
+
+## 43. A selection in a field the object's data does not reach changes nothing, and says nothing
+
+Reported as "selecting an author does nothing in From → To". Reproduced against the scratch app, and
+it is not a bug in the model: the From → To objects are built on `FtFrom` / `FtTo` and the field
+selected was `Author`, which belongs to the unrelated `Chat` table. Selecting `Author` left both
+objects at 17 rows; selecting `FtFrom` took them to 8. Both objects resolve their roles correctly from
+their cIds, so neither the missing-recipient screen nor the positional fallback was involved.
+
+**Rule:** this is GOTCHAS 15 seen from the reader's side. Nothing in the object says a selection could
+not reach it, and nothing can: the object is not told. Worth a diagnostic one day, not a fix.
+
+## 44. A soft patch is session-only until the property panel reads it back
+
+A soft patch is not saved — but in edit mode the property panel round-trips the **effective**
+properties into the stored ones, and whatever was patched is then written with the object. Seen on
+Qlik Sense May 2026: the whole-conversations gate dimension ended up in a saved object's
+`qHyperCubeDef.qDimensions` with `qStateName` left empty, so the object was no longer widened and
+carried a dimension nobody had added.
+
+Which the positional role fallback then bound, because the gate carries no _role_ cId: it became the
+object's Recipient, and every message grew a recipient of "1". The conversation flickered as the panel
+and the patch wrote over each other, and went on looking widened — the toggle pressed, the summary
+counting conversations — while showing the strict rows.
+
+**Rule:** the object's own cube is never patched at all. The widened cube is a **session object**
+holding a copy of it, which the panel cannot reach and nothing can save. The role fallback skips the
+gate's cId outright, and an object that already carries one from 0.6.0 is repaired the next time it is
+edited. _Guard: `test/unit/column-map.test.js`, `test/unit/whole-conversations.test.js`._
+
+## 45. A patched cube takes the object's selections into the alternate state with it
+
+The second half of the same mistake, and the reason the copy is not optional. While the object's own
+cube was patched into the alternate state, everything that selected through the object selected
+_there_: a click on a lane header narrowed the conversation and left the app untouched — no green bar,
+nothing in the field, nothing for anyone else on the sheet. `stateNameOf(layout)` was reading the
+state the object had been patched into rather than the one it belongs to.
+
+**Rule:** the object's cube stays in the default state and the widened copy lives beside it, so
+`useSelections` keeps working as it always has. A lane header selects through the object's selection
+mode like a filter pane — several picked, then confirmed together — rather than applying at once.
+_Guard: `test/unit/selection.test.js`, `test/component/chatlog-lane-controls.test.jsx`._
+
+## 46. A widened cube is not the object, so the modal state does not freeze it
+
+Nebula freezes the object's own layout while it is in the modal selection state, so a chart does not
+redraw from under the pointer as values are picked. The widened cube is a different object and is not
+frozen: picking one lane header took the other lanes off the board before a second could be picked,
+and the confirm tick had nothing left to confirm but the first.
+
+**Rule:** the board waits with the rest of the object. The widened cube's `changed` event is held
+while `selections.isActive()`, and the layout is read again once the selection is confirmed or
+cancelled. The headers picked so far are drawn as Sense draws a picked value, since a board that waits
+would otherwise show no sign of what has been chosen.
+
+## 47. State the object holds itself renders nothing unless the effect depends on it
+
+The object renders from one big effect, and nebula re-runs it only when something in its dependency
+list changes. State the object holds itself — the reader's whole-conversations choice, the window of
+conversations, which lane headers are picked — changes nothing the engine reports. Left out of that
+list, the toggle in the bar did nothing whatever, while the same setting worked from the property
+panel: that writes the properties, and the layout change re-ran the effect for its own reasons.
+
+**Rule:** every `useState` value in `src/index.js` is a dependency of the render effect.
+_Guard: `test/guards/render-deps.test.js`, which reads the list out of the source._
+
+## 48. An `Aggr` set expression does not choose which groups are iterated
+
+The gate is an `Aggr` over every message id, which weighs the whole table however narrow the
+selection is. The obvious cure — `Aggr({1<[ThreadId] = P({$} [ThreadId])>} …, [MsgId])`, so only the
+message ids of the conversations in scope are walked — does not work: measured on Qlik Sense May 2026,
+the set changed what was counted inside and left the groups alone, so every message id was still
+iterated and the gate let them all through. 35 rows came back where 8 were right.
+
+**Rule:** the conversation test belongs inside the `If`, where it was, and the cost is documented
+rather than optimised away. Skipping the widening while nothing was selected looked free — the
+widened cube holds exactly what the object's own does then — and cost about 80 ms on a
+12,000-message app. It was removed again; see GOTCHAS 53 for why. _Guard:
+`test/unit/context-gate.test.js`._
+
+## 49. Making the widened cube is as disruptive as letting it answer
+
+The board was held still while a selection session was open, by stalling the widened cube's `changed`
+event. That covered a cube that already existed. It did not cover the cube being **made**: once the
+object stopped widening while nothing was selected, picking the first lane header became the very
+selection that brought the cube into being, and building it there took the other headers off the
+board before a second could be picked.
+
+**Rule:** no part of the widened cube's life — created, replaced or released — happens while
+`selections.isActive()`. The stall is remembered and the whole decision is taken again once the
+session is confirmed or cancelled.
+
+## 50. A session object outlives the component that made it
+
+Nothing released the widened cube when the object left the sheet, and nothing removed its `changed`
+listener, so a reader browsing sheets left a hypercube over the whole message table resident per
+object for the rest of the session — each with a listener still calling `getLayout()` against a
+component that no longer rendered.
+
+**Rule:** the widened cube is released, and its listener removed, from an effect of its own keyed on
+the app handle. Session objects die with the session, which is exactly why a leak inside one is easy
+to miss: nothing ever fails, the engine simply holds more than it needs to.
+
+## 51. A button without a tabIndex is a tab stop on every row that draws it
+
+The guard asserted the conversation exposed one `[tabindex="0"]`, and passed while the **Details**
+button — which carried no `tabIndex` at all — was a tab stop on every rendered row. A selector for
+`[tabindex="0"]` cannot see an implicit stop, so the invariant it was written to protect had been
+quietly broken for as long as that button existed.
+
+**Rule:** every control inside a message roves with the focus, Details and the copy button alike, so
+what the conversation costs to tab past does not grow with it. The guard counts implicit stops too
+and compares a five-message conversation with a fifty-message one, rather than asserting a number.
+_Guard: `test/component/chatlog.test.jsx`, `test/component/chatlog-lanes-free.test.jsx`._
+
+## 52. The engine says "the state is already there" only in a parameter
+
+`AddSessionAlternateState` with a name that already exists is refused with **code 8**, the generic
+message **"Invalid parameters"**, and the one thing that says what went wrong in the `parameter`
+field: **"Used state name"**. Measured on Qlik Sense May 2026. There is no dedicated error code, so a
+caller testing `code` or `message` for the word "already" finds nothing.
+
+That mattered because a session alternate state belongs to the **engine session**, which outlives the
+component that asked for it: nebula remounts a supernova for its own reasons, and the state is still
+there when it does. The second ask was read as a refusal, no widened cube was built, and the whole
+mode silently did nothing — while the rejection reached the reader as Qlik Sense's own error dialog,
+caught promise or not.
+
+Worse, a cube whose `qStateName` names a state that does **not** exist is accepted without error. So
+guessing wrong in the other direction is silent too: no exception, just a cube read in a state nobody
+made.
+
+**Rule:** ask once per browsing context, remembered outside any component, and read the refusal by
+code 8 together with a parameter naming the state. Made and emptied are remembered **apart**: a state
+that was created and could not be emptied must not be created again — that provokes this very
+refusal — but it must be emptied again. A mode that was asked for and did not happen says so in a
+notice, rather than leaving the toggle pressed over a conversation that never widened. What to do
+when the memo is wrong is GOTCHAS 55. _Guard: `test/unit/whole-conversations.test.js`._
+
+## 53. An optimisation that breaks an invariant is not an optimisation
+
+Not widening while nothing was selected saved an `Aggr` over every message in the app — about 80 ms
+on the 12,000-message fixture — and broke the invariant everything else rested on: **choosing the
+mode means the widened cube exists**.
+
+Two defects came out of that one hole, a day apart. The first lane header picked was itself the
+selection that brought the cube into being, so it was built mid-pick and took the other headers off
+the board before a second could be picked — the very defect the stall had been added to fix. And
+whether the mode engaged at all came to depend on reading the current selection state out of a
+layout: with the setting on and an author selected, the object did not widen on load, while flipping
+the setting made it widen at once.
+
+**Rule:** the cube exists whenever the mode is chosen, full stop. The stall then has one narrow job —
+holding the board still while a selection session is open — because the cube it is protecting is
+always already there. An optimisation is welcome back only where it cannot decide whether the feature
+happens.
+
+## 54. A new session alternate state is born holding the current selections
+
+`AddSessionAlternateState` copies the default state's selections as they stand at the moment it is
+created. The documentation mentions a `qSourceStateName` for copying from an existing state and says
+nothing about what happens without one; measured on Qlik Sense May 2026, without one it copies the
+default state.
+
+That is the opposite of what the widened cube needs, and it hid behind the order of two steps. The
+spike that designed this feature created the state **first** and selected afterwards, so the state
+was empty and everything measured correctly. A reader does it the other way round: they select, see
+too little, and then ask for whole conversations — and the state is born carrying their selection, so
+the widened cube is an exact copy of the strict one. The mode engaged, the cube was created, the
+summary changed its wording, and not one extra message appeared.
+
+**Rule:** the state is emptied with `ClearAll(true, stateName)` as soon as it exists, including a
+state an earlier mount left behind, whose selections nobody can know. **Locked selections included:**
+`qLockedAlso` false is the obvious reading — do not touch what the reader locked — and it is the wrong
+one here. Nothing is ever selected in this state, so no lock inside it can be the reader's; one
+inherited from the default state would quietly keep its field narrowing, which is this gotcha's own
+symptom with no way to see it. That costs one undo step per state per page load — not per selection,
+which is what GOTCHAS 42 ruled out. Emptying it is not optional: a cube read in a state holding the
+reader's own selections is the strict conversation wearing the widened one's clothes, and the summary
+then claims context that is not there. Where the state cannot be emptied the object does not widen at
+all. _Guard: `test/unit/whole-conversations.test.js`._
+
+## 55. A memo of what the engine holds outlives the engine
+
+Asking for the session alternate state once per browsing context (GOTCHAS 52) means remembering it
+outside any component — and that memo then outlives the thing it describes. Session states belong to
+the **engine session**, and a session that is replaced takes them with it: a dropped websocket after
+a laptop sleeps, resumed into a new session without the page reloading. The memo still names the
+state, so nothing is created, and a cube whose `qStateName` names a state nobody made is accepted
+without error (GOTCHAS 52 again) — so whole conversations is dead for the rest of the page's life,
+with nothing failing anywhere a reader could see it.
+
+**Rule:** the memo is forgotten wherever the engine contradicts it. A refusal of
+`CreateSessionObject` is the signal — not a refusal of our own, which is a decision taken locally
+with the state still there and still empty — and the object's own remembered state name is dropped
+with it, so the next ask makes and empties the state again. One extra pair of calls on a path that
+has already failed is the whole price of being able to recover at all. _Guard:
+`test/unit/whole-conversations.test.js`._
