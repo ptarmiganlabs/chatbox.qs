@@ -222,8 +222,22 @@ describe('repairStoredGate', () => {
     it('says when the engine refused, rather than throwing into the render', async () => {
         const warn = vi.fn();
         const model = { getProperties: vi.fn().mockRejectedValue(new Error('no')) };
-        expect(await repairStoredGate({ model, logger: { warn } })).toBe(false);
+        // Null, not false: false means there was nothing to repair, and is not worth asking again.
+        expect(await repairStoredGate({ model, logger: { warn } })).toBeNull();
         expect(warn).toHaveBeenCalled();
+    });
+
+    it('answers null too when the repaired properties could not be written', async () => {
+        const model = {
+            getProperties: vi.fn().mockResolvedValue({
+                qHyperCubeDef: {
+                    qStateName: '',
+                    qDimensions: [{ qDef: { cId: CONTEXT_GATE_CID } }],
+                },
+            }),
+            setProperties: vi.fn().mockRejectedValue(new Error('read only')),
+        };
+        expect(await repairStoredGate({ model, logger: { warn: vi.fn() } })).toBeNull();
     });
 });
 

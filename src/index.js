@@ -625,10 +625,18 @@ export default function supernova(galaxy) {
                     if (wholePicked !== null) setWholePicked(null);
                 }
                 // An object saved by an earlier build with the gate patched into it is put right
-                // here, where its properties may be written at all. Once per session.
-                if (interactions?.edit && !wholeRef.current.repaired) {
-                    wholeRef.current.repaired = true;
-                    repairStoredGate({ model, logger });
+                // here, where its properties may be written at all. Once per session when it works:
+                // a repair that failed is tried again the next time the sheet is edited, rather
+                // than being remembered as done. Never twice at once — the effect runs again for
+                // every layout while the first is still writing.
+                if (!interactions?.edit && wholeRef.current.repaired === 'failed') {
+                    wholeRef.current.repaired = false;
+                }
+                if (interactions?.edit && wholeRef.current.repaired === false) {
+                    wholeRef.current.repaired = 'pending';
+                    repairStoredGate({ model, logger }).then((outcome) => {
+                        wholeRef.current.repaired = outcome === null ? 'failed' : true;
+                    });
                 }
 
                 // The selection session is over: the headers are no longer anybody's pick.
