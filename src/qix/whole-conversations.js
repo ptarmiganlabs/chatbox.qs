@@ -66,13 +66,27 @@ export function stateAlreadyExists(error) {
 /**
  * Name the session state for an object.
  *
- * One per object, so two chatboxes on a sheet never bound each other's cube.
+ * One per object, so two chatboxes on a sheet never bound each other's cube — which is why the id is
+ * encoded rather than cleaned. Stripping what a state name should not hold made `a-bc` and `ab-c` the
+ * same state. Here a letter or digit stands for itself and every other UTF-16 unit becomes `_` and its
+ * four hex digits, `_` included, so no two ids can come out alike. Units, not characters: a character
+ * outside the basic plane is two of them, and its first alone is shared by its neighbours. Qlik's own
+ * ids are letters and digits, and come out unchanged.
  *
  * @param {string} objectId - The object's id.
  * @returns {string} The state name.
  */
 export function stateNameFor(objectId) {
-    return `cqs_${String(objectId ?? '').replace(/[^A-Za-z0-9_]/g, '') || 'object'}`;
+    const id = String(objectId ?? '');
+    if (id === '') return 'cqs_object';
+    let encoded = '';
+    for (let at = 0; at < id.length; at += 1) {
+        const unit = id[at];
+        encoded += /[A-Za-z0-9]/.test(unit)
+            ? unit
+            : `_${id.charCodeAt(at).toString(16).padStart(4, '0')}`;
+    }
+    return `cqs_${encoded}`;
 }
 
 /**
