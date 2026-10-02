@@ -668,6 +668,8 @@ export default function supernova(galaxy) {
                 const gate = buildContextGate(byRole, {
                     highlightField: toolSettings.highlight.field,
                     categoryField: toolSettings.category.field,
+                    // The state as the layout reports it, which is the one the object reads in.
+                    objectState: stateNameOf(staleLayout),
                 });
                 // Chosen is all it takes. There was a short-circuit here that skipped widening
                 // while nothing was selected, on the grounds that the widened cube would then hold

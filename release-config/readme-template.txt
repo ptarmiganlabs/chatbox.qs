@@ -76,12 +76,14 @@ Selections on the participant, From, To, highlight and category fields stop
 narrowing; every other selection still narrows, so a date as well gives you
 that day's messages of their chats.
 
-It needs the Message ID and the people dimensions to be fields rather than
-expressions -- there is no field to free in an expression -- and where one is
-an expression the button is disabled and says why. The object reads a copy of
-its own cube in an empty session alternate state: nothing is written to your
-app, and selections behave exactly as they always have. An image or PDF
-export cannot make that state, so it shows the strict conversation.
+It needs the Message ID, the people and the conversation dimensions to be
+fields rather than expressions -- there is no field to free in an expression --
+and the object to be in the default state, since it widens against the default
+state's selection. Where either is not so, the button is disabled and says why.
+The object reads a copy of its own cube in an empty session alternate state:
+nothing is written to your app, and selections behave exactly as they always
+have. An image or PDF export cannot make that state, so it shows the strict
+conversation.
 
 The widened cube weighs every message in the app rather than only the ones
 read, so on a very large table expect the first draw after a selection to take

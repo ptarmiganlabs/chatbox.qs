@@ -4,6 +4,7 @@ import {
     buildContextGate,
     freedSet,
     gateDimensionExpression,
+    gateProblemText,
 } from '../../src/qix/context-gate';
 import { ROLES } from '../../src/qix/column-map';
 import { readTextToolSettings } from '../../src/highlight/settings';
@@ -81,6 +82,19 @@ describe('buildContextGate', () => {
         });
         expect(gate.freed).toEqual([]);
         expect(gateDimensionExpression(gate)).toBe('');
+    });
+
+    it('refuses a conversation dimension that is an expression, which cannot bound anything', () => {
+        // Without a field the gate would read the whole cube as one conversation, and selecting Ada
+        // would bring back every conversation in the app rather than hers.
+        const gate = buildContextGate({ ...roles, [ROLES.THREAD]: onExpression(2) });
+        expect(gate.problem).toEqual({
+            kind: GATE_PROBLEMS.EXPRESSION_DIMENSION,
+            roles: [ROLES.THREAD],
+        });
+        expect(gateProblemText(gate.problem)).toBe(
+            'Whole conversations need Conversation on a field, not an expression.'
+        );
     });
 
     it('refuses a message id that is an expression, which nothing can be counted by', () => {
@@ -184,5 +198,47 @@ describe('freeing the keyword and its category', () => {
     it('never frees one field twice, whatever it is used for', () => {
         const gate = buildContextGate(roles, { highlightField: 'Author' });
         expect(gate.freed).toEqual(['Author']);
+    });
+});
+
+describe('an object that reads in an alternate state', () => {
+    const roles = {
+        [ROLES.MESSAGE_ID]: onField('MsgId', 0),
+        [ROLES.AUTHOR]: onField('Author', 1),
+        [ROLES.THREAD]: onField('ThreadId', 2),
+    };
+
+    it('cannot be widened, and is told so before anything else', () => {
+        // The gate frees fields from the default state's selection. An object answering to another
+        // state would show conversations chosen by selections it does not follow.
+        const gate = buildContextGate(roles, { objectState: 'Comparison' });
+        expect(gate.problem).toEqual({
+            kind: GATE_PROBLEMS.ALTERNATE_STATE,
+            roles: [],
+            state: 'Comparison',
+        });
+        expect(gateDimensionExpression(gate)).toBe('');
+        // Before the dimensions: fixing one would not help while the state is wrong.
+        const both = buildContextGate(
+            { ...roles, [ROLES.AUTHOR]: onExpression(1) },
+            {
+                objectState: 'Comparison',
+            }
+        );
+        expect(both.problem.kind).toBe(GATE_PROBLEMS.ALTERNATE_STATE);
+    });
+
+    it('says which state, in words a reader can act on', () => {
+        const gate = buildContextGate(roles, { objectState: 'Comparison' });
+        expect(gateProblemText(gate.problem)).toBe(
+            'Whole conversations need the default state, not the alternate state Comparison.'
+        );
+    });
+
+    it('treats the default state however it is written as no problem at all', () => {
+        for (const objectState of ['$', '', undefined, null]) {
+            expect(buildContextGate(roles, { objectState }).problem).toBeNull();
+        }
+        expect(buildContextGate(roles).problem).toBeNull();
     });
 });

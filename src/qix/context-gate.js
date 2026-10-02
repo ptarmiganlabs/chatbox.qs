@@ -30,7 +30,18 @@ export { CONTEXT_GATE_CID };
 export const GATE_PROBLEMS = Object.freeze({
     NO_MESSAGE_ID: 'no-message-id',
     EXPRESSION_DIMENSION: 'expression-dimension',
+    ALTERNATE_STATE: 'alternate-state',
 });
+
+/**
+ * Tell whether a state name is the default state.
+ *
+ * @param {?string} state - From `stateNameOf`, or a cube's `qStateName`.
+ * @returns {boolean} True for `$`, and for no state at all.
+ */
+function isDefaultState(state) {
+    return state === undefined || state === null || state === '' || state === '$';
+}
 
 /** The roles whose selections stop narrowing: who spoke, and who they spoke to. */
 const PEOPLE_ROLES = Object.freeze([ROLES.AUTHOR, ROLES.RECIPIENT]);
@@ -54,29 +65,50 @@ export function freedSet(fields) {
  * Doing it twice is not harmless — a field literally named `[weird]` is typed `[[weird]]`, comes out
  * of the first pass as `[weird]`, and a second pass strips it to a field that does not exist.
  *
+ * An object that reads in an alternate state cannot be widened at all. The gate frees fields from the
+ * default state's selection, `$`, and widening an object that answers to another state would show
+ * conversations chosen by selections the object does not follow. It is a problem like an expression
+ * dimension, so the toggle is disabled and says why, rather than being offered and then failing.
+ *
  * @param {object} byRole - The resolved columns by role, from `resolveRoles`.
- * @param {object} [keywords] - The highlight settings' field names, as `readTextToolSettings` returns
- *     them.
- * @param {string} [keywords.highlightField] - The field whose values are highlighted.
- * @param {string} [keywords.categoryField] - The field that groups those values.
+ * @param {object} [context] - What else decides the gate.
+ * @param {string} [context.highlightField] - The field whose values are highlighted, as
+ *     `readTextToolSettings` returns it.
+ * @param {string} [context.categoryField] - The field that groups those values, likewise.
+ * @param {string} [context.objectState] - The state the object reads in, from `stateNameOf` on its
+ *     layout; `$` or nothing for the default state.
  * @returns {{freed: string[], messageIdField: string, threadField: string,
- *     problem: ?{kind: string, roles: string[]}}} The fields freed, the fields the gate counts and
- *     scopes by, and what stands in the way; `problem` is null when nothing does.
+ *     problem: ?{kind: string, roles: string[], state?: string}}} The fields freed, the fields the
+ *     gate counts and scopes by, and what stands in the way; `problem` is null when nothing does.
  */
-export function buildContextGate(byRole, { highlightField = '', categoryField = '' } = {}) {
+export function buildContextGate(
+    byRole,
+    { highlightField = '', categoryField = '', objectState = '$' } = {}
+) {
     const messageIdField = fieldOfColumn(byRole?.[ROLES.MESSAGE_ID]);
     const empty = {
         freed: [],
         messageIdField,
         threadField: fieldOfColumn(byRole?.[ROLES.THREAD]),
     };
+    // First, because nothing else can make it work: fixing a dimension would not.
+    if (!isDefaultState(objectState)) {
+        return {
+            ...empty,
+            problem: { kind: GATE_PROBLEMS.ALTERNATE_STATE, roles: [], state: objectState },
+        };
+    }
     if (!messageIdField) {
         return { ...empty, problem: { kind: GATE_PROBLEMS.NO_MESSAGE_ID, roles: [] } };
     }
 
     // A people dimension that is not a field cannot be freed, and a gate that left it narrowing
-    // would widen some conversations and not others.
-    const unusable = PEOPLE_ROLES.filter((role) => byRole?.[role] && !fieldOfColumn(byRole[role]));
+    // would widen some conversations and not others. A conversation dimension that is not a field
+    // cannot bound anything: the gate would read the whole cube as one conversation, and widening
+    // would bring back every conversation in the app rather than the ones the selection touches.
+    const unusable = [...PEOPLE_ROLES, ROLES.THREAD].filter(
+        (role) => byRole?.[role] && !fieldOfColumn(byRole[role])
+    );
     if (unusable.length > 0) {
         return { ...empty, problem: { kind: GATE_PROBLEMS.EXPRESSION_DIMENSION, roles: unusable } };
     }
@@ -143,6 +175,9 @@ export function gateDimensionExpression(gate) {
  */
 export function gateProblemText(problem, model) {
     if (!problem) return '';
+    if (problem.kind === GATE_PROBLEMS.ALTERNATE_STATE) {
+        return `Whole conversations need the default state, not the alternate state ${problem.state}.`;
+    }
     if (problem.kind === GATE_PROBLEMS.NO_MESSAGE_ID) {
         return 'Whole conversations need a Message ID dimension on a field.';
     }
