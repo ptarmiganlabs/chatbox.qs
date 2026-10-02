@@ -18,6 +18,18 @@ through the object's own selection mode — exactly as a filter pane works:
 The lanes deliberately do not change while you are choosing. If the board rearranged itself after the
 first header, there would be nothing left to pick for the second.
 
+## When Qlik Sense refuses the click
+
+A header whose field is locked cannot be selected. The click then says so in the corner of the
+object — for a thread field called `ThreadId`:
+
+_Qlik Sense did not select in ThreadId; the field may be locked_
+
+and the selection is cancelled, the confirm bar with it. Any header you had already picked goes grey
+too: when Qlik Sense refuses one value in a selection, it lets go of every value picked in that
+selection, so there would be nothing left to confirm. Where the thread dimension is an expression,
+the message names the dimension instead of a field.
+
 ## What it does not change
 
 - **The (no conversation) lane is not clickable.** It collects messages that have no thread value, so
@@ -35,3 +47,5 @@ first header, there would be nothing left to pick for the second.
 - Publish after `whole-conversations.md`, which is where the two features meet: with the mode on, a
   conversation picked here comes back whole.
 - Proposed page: the existing lanes page, as a new section rather than a page of its own.
+- The refusal section was added before 0.6.0 was released, so it gates against 0.6.0 with the rest.
+  If it is published against a later version, check whether 0.6.0 itself shipped with it.

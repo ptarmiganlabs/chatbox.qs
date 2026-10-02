@@ -29,7 +29,7 @@ import dataTargets from './data';
 import ext from './ext/index';
 import { normalize } from './chat/normalize';
 import { readConversationRows } from './qix/conversation-rows';
-import { ROLES, conversationModelOf, resolveRoles } from './qix/column-map';
+import { ROLES, conversationModelOf, fieldOfColumn, resolveRoles } from './qix/column-map';
 import { buildContextGate, gateDimensionExpression, gateProblemText } from './qix/context-gate';
 import {
     createWidened,
@@ -66,6 +66,7 @@ import {
     selectInFieldBesideObjectSelections,
     stateNameOf,
 } from './qix/field-selection';
+import { selectInObjectSession } from './qix/object-selection';
 import { render, destroy } from './ui/chat-renderer';
 import ChatLog from './ui/ChatLog';
 import { Empty, Failed, Loading, NotConfigured, emptyStateMessage } from './ui/states';
@@ -819,6 +820,10 @@ export default function supernova(galaxy) {
                 // mode, as a filter pane does: pick one header, then another, then confirm or
                 // cancel them together. A thread dimension that is an expression still selects —
                 // the hypercube addresses a column, not a field name.
+                const laneField =
+                    fieldOfColumn(byRole[ROLES.THREAD]) ||
+                    byRole[ROLES.THREAD]?.label ||
+                    'the conversation dimension';
                 const lanePicking =
                     canSelectLanes && board && byRole[ROLES.THREAD]
                         ? {
@@ -833,32 +838,29 @@ export default function supernova(galaxy) {
                               onPick: async (lane) => {
                                   const steps = buildLaneSelection({ lane, byRole });
                                   if (!steps.length || !selections) return;
-                                  try {
-                                      if (!selections.isActive())
-                                          await selections.begin(['/qHyperCubeDef']);
-                                      let applied = false;
-                                      for (const { dimIdx, values, toggle } of steps) {
-                                          const ok = await selections.select({
-                                              method: 'selectHyperCubeValues',
-                                              params: ['/qHyperCubeDef', dimIdx, values, toggle],
-                                          });
-                                          if (ok === false) break;
-                                          applied = true;
-                                      }
-                                      // Only a selection the engine took is drawn as picked. A
-                                      // locked field answers false, and a header green over a
-                                      // selection that never happened is worse than no feedback —
-                                      // the reader would confirm what they believe they chose.
-                                      if (!applied) return;
+                                  const result = await selectInObjectSession({
+                                      selections,
+                                      steps,
+                                      logger,
+                                  });
+                                  // Only a selection the engine took is drawn as picked: a header
+                                  // green over a selection that never happened is worse than no
+                                  // feedback, because the reader confirms what they believe they
+                                  // chose. A refusal has also ended the session, which takes every
+                                  // header picked in it off the board on the next render.
+                                  if (result.outcome === SELECTION_OUTCOMES.SELECTED) {
                                       setPickedLanes((picked) => {
                                           const next = new Set(picked ?? []);
                                           if (next.has(lane.key)) next.delete(lane.key);
                                           else next.add(lane.key);
                                           return next;
                                       });
-                                  } catch (err) {
-                                      logger.warn('lane selection failed:', err);
+                                      return;
                                   }
+                                  // And it says so, as a click on a keyword does: a header that
+                                  // stays grey under the pointer reads as a click that missed.
+                                  const message = selectionNotice(laneField, result);
+                                  if (message) setNotice({ ...message, id: ++noticeIdRef.current });
                               },
                           }
                         : null;
