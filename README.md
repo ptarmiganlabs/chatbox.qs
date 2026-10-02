@@ -211,6 +211,11 @@ Set under **Behaviour → Clicking a message**:
 A single value toggles, as a click in Sense always has. A set of values replaces that field's
 selection, because toggling a set flips each value on its own.
 
+**A click on the avatar does what a click on the message does** — it is the same message, pointed at
+from a finger's width to the left. The picture stays out of the keyboard's way: the bubble beside it
+already offers the action, and a second tab stop on every row is what the roving tabindex exists to
+prevent.
+
 Per-message metadata is configured under **Message metadata** in the property panel. Each expression
 must aggregate — `Only([Field])`, not a bare field reference. A leading `=`, which the expression editor
 adds, makes no difference.

@@ -430,7 +430,13 @@ export function ChatLog({
     const sizeShown = live && settings.showTextSize !== false;
     // While the conversation is widened, the bar says what is on screen rather than leaving the
     // reader to wonder why messages they did not select are there.
-    const contextCount = whole?.widened ? messages.filter((message) => message.context).length : 0;
+    // Counted once per set of messages, not once per render. The object renders again for every
+    // resize step, notice and keystroke, and Maximum messages allows fifty thousand of them; the
+    // board hands over its own subset, so this cannot be counted up in normalize.
+    const contextCount = useMemo(
+        () => (whole?.widened ? messages.filter((message) => message.context).length : 0),
+        [messages, whole?.widened]
+    );
     const wholeInfo =
         whole?.widened && messages.length > 0
             ? {

@@ -155,25 +155,32 @@ export function MessageRow({
 
     let avatar = null;
     if (showAvatar) {
+        // A reader who clicks the face is pointing at the message beside it, so the picture does
+        // what the bubble does. It stays out of the accessibility tree and takes no tab stop: the
+        // bubble offers the same action to a keyboard, and two ways in would be two stops per row.
+        const onAvatar = selectable || onShowDetails ? handleClick : undefined;
+        const avatarClass = `${styles.avatar}${onAvatar ? ` ${styles.selectable}` : ''}`;
         if (!showAuthor) {
             avatar = <div className={styles.avatarSpacer} aria-hidden="true" />;
         } else if (message.author?.avatarUrl) {
             avatar = (
                 <img
-                    className={styles.avatar}
+                    className={avatarClass}
                     src={message.author.avatarUrl}
                     alt=""
                     loading="lazy"
                     referrerPolicy="no-referrer"
                     style={{ '--cqs-accent': accent }}
+                    onClick={onAvatar}
                 />
             );
         } else {
             avatar = (
                 <div
-                    className={`${styles.avatar} ${styles.avatarFallback}`}
+                    className={`${avatarClass} ${styles.avatarFallback}`}
                     style={{ '--cqs-accent': accent }}
                     aria-hidden="true"
+                    onClick={onAvatar}
                 >
                     {initials(message.author?.label)}
                 </div>

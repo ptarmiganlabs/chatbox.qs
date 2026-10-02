@@ -558,3 +558,50 @@ describe('MessageRow — the copy button', () => {
         );
     });
 });
+
+describe('MessageRow — the avatar', () => {
+    it('does what the bubble does, because it is part of the same message', () => {
+        const onSelect = vi.fn();
+        const one = message({ author: participant({ avatarUrl: null }) });
+        const { container } = render(
+            <MessageRow message={one} showAuthor showAvatar selectable onSelect={onSelect} />
+        );
+        const avatar = container.querySelector('[class*="avatarFallback"]');
+        expect(avatar).not.toBeNull();
+        fireEvent.click(avatar);
+        expect(onSelect).toHaveBeenCalledWith(one);
+    });
+
+    it('takes no tab stop and stays out of the accessibility tree', () => {
+        // The bubble beside it offers the same action to a keyboard; two ways in would be two tab
+        // stops per row, which is what the roving tabindex exists to prevent.
+        const { container } = render(
+            <MessageRow
+                message={message()}
+                showAuthor
+                showAvatar
+                selectable
+                tabbable
+                onSelect={vi.fn()}
+            />
+        );
+        const avatar = container.querySelector('[class*="avatarFallback"]');
+        expect(avatar).toHaveAttribute('aria-hidden', 'true');
+        expect(avatar.getAttribute('tabindex')).toBeNull();
+    });
+
+    it('does nothing at all where a click on the message does nothing', () => {
+        const onSelect = vi.fn();
+        const { container } = render(
+            <MessageRow
+                message={message()}
+                showAuthor
+                showAvatar
+                selectable={false}
+                onSelect={onSelect}
+            />
+        );
+        fireEvent.click(container.querySelector('[class*="avatarFallback"]'));
+        expect(onSelect).not.toHaveBeenCalled();
+    });
+});
