@@ -101,17 +101,26 @@ export async function ensureState({ app, objectId, logger }) {
     if (statesMade.has(name)) return name;
     try {
         await app.addSessionAlternateState(name);
-        statesMade.add(name);
-        return name;
     } catch (error) {
-        // The name being taken is the outcome asked for, however the engine phrases it.
-        if (stateAlreadyExists(error)) {
-            statesMade.add(name);
-            return name;
+        // The name being taken is the outcome asked for, however the engine phrases it. The state
+        // is then as old as the mount that made it, and carries whatever it was born with.
+        if (!stateAlreadyExists(error)) {
+            logger?.warn?.('whole conversations: the engine refused a session state:', error);
+            return null;
         }
-        logger?.warn?.('whole conversations: the engine refused a session state:', error);
+    }
+    // A new session alternate state is born holding the selections the default state has at that
+    // moment — the whole point of the state is that it holds none. The object widens when the
+    // reader asks, which is after they have selected, so without this the widened cube is an exact
+    // copy of the strict one and the mode does nothing at all (GOTCHAS 54).
+    try {
+        await app.clearAll(false, name);
+    } catch (error) {
+        logger?.warn?.('whole conversations: the session state could not be emptied:', error);
         return null;
     }
+    statesMade.add(name);
+    return name;
 }
 
 /**

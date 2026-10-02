@@ -179,7 +179,7 @@ the reader usually meant is _which chats is Ada in_ — and for that, **Show who
 from a selection means naming it. Where one of them is an expression the button is disabled and says
 so, rather than widening some conversations and not others.
 
-Under the hood the object reads a **copy of its cube in a session alternate state** — the only way to
+Under the hood the object reads a **copy of its cube in an empty session alternate state** — the only way to
 re-read an expression as it is written, since the message body is your measure and nothing can be
 injected into it. The object's own cube is untouched and stays in the default state, so selections
 behave exactly as they always have. Nothing is written to the app: the state and the copy both live

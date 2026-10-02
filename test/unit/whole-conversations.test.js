@@ -55,7 +55,10 @@ describe('ensureState', () => {
     });
 
     it('creates the session state and answers its name', async () => {
-        const app = { addSessionAlternateState: vi.fn().mockResolvedValue({}) };
+        const app = {
+            addSessionAlternateState: vi.fn().mockResolvedValue({}),
+            clearAll: vi.fn().mockResolvedValue(),
+        };
         expect(await ensureState({ app, objectId: 'xy' })).toBe('cqs_xy');
         expect(app.addSessionAlternateState).toHaveBeenCalledWith('cqs_xy');
     });
@@ -63,6 +66,7 @@ describe('ensureState', () => {
     it('takes a state that is already there as success: it outlives one render', async () => {
         const app = {
             addSessionAlternateState: vi.fn().mockRejectedValue(new Error('already exists')),
+            clearAll: vi.fn().mockResolvedValue(),
         };
         expect(await ensureState({ app, objectId: 'xy' })).toBe('cqs_xy');
     });
@@ -236,7 +240,10 @@ describe('asking for the session state', () => {
     it('asks once per browsing context, however often a component remounts', async () => {
         // The state belongs to the engine session, which outlives the component: nebula remounts a
         // supernova for reasons of its own, and asking again is refused.
-        const app = { addSessionAlternateState: vi.fn().mockResolvedValue({}) };
+        const app = {
+            addSessionAlternateState: vi.fn().mockResolvedValue({}),
+            clearAll: vi.fn().mockResolvedValue(),
+        };
         expect(await ensureState({ app, objectId: 'xy' })).toBe('cqs_xy');
         expect(await ensureState({ app, objectId: 'xy' })).toBe('cqs_xy');
         expect(app.addSessionAlternateState).toHaveBeenCalledTimes(1);
@@ -249,7 +256,10 @@ describe('asking for the session state', () => {
             code: 8,
             parameter: 'Used state name',
         });
-        const app = { addSessionAlternateState: vi.fn().mockRejectedValue(taken) };
+        const app = {
+            addSessionAlternateState: vi.fn().mockRejectedValue(taken),
+            clearAll: vi.fn().mockResolvedValue(),
+        };
         expect(await ensureState({ app, objectId: 'xy' })).toBe('cqs_xy');
         // And it is remembered, so the refusal is not provoked a second time.
         expect(await ensureState({ app, objectId: 'xy' })).toBe('cqs_xy');
@@ -278,5 +288,59 @@ describe('stateAlreadyExists', () => {
         expect(stateAlreadyExists({ code: 3, message: 'Access denied' })).toBe(false);
         expect(stateAlreadyExists({ code: 8, parameter: 'Invalid handle' })).toBe(false);
         expect(stateAlreadyExists(null)).toBe(false);
+    });
+});
+
+describe('the state is empty when it is used', () => {
+    beforeEach(() => {
+        forgetStates();
+    });
+
+    it('empties the state it just made, because a new one is born holding the selections', async () => {
+        // Measured on Qlik Sense May 2026: AddSessionAlternateState copies the default state's
+        // selections as they stand. The object widens when the reader asks, which is after they
+        // have selected, so without this the widened cube is an exact copy of the strict one.
+        const app = {
+            addSessionAlternateState: vi.fn().mockResolvedValue({}),
+            clearAll: vi.fn().mockResolvedValue(),
+        };
+        expect(await ensureState({ app, objectId: 'xy' })).toBe('cqs_xy');
+        expect(app.clearAll).toHaveBeenCalledWith(false, 'cqs_xy');
+    });
+
+    it('empties a state another mount left behind, whose selections nobody knows', async () => {
+        const app = {
+            addSessionAlternateState: vi.fn().mockRejectedValue(
+                Object.assign(new Error('Invalid parameters'), {
+                    code: 8,
+                    parameter: 'Used state name',
+                })
+            ),
+            clearAll: vi.fn().mockResolvedValue(),
+        };
+        expect(await ensureState({ app, objectId: 'xy' })).toBe('cqs_xy');
+        expect(app.clearAll).toHaveBeenCalledWith(false, 'cqs_xy');
+    });
+
+    it('gives up rather than widening against a state it could not empty', async () => {
+        // A cube read in a state holding the reader's own selections is the strict conversation
+        // wearing the widened one's clothes: the summary would claim context that is not there.
+        const warn = vi.fn();
+        const app = {
+            addSessionAlternateState: vi.fn().mockResolvedValue({}),
+            clearAll: vi.fn().mockRejectedValue(new Error('no')),
+        };
+        expect(await ensureState({ app, objectId: 'xy', logger: { warn } })).toBeNull();
+        expect(warn).toHaveBeenCalled();
+    });
+
+    it('does not empty it again on a later ask in the same context', async () => {
+        const app = {
+            addSessionAlternateState: vi.fn().mockResolvedValue({}),
+            clearAll: vi.fn().mockResolvedValue(),
+        };
+        await ensureState({ app, objectId: 'xy' });
+        await ensureState({ app, objectId: 'xy' });
+        expect(app.clearAll).toHaveBeenCalledTimes(1);
     });
 });

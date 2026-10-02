@@ -687,3 +687,25 @@ the setting made it widen at once.
 holding the board still while a selection session is open — because the cube it is protecting is
 always already there. An optimisation is welcome back only where it cannot decide whether the feature
 happens.
+
+## 54. A new session alternate state is born holding the current selections
+
+`AddSessionAlternateState` copies the default state's selections as they stand at the moment it is
+created. The documentation mentions a `qSourceStateName` for copying from an existing state and says
+nothing about what happens without one; measured on Qlik Sense May 2026, without one it copies the
+default state.
+
+That is the opposite of what the widened cube needs, and it hid behind the order of two steps. The
+spike that designed this feature created the state **first** and selected afterwards, so the state
+was empty and everything measured correctly. A reader does it the other way round: they select, see
+too little, and then ask for whole conversations — and the state is born carrying their selection, so
+the widened cube is an exact copy of the strict one. The mode engaged, the cube was created, the
+summary changed its wording, and not one extra message appeared.
+
+**Rule:** the state is emptied with `ClearAll(false, stateName)` as soon as it exists, including a
+state an earlier mount left behind, whose selections nobody can know. That costs one undo step per
+state per page load — not per selection, which is what GOTCHAS 42 ruled out. Emptying it is not
+optional: a cube read in a state holding the reader's own selections is the strict conversation
+wearing the widened one's clothes, and the summary then claims context that is not there. Where the
+state cannot be emptied the object does not widen at all. _Guard:
+`test/unit/whole-conversations.test.js`._
