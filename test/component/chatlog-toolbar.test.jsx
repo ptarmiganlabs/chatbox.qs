@@ -170,6 +170,7 @@ describe('ChatLog with the conversation widened', () => {
     ];
     const whole = (over = {}) => ({
         on: true,
+        widened: true,
         disabled: false,
         reason: '',
         onToggle: vi.fn(),

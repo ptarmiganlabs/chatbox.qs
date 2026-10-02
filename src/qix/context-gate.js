@@ -22,7 +22,7 @@
  * a dimension narrowing would widen some conversations and not others, with nothing to see.
  */
 import { CONTEXT_GATE_CID, ROLES, fieldOfColumn } from './column-map';
-import { fieldRef } from './field-ref';
+import { fieldRef, normalizeFieldName } from './field-ref';
 import { roleLabel } from './role-labels';
 
 export { CONTEXT_GATE_CID };
@@ -35,6 +35,33 @@ export const GATE_PROBLEMS = Object.freeze({
 
 /** The roles whose selections stop narrowing: who spoke, and who they spoke to. */
 const PEOPLE_ROLES = Object.freeze([ROLES.AUTHOR, ROLES.RECIPIENT]);
+
+/**
+ * Tell whether any selection reaches this object at all.
+ *
+ * Widening frees some fields from the selection; with nothing selected there is nothing to free, the
+ * widened cube would hold exactly what the object's own does, and the gate would be an `Aggr` over
+ * every message in the app for no difference whatever. The state counts come with the layout, so
+ * asking costs nothing. In doubt it answers true: a widening that was not needed is slow, one that
+ * was needed and skipped is wrong.
+ *
+ * @param {object} [layout] - The object's live layout, which carries the current selection state.
+ * @returns {boolean} True when a selection excludes or picks out anything the object reads.
+ */
+export function selectionReaches(layout) {
+    const dims = layout?.qHyperCube?.qDimensionInfo;
+    if (!Array.isArray(dims) || dims.length === 0) return true;
+    return dims.some((info) => {
+        const counts = info?.qStateCounts;
+        if (!counts) return true;
+        return (
+            (counts.qSelected ?? 0) > 0 ||
+            (counts.qExcluded ?? 0) > 0 ||
+            (counts.qSelectedExcluded ?? 0) > 0 ||
+            (counts.qAlternative ?? 0) > 0
+        );
+    });
+}
 
 /**
  * Write a set expression that frees some fields from the default state's selection.
@@ -51,11 +78,14 @@ export function freedSet(fields) {
  * Build the gate expressions for a cube's resolved roles.
  *
  * @param {object} byRole - The resolved columns by role, from `resolveRoles`.
+ * @param {object} [keywords] - The highlight settings' field names.
+ * @param {string} [keywords.highlightField] - The field whose values are highlighted.
+ * @param {string} [keywords.categoryField] - The field that groups those values.
  * @returns {{passes: string, inSelection: string, freed: string[], messageIdField: string,
  *     threadField: string, problem: ?{kind: string, roles: string[]}}} The expressions, the fields
  *     freed, and what stands in the way; `problem` is null when nothing does.
  */
-export function buildContextGate(byRole) {
+export function buildContextGate(byRole, { highlightField = '', categoryField = '' } = {}) {
     const messageIdField = fieldOfColumn(byRole?.[ROLES.MESSAGE_ID]);
     const empty = {
         passes: '',
@@ -75,9 +105,16 @@ export function buildContextGate(byRole) {
         return { ...empty, problem: { kind: GATE_PROBLEMS.EXPRESSION_DIMENSION, roles: unusable } };
     }
 
+    // Who wrote, who they wrote to, and what the messages are highlighted by. A keyword or a
+    // category picks out which conversations are worth reading, not which lines of them: selecting
+    // the category "ops" means show me the chats where ops came up, not the four lines that said so.
     const freed = [
         ...new Set(
-            PEOPLE_ROLES.map((role) => fieldOfColumn(byRole?.[role])).filter((name) => name !== '')
+            [
+                ...PEOPLE_ROLES.map((role) => fieldOfColumn(byRole?.[role])),
+                normalizeFieldName(highlightField),
+                normalizeFieldName(categoryField),
+            ].filter((name) => name !== '')
         ),
     ];
     const id = fieldRef(messageIdField);

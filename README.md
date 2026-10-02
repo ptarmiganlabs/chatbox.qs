@@ -162,6 +162,9 @@ the reader usually meant is _which chats is Ada in_ — and for that, **Show who
 - A conversation is in scope when **any** of its messages survives the selection. Inside those
   conversations the selections on **Participant**, **From** and **To** stop narrowing, so the replies
   Ada answered and the answers she got come back with her own messages.
+- **The highlight field and the category field stop narrowing too.** A keyword picks out which
+  conversations are worth reading, not which lines of them: select the category _ops_ and you get the
+  chats where ops came up, whole, with the ops keywords marked — not the four lines that said so.
 - **Every other selection still narrows.** Pick a date as well and you see that day's messages of
   Ada's chats, not the whole history.
 - The messages that match the selection are drawn as they always are; the rest are dimmed, because
@@ -186,6 +189,13 @@ so it shows the strict conversation.
 
 A widened conversation holds more messages than a narrow one, so **Maximum messages** is reached
 sooner; the banner says when it was.
+
+**What it costs.** The widened cube is bounded by an expression over the message id, so the engine
+weighs every message in the app, not only the ones **Maximum messages** reads. On a 12,000-message
+app that is under a tenth of a second; it grows with the table, so on a very large one expect the
+first draw after a selection to take noticeably longer than the strict view. With **nothing**
+selected the object does not widen at all — there is nothing to free, so the widened cube would hold
+exactly what the strict one does — which is also the moment the conversation is at its largest.
 
 ## Clicking a message
 

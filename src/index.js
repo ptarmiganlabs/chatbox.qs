@@ -30,7 +30,12 @@ import ext from './ext/index';
 import { normalize } from './chat/normalize';
 import { readConversationRows } from './qix/conversation-rows';
 import { ROLES, conversationModelOf, resolveRoles } from './qix/column-map';
-import { buildContextGate, gateDimensionExpression, gateProblemText } from './qix/context-gate';
+import {
+    buildContextGate,
+    gateDimensionExpression,
+    gateProblemText,
+    selectionReaches,
+} from './qix/context-gate';
 import {
     createWidened,
     ensureState,
@@ -608,9 +613,17 @@ export default function supernova(galaxy) {
                     refreshWidened(wholeRef.current.object);
                 }
 
-                const gate = buildContextGate(byRole);
-                const wholeWanted =
+                const gate = buildContextGate(byRole, {
+                    highlightField: toolSettings.highlight.field,
+                    categoryField: toolSettings.category.field,
+                });
+                const wholeChosen =
                     (wholePicked ?? toolSettings.wholeConversations) && !isSnapshot(staleLayout);
+                // With nothing selected there is nothing to free: the widened cube would hold
+                // exactly what the object's own does, and its gate is an Aggr over every message
+                // in the app. That is the largest the cube ever is, so it is the one time the
+                // work is both heaviest and pointless.
+                const wholeWanted = wholeChosen && selectionReaches(liveLayout ?? staleLayout);
                 const signature = wholeWanted && !gate.problem ? gateDimensionExpression(gate) : '';
                 if (signature !== wholeRef.current.signature) {
                     wholeRef.current.signature = signature;
@@ -822,7 +835,8 @@ export default function supernova(galaxy) {
                 const wholeControl = isSnapshot(staleLayout)
                     ? null
                     : {
-                          on: wholeOn,
+                          on: wholeChosen,
+                          widened: wholeOn,
                           disabled: Boolean(gate.problem),
                           reason: gateProblemText(gate.problem, conversationModel),
                           /**

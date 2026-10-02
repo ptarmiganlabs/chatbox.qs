@@ -4,6 +4,7 @@ import {
     buildContextGate,
     freedSet,
     gateDimensionExpression,
+    selectionReaches,
 } from '../../src/qix/context-gate';
 import { ROLES } from '../../src/qix/column-map';
 
@@ -120,5 +121,65 @@ describe('gateDimensionExpression', () => {
     it('writes nothing for a gate that cannot be built', () => {
         expect(gateDimensionExpression(buildContextGate({}))).toBe('');
         expect(gateDimensionExpression(null)).toBe('');
+    });
+});
+
+describe('freeing the keyword and its category', () => {
+    const roles = {
+        [ROLES.MESSAGE_ID]: onField('MsgId', 0),
+        [ROLES.AUTHOR]: onField('Author', 1),
+        [ROLES.THREAD]: onField('ThreadId', 2),
+    };
+
+    it('frees the highlight field and the category field beside the people', () => {
+        // A keyword or a category picks out which conversations are worth reading, not which lines
+        // of them: selecting "ops" means show me the chats where ops came up.
+        const gate = buildContextGate(roles, {
+            highlightField: 'HlKeyword',
+            categoryField: 'HlKeywordCategory',
+        });
+        expect(gate.freed).toEqual(['Author', 'HlKeyword', 'HlKeywordCategory']);
+        expect(gate.passes).toBe('Count({$<[Author]=,[HlKeyword]=,[HlKeywordCategory]=>} [MsgId])');
+    });
+
+    it('takes a field name in brackets, as the panel stores a typed one', () => {
+        const gate = buildContextGate(roles, { highlightField: '[odd]]name]' });
+        expect(gate.freed).toEqual(['Author', 'odd]name']);
+        expect(gate.passes).toContain('[odd]]name]=');
+    });
+
+    it('frees nothing extra while no highlight field is set', () => {
+        expect(buildContextGate(roles, {}).freed).toEqual(['Author']);
+        expect(buildContextGate(roles).freed).toEqual(['Author']);
+    });
+
+    it('never frees one field twice, whatever it is used for', () => {
+        const gate = buildContextGate(roles, { highlightField: 'Author' });
+        expect(gate.freed).toEqual(['Author']);
+    });
+});
+
+describe('selectionReaches', () => {
+    const dims = (...counts) => ({
+        qHyperCube: { qDimensionInfo: counts.map((c) => ({ qStateCounts: c })) },
+    });
+
+    it('answers false when no selection touches the object', () => {
+        // Nothing to free, so the widened cube would hold exactly what the object's own does — and
+        // its gate is an Aggr over every message in the app.
+        expect(selectionReaches(dims({ qSelected: 0, qExcluded: 0, qOption: 12 }))).toBe(false);
+    });
+
+    it('answers true for a selection in the object, and for one outside it', () => {
+        expect(selectionReaches(dims({ qSelected: 1, qExcluded: 0 }))).toBe(true);
+        // An unrelated field selected: the object's own values are excluded by it.
+        expect(selectionReaches(dims({ qSelected: 0, qExcluded: 7 }))).toBe(true);
+        expect(selectionReaches(dims({ qSelected: 0, qAlternative: 2 }))).toBe(true);
+    });
+
+    it('answers true in doubt: being slow costs less than being wrong', () => {
+        expect(selectionReaches(null)).toBe(true);
+        expect(selectionReaches({ qHyperCube: { qDimensionInfo: [] } })).toBe(true);
+        expect(selectionReaches({ qHyperCube: { qDimensionInfo: [{}] } })).toBe(true);
     });
 });

@@ -128,8 +128,9 @@ function ReloadingLine({ reloading }) {
  *   null to leave it out.
  * @param {?object} [props.board] - Conversations side by side, from src/chat/lanes.js; the conversation's
  *   messages are then the board's, in its order. Null for one conversation.
- * @param {?object} [props.whole] - The whole-conversations toggle: `on`, `disabled`, `reason` and
- *     `onToggle()`; null in an export, where there is no engine to widen with.
+ * @param {?object} [props.whole] - The whole-conversations toggle: `on` (what the reader chose),
+ *     `widened` (whether a widened cube is really in use), `disabled`, `reason` and `onToggle()`;
+ *     null in an export, where there is no engine to widen with.
  * @param {?Function} [props.onCopyMessage] - Copies one message; null while the copy button is off.
  * @param {?object} [props.lanePicking] - How a lane header selects its conversation: `locked`,
  *     `hint` and `onPick(lane, toggle)`; null while headers do not select.
@@ -429,9 +430,9 @@ export function ChatLog({
     const sizeShown = live && settings.showTextSize !== false;
     // While the conversation is widened, the bar says what is on screen rather than leaving the
     // reader to wonder why messages they did not select are there.
-    const contextCount = whole?.on ? messages.filter((message) => message.context).length : 0;
+    const contextCount = whole?.widened ? messages.filter((message) => message.context).length : 0;
     const wholeInfo =
-        whole?.on && messages.length > 0
+        whole?.widened && messages.length > 0
             ? {
                   text: `${counted(messages.length, 'message', 'messages')}${
                       board

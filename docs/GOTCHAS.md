@@ -598,3 +598,17 @@ panel: that writes the properties, and the layout change re-ran the effect for i
 
 **Rule:** every `useState` value in `src/index.js` is a dependency of the render effect.
 _Guard: `test/guards/render-deps.test.js`, which reads the list out of the source._
+
+## 48. An `Aggr` set expression does not choose which groups are iterated
+
+The gate is an `Aggr` over every message id, which weighs the whole table however narrow the
+selection is. The obvious cure — `Aggr({1<[ThreadId] = P({$} [ThreadId])>} …, [MsgId])`, so only the
+message ids of the conversations in scope are walked — does not work: measured on Qlik Sense May 2026,
+the set changed what was counted inside and left the groups alone, so every message id was still
+iterated and the gate let them all through. 35 rows came back where 8 were right.
+
+**Rule:** the conversation test belongs inside the `If`, where it was. The cost is real and documented
+rather than optimised away: the object simply does not widen at all when nothing is selected, since
+there is nothing to free then and the widened cube would hold exactly what the strict one does. That
+is also the moment the cube is at its largest, so it is the one case where the work was both heaviest
+and pointless. _Guard: `test/unit/context-gate.test.js`._
