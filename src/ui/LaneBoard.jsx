@@ -59,7 +59,8 @@ export function laneCaption(board, meta = {}) {
  * @param {function(?number): ?object} [props.renderRuler] - Renders the overview ruler: a lane's, by lane
  *   number, with free scrolling; the one beside the rows, given null, with linked scrolling.
  * @param {?object} [props.picking] - How a lane header selects its conversation: `locked`, `tabbable`,
- *   `hint` and `onPick(lane, toggle)`; null while headers do not select.
+ *   `hint`, `picked` (the keys picked in the open selection session, or null) and
+ *   `onPick(lane, toggle)`; null while headers do not select.
  * @returns {object} The rendered lanes.
  */
 export function LaneBoard({
@@ -257,6 +258,7 @@ export function LaneBoard({
             <button
                 type="button"
                 className={styles.laneHeader}
+                aria-pressed={picking.picked ? picking.picked.has(lane.key) : undefined}
                 disabled={picking.locked}
                 tabIndex={picking.tabbable ? 0 : -1}
                 title={`${lane.label}\n${picking.hint}`}

@@ -575,3 +575,26 @@ state the object had been patched into rather than the one it belongs to.
 `useSelections` keeps working as it always has. A lane header selects through the object's selection
 mode like a filter pane — several picked, then confirmed together — rather than applying at once.
 _Guard: `test/unit/selection.test.js`, `test/component/chatlog-lane-controls.test.jsx`._
+
+## 46. A widened cube is not the object, so the modal state does not freeze it
+
+Nebula freezes the object's own layout while it is in the modal selection state, so a chart does not
+redraw from under the pointer as values are picked. The widened cube is a different object and is not
+frozen: picking one lane header took the other lanes off the board before a second could be picked,
+and the confirm tick had nothing left to confirm but the first.
+
+**Rule:** the board waits with the rest of the object. The widened cube's `changed` event is held
+while `selections.isActive()`, and the layout is read again once the selection is confirmed or
+cancelled. The headers picked so far are drawn as Sense draws a picked value, since a board that waits
+would otherwise show no sign of what has been chosen.
+
+## 47. State the object holds itself renders nothing unless the effect depends on it
+
+The object renders from one big effect, and nebula re-runs it only when something in its dependency
+list changes. State the object holds itself — the reader's whole-conversations choice, the window of
+conversations, which lane headers are picked — changes nothing the engine reports. Left out of that
+list, the toggle in the bar did nothing whatever, while the same setting worked from the property
+panel: that writes the properties, and the layout change re-ran the effect for its own reasons.
+
+**Rule:** every `useState` value in `src/index.js` is a dependency of the render effect.
+_Guard: `test/guards/render-deps.test.js`, which reads the list out of the source._

@@ -221,6 +221,10 @@ export default function supernova(galaxy) {
             // appears, changes or goes, which is what fetches the rows again.
             const [wholePicked, setWholePicked] = useState(null);
             const [widenedVersion, setWidenedVersion] = useState(0);
+            // The lane headers picked in the selection session that is still open. Sense shows
+            // a chart's picked values in green; a board that showed nothing would leave the
+            // reader counting clicks to know what they had chosen.
+            const [pickedLanes, setPickedLanes] = useState(null);
             const wholeRef = useRef({
                 signature: '',
                 stateName: null,
@@ -228,7 +232,27 @@ export default function supernova(galaxy) {
                 repaired: false,
                 object: null,
                 layout: null,
+                stalled: false,
             });
+
+            /**
+             * Read the widened cube's layout again and fetch the rows it now holds.
+             *
+             * @param {?object} object - The widened session object, or null.
+             * @returns {Promise<void>} Resolves once the version is bumped.
+             */
+            const refreshWidened = async (object) => {
+                if (!object || wholeRef.current.object !== object) {
+                    setWidenedVersion((version) => version + 1);
+                    return;
+                }
+                try {
+                    wholeRef.current.layout = await object.getLayout();
+                } catch {
+                    wholeRef.current.layout = null;
+                }
+                setWidenedVersion((version) => version + 1);
+            };
 
             // How far down the ranking the lanes shown start. The reader steps it; it is never
             // reset on a selection, because buildBoard clamps it to what there is, and a reader who
@@ -575,6 +599,15 @@ export default function supernova(galaxy) {
                     repairStoredGate({ model, logger });
                 }
 
+                // The selection session is over: the headers are no longer anybody's pick.
+                if (pickedLanes !== null && !selections?.isActive?.()) setPickedLanes(null);
+
+                // A selection confirmed or cancelled while the board was waiting: catch up now.
+                if (wholeRef.current.stalled && !selections?.isActive?.()) {
+                    wholeRef.current.stalled = false;
+                    refreshWidened(wholeRef.current.object);
+                }
+
                 const gate = buildContextGate(byRole);
                 const wholeWanted =
                     (wholePicked ?? toolSettings.wholeConversations) && !isSnapshot(staleLayout);
@@ -609,20 +642,21 @@ export default function supernova(galaxy) {
                         // Its own changes matter: a selection changes which conversations are in
                         // scope without changing the object's own cube at all.
                         object.on('changed', async () => {
-                            try {
-                                wholeRef.current.layout = await object.getLayout();
-                            } catch {
-                                wholeRef.current.layout = null;
+                            // Not while the reader is still choosing. Nebula freezes the object's
+                            // own layout in the modal state so a chart does not redraw from under
+                            // the pointer; the widened cube is a different object and is not
+                            // frozen, so a first lane header picked would take the others off the
+                            // board before a second could be picked. The board waits, as the rest
+                            // of the object does, and catches up when the selection is confirmed
+                            // or cancelled.
+                            if (selections?.isActive?.()) {
+                                wholeRef.current.stalled = true;
+                                return;
                             }
-                            setWidenedVersion((version) => version + 1);
+                            await refreshWidened(object);
                         });
-                        try {
-                            wholeRef.current.layout = await object.getLayout();
-                        } catch {
-                            wholeRef.current.layout = null;
-                        }
                         wholeRef.current.object = object;
-                        setWidenedVersion((version) => version + 1);
+                        await refreshWidened(object);
                     })();
                 }
                 const wholeOn = widened !== null && signature !== '';
@@ -724,6 +758,7 @@ export default function supernova(galaxy) {
                         ? {
                               locked: false,
                               hint: 'Selects this conversation. Pick several, then confirm.',
+                              picked: pickedLanes,
                               /**
                                * Select a lane's conversation beside any already picked.
                                *
@@ -743,6 +778,12 @@ export default function supernova(galaxy) {
                                           });
                                           if (ok === false) break;
                                       }
+                                      setPickedLanes((picked) => {
+                                          const next = new Set(picked ?? []);
+                                          if (next.has(lane.key)) next.delete(lane.key);
+                                          else next.add(lane.key);
+                                          return next;
+                                      });
                                   } catch (err) {
                                       logger.warn('lane selection failed:', err);
                                   }
@@ -861,6 +902,13 @@ export default function supernova(galaxy) {
                 highlightResult,
                 companionVersion,
                 notice,
+                // State the object holds itself. Without these the render runs only when the engine
+                // says something changed, and a button that changes nothing else — the whole
+                // conversations toggle, the lane stepper — does nothing at all.
+                wholePicked,
+                widenedVersion,
+                pickedLanes,
+                laneOffset,
             ]);
 
             // Tear the root down when the object is removed from the sheet.

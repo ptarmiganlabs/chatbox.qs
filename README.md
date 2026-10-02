@@ -130,8 +130,9 @@ many messages it has.
 - Messages without a thread share a **(no conversation)** lane.
 - **A click on a lane's header selects that conversation**, through the object's own selection mode:
   pick one header, then another, then confirm or cancel them together, exactly as a filter pane works.
-  A second click on a header you have picked takes it back. The **(no conversation)** lane has no
-  value behind it and is not clickable.
+  A header you have picked is drawn in green, and a second click on it takes it back. The lanes stay
+  as they were until you confirm, so there is always something left to pick. The **(no conversation)**
+  lane has no value behind it and is not clickable.
 - **When there are more conversations than fit**, the bar steps through them: **◂ 1–4 of 12 ▸**, a
   windowful at a time, down the same ranking. A selection that leaves fewer conversations pulls the
   window back on its own; otherwise it stays where you put it.

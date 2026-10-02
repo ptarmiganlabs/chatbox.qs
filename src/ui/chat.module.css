@@ -1048,6 +1048,20 @@ button.laneHeader:disabled {
     cursor: default;
 }
 
+/* A header picked in a selection session that is still open, drawn as Sense draws a picked value. */
+button.laneHeader[aria-pressed='true'] {
+    background: var(--cqs-selected, #009845);
+    color: #ffffff;
+}
+
+button.laneHeader[aria-pressed='true']:hover:not(:disabled) {
+    background: var(--cqs-selected, #009845);
+}
+
+button.laneHeader[aria-pressed='true'] .laneCount {
+    color: inherit;
+}
+
 button.laneHeader:focus-visible {
     outline: 2px solid var(--cqs-focus, #3f8ab3);
     outline-offset: -2px;
