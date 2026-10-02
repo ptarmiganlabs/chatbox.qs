@@ -651,10 +651,9 @@ export default function supernova(galaxy) {
                 // it the first lane header picked was itself the selection that brought the cube
                 // into being, and whether the mode engaged at all came to depend on reading the
                 // selection state out of a layout correctly. Both are worse than the 80 ms.
-                const wholeWanted =
+                const wholeChosen =
                     (wholePicked ?? toolSettings.wholeConversations) && !isSnapshot(staleLayout);
-                const wholeChosen = wholeWanted;
-                const signature = wholeWanted && !gate.problem ? gateDimensionExpression(gate) : '';
+                const signature = wholeChosen && !gate.problem ? gateDimensionExpression(gate) : '';
                 if (signature !== wholeRef.current.signature) {
                     wholeRef.current.signature = signature;
                     // Fire and forget: the widened cube arriving bumps a version, which fetches.
@@ -676,6 +675,10 @@ export default function supernova(galaxy) {
                         });
                         if (!object || wholeRef.current.signature !== signature) {
                             await releaseWidened({ app, object, logger });
+                            // The state this object remembered may be one the engine no longer has;
+                            // `createWidened` has already forgotten it where that is why it failed,
+                            // and the ask is cheap where it is not.
+                            if (!object) wholeRef.current.stateName = null;
                             // A mode that was asked for and did not happen says so. It used to
                             // leave the toggle pressed over a conversation that had not widened,
                             // which reads as a button that does nothing.

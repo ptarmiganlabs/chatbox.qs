@@ -666,9 +666,11 @@ guessing wrong in the other direction is silent too: no exception, just a cube r
 made.
 
 **Rule:** ask once per browsing context, remembered outside any component, and read the refusal by
-code 8 together with a parameter naming the state. A mode that was asked for and did not happen says
-so in a notice, rather than leaving the toggle pressed over a conversation that never widened.
-_Guard: `test/unit/whole-conversations.test.js`._
+code 8 together with a parameter naming the state. Made and emptied are remembered **apart**: a state
+that was created and could not be emptied must not be created again — that provokes this very
+refusal — but it must be emptied again. A mode that was asked for and did not happen says so in a
+notice, rather than leaving the toggle pressed over a conversation that never widened. What to do
+when the memo is wrong is GOTCHAS 55. _Guard: `test/unit/whole-conversations.test.js`._
 
 ## 53. An optimisation that breaks an invariant is not an optimisation
 
@@ -702,10 +704,30 @@ too little, and then ask for whole conversations — and the state is born carry
 the widened cube is an exact copy of the strict one. The mode engaged, the cube was created, the
 summary changed its wording, and not one extra message appeared.
 
-**Rule:** the state is emptied with `ClearAll(false, stateName)` as soon as it exists, including a
-state an earlier mount left behind, whose selections nobody can know. That costs one undo step per
-state per page load — not per selection, which is what GOTCHAS 42 ruled out. Emptying it is not
-optional: a cube read in a state holding the reader's own selections is the strict conversation
-wearing the widened one's clothes, and the summary then claims context that is not there. Where the
-state cannot be emptied the object does not widen at all. _Guard:
+**Rule:** the state is emptied with `ClearAll(true, stateName)` as soon as it exists, including a
+state an earlier mount left behind, whose selections nobody can know. **Locked selections included:**
+`qLockedAlso` false is the obvious reading — do not touch what the reader locked — and it is the wrong
+one here. Nothing is ever selected in this state, so no lock inside it can be the reader's; one
+inherited from the default state would quietly keep its field narrowing, which is this gotcha's own
+symptom with no way to see it. That costs one undo step per state per page load — not per selection,
+which is what GOTCHAS 42 ruled out. Emptying it is not optional: a cube read in a state holding the
+reader's own selections is the strict conversation wearing the widened one's clothes, and the summary
+then claims context that is not there. Where the state cannot be emptied the object does not widen at
+all. _Guard: `test/unit/whole-conversations.test.js`._
+
+## 55. A memo of what the engine holds outlives the engine
+
+Asking for the session alternate state once per browsing context (GOTCHAS 52) means remembering it
+outside any component — and that memo then outlives the thing it describes. Session states belong to
+the **engine session**, and a session that is replaced takes them with it: a dropped websocket after
+a laptop sleeps, resumed into a new session without the page reloading. The memo still names the
+state, so nothing is created, and a cube whose `qStateName` names a state nobody made is accepted
+without error (GOTCHAS 52 again) — so whole conversations is dead for the rest of the page's life,
+with nothing failing anywhere a reader could see it.
+
+**Rule:** the memo is forgotten wherever the engine contradicts it. A refusal of
+`CreateSessionObject` is the signal — not a refusal of our own, which is a decision taken locally
+with the state still there and still empty — and the object's own remembered state name is dropped
+with it, so the next ask makes and empties the state again. One extra pair of calls on a path that
+has already failed is the whole price of being able to recover at all. _Guard:
 `test/unit/whole-conversations.test.js`._

@@ -39,6 +39,16 @@ export const WIDENED_TYPE = 'chatbox-widened';
 const statesMade = new Set();
 
 /**
+ * The session states already emptied, which are the ones ready to be read in.
+ *
+ * Made and emptied are remembered apart because they fail apart. A state that was created and then
+ * could not be emptied must not be created again — that provokes exactly the refusal, and the error
+ * dialog, that {@link statesMade} exists to avoid — but it must be emptied again, because a state
+ * still holding the reader's selections is worse than no state at all (GOTCHAS 54).
+ */
+const statesEmptied = new Set();
+
+/**
  * Tell whether a refusal means the state is already there.
  *
  * The engine does not say so in words a caller can rely on: there is no dedicated error code, the
@@ -98,29 +108,52 @@ export function gateDimension(gate) {
  */
 export async function ensureState({ app, objectId, logger }) {
     const name = stateNameFor(objectId);
-    if (statesMade.has(name)) return name;
-    try {
-        await app.addSessionAlternateState(name);
-    } catch (error) {
-        // The name being taken is the outcome asked for, however the engine phrases it. The state
-        // is then as old as the mount that made it, and carries whatever it was born with.
-        if (!stateAlreadyExists(error)) {
-            logger?.warn?.('whole conversations: the engine refused a session state:', error);
-            return null;
+    if (statesEmptied.has(name)) return name;
+    if (!statesMade.has(name)) {
+        try {
+            await app.addSessionAlternateState(name);
+        } catch (error) {
+            // The name being taken is the outcome asked for, however the engine phrases it. The
+            // state is then as old as the mount that made it, and carries whatever it was born with.
+            if (!stateAlreadyExists(error)) {
+                logger?.warn?.('whole conversations: the engine refused a session state:', error);
+                return null;
+            }
         }
+        // Remembered the moment the engine has it, before the emptying that may still fail: the
+        // asking is what must not be repeated.
+        statesMade.add(name);
     }
     // A new session alternate state is born holding the selections the default state has at that
     // moment — the whole point of the state is that it holds none. The object widens when the
     // reader asks, which is after they have selected, so without this the widened cube is an exact
     // copy of the strict one and the mode does nothing at all (GOTCHAS 54).
+    //
+    // Locked selections included: nothing is ever selected in this state, so no lock in it can be
+    // the reader's, and one left behind would quietly keep its field narrowing.
     try {
-        await app.clearAll(false, name);
+        await app.clearAll(true, name);
     } catch (error) {
         logger?.warn?.('whole conversations: the session state could not be emptied:', error);
         return null;
     }
-    statesMade.add(name);
+    statesEmptied.add(name);
     return name;
+}
+
+/**
+ * Forget a state, so the next ask makes it again.
+ *
+ * For a state the engine no longer has: a session that was replaced took its session states with
+ * it, and the memo would otherwise name one that is not there for the rest of the page's life.
+ *
+ * @param {?string} name - The state's name.
+ * @returns {void}
+ */
+function forgetState(name) {
+    if (!name) return;
+    statesMade.delete(name);
+    statesEmptied.delete(name);
 }
 
 /**
@@ -130,6 +163,7 @@ export async function ensureState({ app, objectId, logger }) {
  */
 export function forgetStates() {
     statesMade.clear();
+    statesEmptied.clear();
 }
 
 /**
@@ -184,9 +218,15 @@ export async function createWidened({ app, model, stateName, gate, logger }) {
         // copy made from the stored cube would show the messages in the message id's order.
         const props = await model.getEffectiveProperties();
         const definition = widenedDefinition({ cube: props?.qHyperCubeDef, stateName, gate });
+        // A decision of our own, not a refusal: the state is still there and still empty.
         if (!definition) return null;
         return await app.createSessionObject(definition);
     } catch (error) {
+        // The engine refused, so what it holds is no longer what the memo says it holds — the
+        // likeliest reason being a session that was replaced, taking its session states with it.
+        // Asked for again, the state is made and emptied again; that costs one extra pair of calls
+        // on a path that has already failed, and is the only way back from a dead session.
+        forgetState(stateName);
         logger?.warn?.('whole conversations: the widened cube could not be created:', error);
         return null;
     }

@@ -287,7 +287,7 @@ describe('the state is empty when it is used', () => {
             clearAll: vi.fn().mockResolvedValue(),
         };
         expect(await ensureState({ app, objectId: 'xy' })).toBe('cqs_xy');
-        expect(app.clearAll).toHaveBeenCalledWith(false, 'cqs_xy');
+        expect(app.clearAll).toHaveBeenCalledWith(true, 'cqs_xy');
     });
 
     it('empties a state another mount left behind, whose selections nobody knows', async () => {
@@ -301,7 +301,7 @@ describe('the state is empty when it is used', () => {
             clearAll: vi.fn().mockResolvedValue(),
         };
         expect(await ensureState({ app, objectId: 'xy' })).toBe('cqs_xy');
-        expect(app.clearAll).toHaveBeenCalledWith(false, 'cqs_xy');
+        expect(app.clearAll).toHaveBeenCalledWith(true, 'cqs_xy');
     });
 
     it('gives up rather than widening against a state it could not empty', async () => {
@@ -323,6 +323,78 @@ describe('the state is empty when it is used', () => {
         };
         await ensureState({ app, objectId: 'xy' });
         await ensureState({ app, objectId: 'xy' });
+        expect(app.clearAll).toHaveBeenCalledTimes(1);
+    });
+
+    it('empties again what it could not empty, without asking for the state twice', async () => {
+        // Made and emptied fail apart. Asking again for a state the engine already has provokes
+        // the refusal — and Qlik Sense's own error dialog — that remembering the ask exists to
+        // avoid; leaving it unemptied makes the strict conversation wear the widened one's clothes.
+        const app = {
+            addSessionAlternateState: vi.fn().mockResolvedValue({}),
+            clearAll: vi.fn().mockRejectedValueOnce(new Error('no')).mockResolvedValue(),
+        };
+        expect(await ensureState({ app, objectId: 'xy', logger: { warn: vi.fn() } })).toBeNull();
+        expect(await ensureState({ app, objectId: 'xy' })).toBe('cqs_xy');
+        expect(app.addSessionAlternateState).toHaveBeenCalledTimes(1);
+        expect(app.clearAll).toHaveBeenCalledTimes(2);
+    });
+});
+
+describe('a state the engine no longer has', () => {
+    beforeEach(() => {
+        forgetStates();
+    });
+
+    it('is made again after the engine refuses the cube, so a replaced session recovers', async () => {
+        // Session alternate states die with the session. A memo naming one the engine does not
+        // have would leave the mode dead for the rest of the page's life, and a cube whose
+        // qStateName names a state nobody made is accepted without complaint (GOTCHAS 52).
+        const app = {
+            addSessionAlternateState: vi.fn().mockResolvedValue({}),
+            clearAll: vi.fn().mockResolvedValue(),
+            createSessionObject: vi.fn().mockRejectedValue(new Error('no such state')),
+        };
+        const model = {
+            getEffectiveProperties: vi
+                .fn()
+                .mockResolvedValue({ qHyperCubeDef: { qStateName: '' } }),
+        };
+        const stateName = await ensureState({ app, objectId: 'xy' });
+        expect(
+            await createWidened({
+                app,
+                model,
+                stateName,
+                gate: gateOf(),
+                logger: { warn: vi.fn() },
+            })
+        ).toBeNull();
+
+        await ensureState({ app, objectId: 'xy' });
+        expect(app.addSessionAlternateState).toHaveBeenCalledTimes(2);
+        expect(app.clearAll).toHaveBeenCalledTimes(2);
+    });
+
+    it('is left alone when the cube was refused by us rather than by the engine', async () => {
+        // An object already reading in an alternate state is a decision of our own: the session
+        // state is still there and still empty, and making it again would cost an undo step.
+        const app = {
+            addSessionAlternateState: vi.fn().mockResolvedValue({}),
+            clearAll: vi.fn().mockResolvedValue(),
+            createSessionObject: vi.fn(),
+        };
+        const model = {
+            getEffectiveProperties: vi
+                .fn()
+                .mockResolvedValue({ qHyperCubeDef: { qStateName: 'Comparison' } }),
+        };
+        const stateName = await ensureState({ app, objectId: 'xy' });
+        expect(await createWidened({ app, model, stateName, gate: gateOf() })).toBeNull();
+        expect(app.createSessionObject).not.toHaveBeenCalled();
+
+        await ensureState({ app, objectId: 'xy' });
+        expect(app.addSessionAlternateState).toHaveBeenCalledTimes(1);
         expect(app.clearAll).toHaveBeenCalledTimes(1);
     });
 });

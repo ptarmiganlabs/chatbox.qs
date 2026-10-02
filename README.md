@@ -193,9 +193,8 @@ sooner; the banner says when it was.
 **What it costs.** The widened cube is bounded by an expression over the message id, so the engine
 weighs every message in the app, not only the ones **Maximum messages** reads. On a 12,000-message
 app that is under a tenth of a second; it grows with the table, so on a very large one expect the
-first draw after a selection to take noticeably longer than the strict view. With **nothing**
-selected the object does not widen at all — there is nothing to free, so the widened cube would hold
-exactly what the strict one does — which is also the moment the conversation is at its largest.
+first draw after a selection to take noticeably longer than the strict view. The cost is the same
+whether or not anything is selected: the mode being on is what builds the widened cube.
 
 ## Clicking a message
 

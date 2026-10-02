@@ -132,8 +132,8 @@ function ReloadingLine({ reloading }) {
  *     `widened` (whether a widened cube is really in use), `disabled`, `reason` and `onToggle()`;
  *     null in an export, where there is no engine to widen with.
  * @param {?Function} [props.onCopyMessage] - Copies one message; null while the copy button is off.
- * @param {?object} [props.lanePicking] - How a lane header selects its conversation: `locked`,
- *     `hint` and `onPick(lane, toggle)`; null while headers do not select.
+ * @param {?object} [props.lanePicking] - How a lane header selects its conversation: `hint`,
+ *     `picked` and `onPick(lane)`; null while headers do not select.
  * @param {?object} [props.laneSteps] - Stepping the window of conversations: `first`, `shown`,
  *     `total` and `onStep(direction)`; null where every conversation is already shown.
  * @param {?string} [props.laneNotice] - Why conversations cannot be shown side by side, as a banner.

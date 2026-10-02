@@ -58,7 +58,7 @@ export function laneCaption(board, meta = {}) {
  *   lane draws, as it changes.
  * @param {function(?number): ?object} [props.renderRuler] - Renders the overview ruler: a lane's, by lane
  *   number, with free scrolling; the one beside the rows, given null, with linked scrolling.
- * @param {?object} [props.picking] - How a lane header selects its conversation: `locked`, `tabbable`,
+ * @param {?object} [props.picking] - How a lane header selects its conversation: `tabbable`,
  *   `hint`, `picked` (the keys picked in the open selection session, or null) and `onPick(lane)`;
  *   null while headers do not select.
  * @returns {object} The rendered lanes.

@@ -107,6 +107,8 @@ export function MessageRow({
         own ? styles.bubbleOwn : '',
         message.merged ? styles.bubbleMerged : '',
         selectable || onShowDetails ? styles.selectable : '',
+        // A gutter for the copy button, so it never covers the first line of a short message.
+        onCopy ? styles.bubbleCopyRoom : '',
         expanded ? styles.bubbleOpen : '',
         focused ? styles.bubbleFocused : '',
         // 'X' excluded and 'A' alternative are both "not currently possible".

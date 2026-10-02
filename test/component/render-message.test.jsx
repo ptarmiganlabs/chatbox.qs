@@ -557,6 +557,22 @@ describe('MessageRow — the copy button', () => {
             '0'
         );
     });
+
+    it('is given room in the bubble, so it never covers the message it copies', () => {
+        // It sits in the bubble's own upper corner, over the text's column rather than over the
+        // padding, and a two-word message is narrower than the button. The gutter is held open
+        // whether the button is drawn or not: reflowing the text under the pointer is worse again.
+        const { container, rerender } = render(
+            <MessageRow message={message({ body: 'ok' })} index={0} showAuthor onCopy={vi.fn()} />
+        );
+        const bubble = container.querySelector('[data-message-index]');
+        expect(bubble.className).toMatch(/bubbleCopyRoom/);
+
+        rerender(<MessageRow message={message({ body: 'ok' })} index={0} showAuthor />);
+        expect(container.querySelector('[data-message-index]').className).not.toMatch(
+            /bubbleCopyRoom/
+        );
+    });
 });
 
 describe('MessageRow — the avatar', () => {

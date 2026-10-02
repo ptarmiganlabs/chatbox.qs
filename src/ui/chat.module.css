@@ -280,10 +280,12 @@
     max-width: 78%;
 }
 
-/* Copy one message, in the bubble's own upper corner. It takes the bubble's background so it never
-   sits on top of a glyph, and is drawn only while the pointer or the keyboard is on this bubble: a
-   button on every message at once is a wall of them. A drag that selects the message text still
-   selects it (GOTCHAS 24), because the button appears over the padding rather than in the text. */
+/* Copy one message, in the bubble's own upper corner. It is drawn only while the pointer or the
+   keyboard is on this bubble: a button on every message at once is a wall of them. The bubble keeps
+   a gutter for it whether it is drawn or not (.bubbleCopyRoom), so the text is never underneath it
+   and nothing reflows under the pointer; it takes the bubble's background all the same, since a
+   bubble narrower than its own gutter has nowhere else to put it. A drag that selects the message
+   text still selects it (GOTCHAS 24): the gutter is not where the text is. */
 .copyMessage {
     position: absolute;
     top: 2px;
@@ -343,6 +345,13 @@
        author-controlled and we cannot guarantee contrast against it. */
     border-inline-start: 3px solid var(--cqs-accent, transparent);
     overflow-wrap: anywhere;
+}
+
+/* Room for the copy button, held open whenever there is one to draw. The button is an icon of
+   1.1em plus its own padding, so the gutter is wider than any density's own padding-inline-end at
+   any text size: it replaces that padding rather than being compared with it. */
+.bubbleCopyRoom {
+    padding-inline-end: calc(1.1em + 8px);
 }
 
 .bubbleOwn {
