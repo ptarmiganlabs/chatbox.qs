@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.6.1](https://github.com/ptarmiganlabs/chatbox.qs/compare/chatbox-qs-v0.6.0...chatbox-qs-v0.6.1) (2026-10-03)
+
+
+### Miscellaneous
+
+* **deps:** update npm dependencies, vitest to 5 ([000f269](https://github.com/ptarmiganlabs/chatbox.qs/commit/000f269b8596ff78677c620c88112626a1d7c6cd))
+* **deps:** update setup-uv to 10.2.0 and codeql-action to 4.38.2 ([035f689](https://github.com/ptarmiganlabs/chatbox.qs/commit/035f68940b6749a6fd0f99746773c44b080ba32f))
+* tag a release when its draft is made, not when it is published ([b6ef68e](https://github.com/ptarmiganlabs/chatbox.qs/commit/b6ef68ec6c698e01db17eee7cb078f574e3d2d9a))
+
 ## [0.6.0](https://github.com/ptarmiganlabs/chatbox.qs/compare/chatbox-qs-v0.5.1...chatbox-qs-v0.6.0) (2026-10-02)
 
 
