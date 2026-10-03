@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.2](https://github.com/ptarmiganlabs/chatbox.qs/compare/chatbox-qs-v0.6.1...chatbox-qs-v0.6.2) (2026-10-03)
+
+
+### Documentation
+
+* say that Qlik Cloud is untested ([22b613c](https://github.com/ptarmiganlabs/chatbox.qs/commit/22b613cda45388cabca99df779b6e57cbab7d807))
+
 ## [0.6.1](https://github.com/ptarmiganlabs/chatbox.qs/compare/chatbox-qs-v0.6.0...chatbox-qs-v0.6.1) (2026-10-03)
 
 
