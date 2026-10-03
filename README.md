@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/logo/chatbox-qs-logo-256.png" alt="Chatbox.qs" width="140">
+</p>
+
 # Chatbox.qs
 
 Render chat-style conversations from the Qlik Sense data model — message bubbles for two parties

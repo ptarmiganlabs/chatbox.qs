@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="140" height="140" viewBox="0 0 140 140" role="img" aria-labelledby="mark-title">
+  <title id="mark-title">Chatbox.qs</title>
+  <defs>
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#FDF1F6"/>
+      <stop offset="100%" stop-color="#F6D5E3"/>
+    </linearGradient>
+    <linearGradient id="iconGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#E5477C"/>
+      <stop offset="100%" stop-color="#A61B52"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="4" y="4" width="132" height="132" rx="16" ry="16" fill="url(#bgGrad)"/>
+
+  <!-- Same glyph as the logo, scaled 1.15x about its own centre and re-centred
+       in the card: with no wordmark under it there is room, and a mark that
+       kept the logo's proportions would sit oddly high. -->
+  <g transform="translate(70 70) scale(1.15) translate(-70 -57.5)">
+    <path d="M40 18 H100 A14 14 0 0 1 114 32 V52 A14 14 0 0 1 100 66 H48 L26 80 V32
+             A14 14 0 0 1 40 18 Z"
+          fill="url(#iconGrad)"/>
+    <rect x="40" y="32" width="58" height="6" rx="3" fill="#ffffff" opacity="0.95"/>
+    <rect x="40" y="46" width="40" height="6" rx="3" fill="#ffffff" opacity="0.68"/>
+    <circle cx="56" cy="88" r="9" fill="#4477AA" stroke="#FDF1F6" stroke-width="2.17"/>
+    <circle cx="70" cy="88" r="9" fill="#CCBB44" stroke="#FDF1F6" stroke-width="2.17"/>
+    <circle cx="84" cy="88" r="9" fill="#228833" stroke="#FDF1F6" stroke-width="2.17"/>
+  </g>
+</svg>
