@@ -3,6 +3,7 @@
     "bump-minor-pre-major": true,
     "prerelease": false,
     "draft": true,
+    "force-tag-creation": true,
     "release-search-depth": 10,
     "commit-search-depth": 200,
     "changelog-sections": [
