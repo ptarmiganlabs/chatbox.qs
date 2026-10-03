@@ -474,7 +474,11 @@ reads — a draft does not excuse leaving either of them stale.
 
 ## Requirements
 
-- Qlik Sense Enterprise on Windows (primary target) or Qlik Cloud
+- Qlik Sense Enterprise on Windows. This is where Chatbox.qs is built and tested.
+- **Qlik Cloud is untested.** The extension imports there the same way, but it has never been run on
+  a Cloud tenant, where the content security policy, media paths and property panel all differ.
+  Until [#13](https://github.com/ptarmiganlabs/chatbox.qs/issues/13) is done, treat Cloud as
+  unsupported.
 - Node 24.15.0+ to build
 
 ## Licence

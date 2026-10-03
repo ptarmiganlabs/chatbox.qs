@@ -14,8 +14,10 @@ INSTALLING
 Qlik Sense Enterprise on Windows
   QMC -> Extensions -> Import, and select chatbox-qs.zip.
 
-Qlik Cloud
+Qlik Cloud -- untested
   Management console -> Extensions -> Add, and select chatbox-qs.zip.
+  Chatbox.qs is built and tested on Qlik Sense Enterprise on Windows. It has
+  never been run on a Cloud tenant, so treat Cloud as unsupported for now.
 
 Do NOT unzip chatbox-qs.zip first. Sense expects the archive.
 
