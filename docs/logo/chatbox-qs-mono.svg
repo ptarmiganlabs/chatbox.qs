@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-labelledby="t">
+  <title id="t">Chatbox.qs</title>
+  <!-- One colour, no gradients. Inherits currentColor where that means
+       something and falls back to black on its own: Safari pinned tab, print,
+       stamps. The participants are knocked out of the bubble rather than drawn
+       on it, and sit further apart than elsewhere — with no colour to separate
+       them, touching holes would merge into one lozenge. -->
+  <path fill="currentColor" fill-rule="evenodd"
+        d="M128 120 H384 A52 52 0 0 1 436 172 V300 A52 52 0 0 1 384 352 H160 L76 404 V172
+           A52 52 0 0 1 128 120 Z
+           M208 236 A40 40 0 1 0 128 236 A40 40 0 1 0 208 236 Z
+           M296 236 A40 40 0 1 0 216 236 A40 40 0 1 0 296 236 Z
+           M384 236 A40 40 0 1 0 304 236 A40 40 0 1 0 384 236 Z"/>
+</svg>

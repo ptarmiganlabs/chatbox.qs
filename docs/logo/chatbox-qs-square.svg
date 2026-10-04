@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1200" viewBox="0 0 1200 1200" role="img" aria-labelledby="t">
+  <title id="t">Chatbox.qs — render chat-style conversations from the Qlik Sense data model</title>
+  <defs>
+    <!-- The card needs a ground to sit on, or it dissolves into the post. -->
+    <linearGradient id="pageGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="100%" stop-color="#FBE9F0"/>
+    </linearGradient>
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#FDF1F6"/>
+      <stop offset="100%" stop-color="#F6D5E3"/>
+    </linearGradient>
+    <linearGradient id="iconGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#E5477C"/>
+      <stop offset="100%" stop-color="#A61B52"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1200" height="1200" fill="url(#pageGrad)"/>
+
+  <g transform="translate(236 150) scale(5.2)">
+    <rect x="4" y="4" width="132" height="132" rx="16" ry="16" fill="url(#bgGrad)"/>
+    <path d="M40 18 H100 A14 14 0 0 1 114 32 V52 A14 14 0 0 1 100 66 H48 L26 80 V32
+             A14 14 0 0 1 40 18 Z" fill="url(#iconGrad)"/>
+    <rect x="40" y="32" width="58" height="6" rx="3" fill="#ffffff" opacity="0.95"/>
+    <rect x="40" y="46" width="40" height="6" rx="3" fill="#ffffff" opacity="0.68"/>
+    <circle cx="56" cy="88" r="9" fill="#4477AA" stroke="#FDF1F6" stroke-width="2.5"/>
+    <circle cx="70" cy="88" r="9" fill="#CCBB44" stroke="#FDF1F6" stroke-width="2.5"/>
+    <circle cx="84" cy="88" r="9" fill="#228833" stroke="#FDF1F6" stroke-width="2.5"/>
+    <text x="70" y="112" text-anchor="middle"
+          font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif"
+          font-size="12" font-weight="600" fill="#A61B52">Chatbox.qs</text>
+  </g>
+
+  <text x="600" y="980" text-anchor="middle"
+        font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif"
+        font-size="42" font-weight="400" fill="#A61B52">Render chat-style conversations</text>
+  <text x="600" y="1032" text-anchor="middle"
+        font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif"
+        font-size="42" font-weight="400" fill="#A61B52">from the Qlik Sense data model</text>
+
+  <rect x="0" y="1188" width="200.5" height="12" fill="#4477AA"/>
+  <rect x="200" y="1188" width="200.5" height="12" fill="#EE6677"/>
+  <rect x="400" y="1188" width="200.5" height="12" fill="#228833"/>
+  <rect x="600" y="1188" width="200.5" height="12" fill="#CCBB44"/>
+  <rect x="800" y="1188" width="200.5" height="12" fill="#66CCEE"/>
+  <rect x="1000" y="1188" width="200.5" height="12" fill="#AA3377"/>
+</svg>

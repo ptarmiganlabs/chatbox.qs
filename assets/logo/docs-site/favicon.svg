@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-labelledby="t">
+  <title id="t">Chatbox.qs</title>
+  <defs>
+    <linearGradient id="iconGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#E5477C"/>
+      <stop offset="100%" stop-color="#A61B52"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Edge to edge on purpose: every OS masks app icons to its own shape, so
+       the artwork must not carry rounded corners of its own. The figure and
+       ground swap here — the hue becomes the tile and the bubble goes white,
+       because a bubble is not a rectangle and cannot itself be the tile. -->
+  <rect width="512" height="512" fill="url(#iconGrad)"/>
+
+  <path d="M128 120 H384 A52 52 0 0 1 436 172 V300 A52 52 0 0 1 384 352 H160 L76 404 V172
+           A52 52 0 0 1 128 120 Z"
+        fill="#ffffff"/>
+
+  <!-- The participants stand in for the content lines at this size: below about
+       24 px the lines are mush, and the dots are the one element that still
+       carries meaning. Larger and further apart than the logo's dots (r47/pitch
+       106, against r9/pitch 14 scaled): at 16 px the logo's proportions broke
+       into a checkerboard, because #CCBB44 is much lighter than its neighbours
+       and three sub-pixel dots of unequal value do not read as three. -->
+  <circle cx="150" cy="236" r="47" fill="#4477AA"/>
+  <circle cx="256" cy="236" r="47" fill="#CCBB44"/>
+  <circle cx="362" cy="236" r="47" fill="#228833"/>
+</svg>
