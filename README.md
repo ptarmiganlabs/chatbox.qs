@@ -149,8 +149,17 @@ Everything else works across the lanes. Two-sided layout sides each lane's conve
 Search and the step keys go through the matches in time order with linked scrolling, and lane by lane
 with free scrolling, where each lane has an overview ruler of its own. **↑** and **↓** move within a lane,
 **←** and **→** to the next one. Automatic details open as an overlay, not a side pane that would squeeze
-every lane, and automatic **Density** follows a lane's width. An image or PDF export shows the lanes the
-reader saw.
+every lane. An image or PDF export shows the lanes the reader saw.
+
+**Automatic density follows each lane's width, and with lanes that usually means ultra.** A lane is at
+least 220 pixels wide and the object fits as many as it can, so most lanes are 220–320 pixels wide —
+and at 320 pixels or less, automatic **Density** is **ultra**: no avatars, 11-pixel text, the tightest
+spacing. An 810-pixel object showing three conversations gets three 270-pixel lanes, all ultra. Lanes
+come out wider, and roomier, only when the object is wide for its **Most conversations side by side**,
+or there are fewer conversations than fit: 1,400 pixels with four lanes gives 350-pixel lanes at
+compact. This is deliberate — a lane is as narrow as a small tile, and is drawn like one. For avatars
+and more room, set **Density** under **Appearance** to compact or comfortable; it applies to every lane.
+**Text size**, also under **Appearance**, sets the size of the text on its own.
 
 With lanes, the newest rows are read, up to **Maximum messages**, so a limit that cuts the rows short
 leaves out older conversations, not the latest. The conversations are then counted among the rows read,

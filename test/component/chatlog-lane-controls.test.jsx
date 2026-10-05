@@ -190,3 +190,30 @@ describe('a lane header the engine refused', () => {
         );
     });
 });
+
+describe('automatic density with conversations side by side', () => {
+    // Decided in #42, option 3: automatic density follows each lane's width, as for a tile that
+    // narrow, and is documented rather than changed. These pin the decision, so changing it is a
+    // choice somebody makes on purpose rather than a side effect.
+    const densityOf = (container) =>
+        container.querySelector('[data-density]')?.getAttribute('data-density');
+
+    it('draws three lanes on an 810-pixel object at ultra: each lane is 270 pixels', () => {
+        const { container } = renderLanes({ max: 3, rect: { width: 810, height: 600 } });
+        expect(densityOf(container)).toBe('ultra');
+    });
+
+    it('draws wider lanes roomier: two on a 900-pixel object are 450 pixels each', () => {
+        const { container } = renderLanes({ max: 2, rect: { width: 900, height: 600 } });
+        expect(densityOf(container)).toBe('compact');
+    });
+
+    it('takes a density set in the panel over the lane width, for every lane', () => {
+        const { container } = renderLanes({
+            max: 3,
+            rect: { width: 810, height: 600 },
+            settings: { ...settings, density: 'comfortable' },
+        });
+        expect(densityOf(container)).toBe('comfortable');
+    });
+});
