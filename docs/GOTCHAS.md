@@ -754,3 +754,27 @@ and not in edit mode. A message whose click selects nothing shows no pointer and
 neither does its avatar. Opening a message's details selects nothing, and stays possible. _Guard:
 `test/unit/selection.test.js`, `test/component/chatlog.test.jsx`,
 `test/component/render-message.test.jsx`._
+
+## 57. GetProperties leaves out a q-property whose value is the default
+
+An attribute expression with nothing in it comes back from the engine as `{ "qAttribute": true, "id":
+"avatar" }` — no `qExpression` key at all, while `"subtitle": ""` in the very same properties survives. So
+it is the engine dropping a default-valued **q**-property, not the transport dropping empty strings.
+
+`buildAttributeExpressions` emits `qExpression: ''` for an unset slot, so the sync's no-op guard compared
+`undefined === ''` and never held for a real object. **There is no state the write can reach where it does
+hold.** Checked on the lab, object `AaesP`: a 0.5.1 build had written that object in edit mode — its saved
+`qSortCriterias` carry the time-order sort, which only that write puts there — and its six empty slots
+still read back with no `qExpression`. The write sent `''` for each of them and the engine omitted them
+again on the way out.
+
+So the sync wrote on every layout change in edit mode rather than once: each write a full properties object
+read moments earlier, which undoes a panel edit made in between — the further away the server, the wider
+that window. And if the engine answers a write that changed nothing with a change notification, that write
+brings the next layout, which brings the next write, with a data re-fetch each time round. The writes are
+confirmed; the notification closing them into a loop has not been watched in a client.
+
+**Rule:** an equality check against a definition built in the browser normalises both sides — a missing
+q-property and its default value are one state (`expressionOf` in `src/qix/sync-attrs.js`). And the sync
+patches the two paths it owns rather than writing the whole properties object back, so what it does not own
+cannot be clobbered by it. _Guard: `test/unit/sync-attrs.test.js`._
