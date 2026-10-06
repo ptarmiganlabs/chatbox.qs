@@ -37,7 +37,7 @@ import {
     releaseWidened,
     repairStoredGate,
 } from './qix/whole-conversations';
-import { buildLaneSelection, buildSelection } from './qix/selection';
+import { buildLaneSelection, buildSelection, clicksMaySelect } from './qix/selection';
 import { describeAssignments } from './qix/role-labels';
 import { syncAttributeExpressions } from './qix/sync-attrs';
 import { createTimeOrder } from './qix/time-order';
@@ -543,10 +543,14 @@ export default function supernova(galaxy) {
                 }
                 const { conversation } = conversationCacheRef.current;
 
-                // The live layout carries current selection state; the stale one
-                // does not, so the highlight reads from the live cube.
-                const canSelect =
-                    Boolean(interactions?.select) && settings.onBubbleClick !== 'none';
+                // Whether a click may select at all: never in edit mode, in an export
+                // render, or while Sense holds the object inactive (GOTCHAS 56). One gate for
+                // every click that selects — a message, a highlight or chip, a lane header.
+                const maySelect = clicksMaySelect({
+                    interactions,
+                    snapshot: isSnapshot(staleLayout),
+                });
+                const canSelect = maySelect && settings.onBubbleClick !== 'none';
 
                 /**
                  * Build the selection steps a click on this message would run.
@@ -771,14 +775,10 @@ export default function supernova(galaxy) {
                 });
                 const shown = board ? { ...conversation, messages: board.messages } : conversation;
 
-                // A click on a highlight or a chip selects in the highlight or category field: never in
-                // an export render, whose server reports every interaction as allowed, nor in edit mode.
+                // A click on a highlight or a chip selects in the highlight or category field, under the
+                // same gate as a click on a bubble.
                 const canSelectHighlights =
-                    !isSnapshot(staleLayout) &&
-                    readTextToolSettings(settings).highlight.clickToSelect &&
-                    interactions?.active !== false &&
-                    Boolean(interactions?.select) &&
-                    !interactions?.edit;
+                    maySelect && readTextToolSettings(settings).highlight.clickToSelect;
 
                 const highlightView = highlightViewRef.current.build({
                     tagged: highlightResult,
@@ -840,13 +840,8 @@ export default function supernova(galaxy) {
                         pick(planCategorySelection(highlightView.answer, name, toggle)),
                 };
 
-                // Never in an export, whose server reports every interaction as allowed, nor in
-                // edit mode — the same gate a click on a message passes.
-                const canSelectLanes =
-                    !isSnapshot(staleLayout) &&
-                    interactions?.active !== false &&
-                    Boolean(interactions?.select) &&
-                    !interactions?.edit;
+                // The same gate a click on a message passes.
+                const canSelectLanes = maySelect;
 
                 // A lane header selects its conversation through the object's own selection
                 // mode, as a filter pane does: pick one header, then another, then confirm or

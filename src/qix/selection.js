@@ -44,6 +44,30 @@ function step(column, values, toggle) {
 }
 
 /**
+ * Decide whether a click in the object may select at all, whatever it would select.
+ *
+ * nebula's `interactions.select` is not enough on its own. It is true in Sense edit mode, where a click
+ * on a native chart only picks the object for editing, and in an image or PDF export, whose server
+ * reports every interaction as allowed. It also stays true for an object Sense has made inactive,
+ * which `interactions.active` reports. One gate serves a click on a bubble and a click on a highlight
+ * or a legend chip, so they can never disagree.
+ *
+ * @param {object} options - Inputs.
+ * @param {?{active?: boolean, select?: boolean, edit?: boolean}} [options.interactions] - From
+ *     useInteractionState().
+ * @param {boolean} [options.snapshot] - Whether the object renders a snapshot, as for an export.
+ * @returns {boolean} True when a click may make a selection.
+ */
+export function clicksMaySelect({ interactions, snapshot = false } = {}) {
+    return (
+        !snapshot &&
+        interactions?.active !== false &&
+        Boolean(interactions?.select) &&
+        !interactions?.edit
+    );
+}
+
+/**
  * Build the selection steps for a click.
  *
  * @param {object} options - Inputs.

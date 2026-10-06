@@ -231,6 +231,10 @@ Set under **Behaviour → Clicking a message**:
 A single value toggles, as a click in Sense always has. A set of values replaces that field's
 selection, because toggling a set flips each value on its own.
 
+As on a native chart, a click selects nothing while the sheet is being edited, in an image or PDF
+export, or while Sense holds the object inactive; the message then shows no pointer. **Opens the
+details** still opens them, and so does the **Details** link: reading a message selects nothing.
+
 A click Qlik Sense refuses — the field is locked — says so in the corner, naming the field, and
 ends the selection rather than leaving the confirm bar over nothing: when Sense refuses one value it
 lets go of every value picked in that selection, so there is nothing left to confirm.

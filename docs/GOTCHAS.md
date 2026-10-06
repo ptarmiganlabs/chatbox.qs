@@ -739,3 +739,18 @@ with the state still there and still empty — and the object's own remembered s
 with it, so the next ask makes and empties the state again. One extra pair of calls on a path that
 has already failed is the whole price of being able to recover at all. _Guard:
 `test/unit/whole-conversations.test.js`._
+
+## 56. nebula reports selecting as allowed in edit mode
+
+`useInteractionState().select` is true while the sheet is being edited, and in an image or PDF export,
+whose server allows every interaction. Gated on it alone, a click on a message in edit mode selected
+its author on Qlik Sense May 2026, where a click on a native chart only picks the object for editing.
+Highlight, legend-chip and lane-header clicks each carried their own copy of the fuller test; the
+message click, the oldest of them, never had it.
+
+**Rule:** every click that selects — on a message, a highlight, a legend chip or a lane header — goes
+through `clicksMaySelect` in `src/qix/selection.js`: not a snapshot, not inactive, selecting allowed,
+and not in edit mode. A message whose click selects nothing shows no pointer and no button role, and
+neither does its avatar. Opening a message's details selects nothing, and stays possible. _Guard:
+`test/unit/selection.test.js`, `test/component/chatlog.test.jsx`,
+`test/component/render-message.test.jsx`._
