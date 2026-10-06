@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.6.2](https://github.com/ptarmiganlabs/chatbox.qs/compare/chatbox-qs-v0.6.1...chatbox-qs-v0.6.2) (2026-10-06)
+
+
+### Bug Fixes
+
+* select nothing when a message is clicked in edit mode ([f1c4544](https://github.com/ptarmiganlabs/chatbox.qs/commit/f1c45445f49a6f891417a1d6d16f920fa4152152))
+
+
+### Miscellaneous
+
+* add the Chatbox.qs logo and its asset set ([5ed92bf](https://github.com/ptarmiganlabs/chatbox.qs/commit/5ed92bf12ac5d46220f7afa64596f68f2ccb342d))
+
+
+### Documentation
+
+* say that automatic density usually means ultra with lanes, and how to change it ([05c434f](https://github.com/ptarmiganlabs/chatbox.qs/commit/05c434f2105db7d7c9394f554f740bbb6f649a93))
+* say that Qlik Cloud is untested ([22b613c](https://github.com/ptarmiganlabs/chatbox.qs/commit/22b613cda45388cabca99df779b6e57cbab7d807))
+
 ## [0.6.1](https://github.com/ptarmiganlabs/chatbox.qs/compare/chatbox-qs-v0.6.0...chatbox-qs-v0.6.1) (2026-10-03)
 
 
