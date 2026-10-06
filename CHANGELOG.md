@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.6.3](https://github.com/ptarmiganlabs/chatbox.qs/compare/chatbox-qs-v0.6.2...chatbox-qs-v0.6.3) (2026-10-06)
+
+
+### Bug Fixes
+
+* stop the metadata sync writing on every edit-mode render ([68d8066](https://github.com/ptarmiganlabs/chatbox.qs/commit/68d8066b7062a8d497ec5321b5030523b53b0bf9))
+
+
+### Documentation
+
+* add the gotcha for q-properties the engine leaves out ([65842ed](https://github.com/ptarmiganlabs/chatbox.qs/commit/65842ed894d0812f35a7147072cee73bc3974291))
+
 ## [0.6.2](https://github.com/ptarmiganlabs/chatbox.qs/compare/chatbox-qs-v0.6.1...chatbox-qs-v0.6.2) (2026-10-06)
 
 
