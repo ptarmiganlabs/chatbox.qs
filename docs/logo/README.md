@@ -20,12 +20,12 @@ this directory — edit an SVG, then run `./render.sh`; never hand-edit a PNG.
 
 ## Where the output goes
 
-| Directory                    | Contents                                                   |
-| ---------------------------- | ---------------------------------------------------------- |
-| `docs/logo/`                 | Sources, plus logo PNGs at 128/256/512 and mark at 128/256 |
-| `assets/logo/`               | Social cards, blog hero, 1024 rasters                      |
-| `assets/logo/docs-site/`     | Web favicon set for the documentation site                 |
-| `preview.svg`, `preview.png` | Repo root — the extension's asset-panel preview            |
+| Directory                    | Contents                                                                                                                |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `docs/logo/`                 | Sources, plus logo PNGs at 128/256/512 and mark at 128/256                                                              |
+| `assets/logo/`               | Social cards, blog hero, 1024 rasters                                                                                   |
+| `assets/logo/docs-site/`     | The documentation site's `docs/public/`: favicons, and `img/` for the navbar icon, the home-page hero and the link card |
+| `preview.svg`, `preview.png` | Repo root — the extension's asset-panel preview                                                                         |
 
 Regenerate everything:
 
@@ -53,10 +53,14 @@ Still manual:
   under Settings → General → Social preview. There is no API for it.
 - **Blog and `og:image` tags** — use `assets/logo/chatbox-qs-og.png`, and
   `assets/logo/chatbox-qs-hero.png` for the header image.
-- **Documentation site favicons** — `render.sh` writes the set to
-  `assets/logo/docs-site/`, but the site lives in its own repository, so
-  copying them into its `public/` is a manual step. Re-copy after any change to
-  `chatbox-qs-fullbleed.svg`.
+- **The documentation site's images** — `render.sh` writes
+  `assets/logo/docs-site/` laid out as the site's `docs/public/`: the favicons
+  at its root, and under `img/` the navbar icon, the home-page hero (the mark
+  at 512) and the link card. The site lives in its own repository,
+  `ptarmiganlabs/chatbox.qs-docs`, which copies that folder from this
+  repository's `origin/main` and holds no image sources of its own. Re-copy
+  after any change to `chatbox-qs-mark.svg`, `chatbox-qs-fullbleed.svg` or
+  `chatbox-qs-og.svg`.
 
 ## Why it looks like this
 
@@ -70,8 +74,8 @@ nearest clearly distinct hue still unclaimed.
 The glyph is a **speech bubble whose tail points down into three participant
 dots**, rather than off into empty space. That is the extension's actual claim:
 a conversation belongs to a _set_ of participants, not to two sides. The dots
-are the first three colours of the fallback palette in
-`src/chat/participants.js` — change them there and they should change here.
+are the first, third and fourth colours of `FALLBACK_PALETTE` in
+`src/theme/palette.js` — change them there and they should change here.
 
 `#EE6677`, the palette's second colour, is skipped in the glyph because it is a
 rose and would disappear into the card. The spectrum bar across the foot of the
