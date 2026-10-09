@@ -37,8 +37,8 @@ export function appearanceSection() {
                 description:
                     'Shown on the right in every conversation they are part of, however many ' +
                     'people are in it. Accepts a literal name or an expression such as =OSUser(). ' +
-                    'Left blank, the person in the most conversations goes right; in a single ' +
-                    'two-person chat, whoever wrote last.',
+                    'Left blank, in a two-person conversation the person with the most different ' +
+                    'people to talk to goes right; where that is level, whoever wrote last.',
                 expression: 'optional',
                 defaultValue: '',
                 /**

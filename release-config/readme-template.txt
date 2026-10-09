@@ -115,7 +115,9 @@ under "Appearance" takes it away.
 
 DOCUMENTATION
 -------------
-https://github.com/ptarmiganlabs/chatbox.qs
+https://chatboxqs.ptarmiganlabs.com
+
+Source and issues: https://github.com/ptarmiganlabs/chatbox.qs
 
 LICENCE
 -------
