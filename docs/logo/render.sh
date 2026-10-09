@@ -73,8 +73,28 @@ cp chatbox-qs-fullbleed.svg "$DOCSITE/favicon.svg"
 # 256 frame costs 262 KB — more than every other file here put together.
 magick "$tmp/i-16.png" "$tmp/i-32.png" "$tmp/i-48.png" "$DOCSITE/favicon.ico"
 
+# The rest of what the doc site shows, under img/, so that docs-site/ mirrors
+# the site's docs/public/ and the site copies one folder rather than picking
+# files out of three. Taken from the house rules' logo template, which grew it
+# after textview.qs-docs had to ask its product for a hero-sized mark that
+# nothing rendered.
+#
+#   img/chatbox-qs-icon.png  the navbar logo: the mark, because the site prints
+#                            the name beside it. Shown at 32 px; 128 covers 4x
+#                            screens.
+#   img/chatbox-qs-hero.png  the home-page hero: the mark again, at 512, because
+#                            the default theme shows it at up to 320 CSS px and
+#                            256 is soft on any high-density screen. Not the blog
+#                            hero ($ASSETS/chatbox-qs-hero.png, 1200 x 600),
+#                            whose name it shares.
+#   img/chatbox-qs-og.png    the link card, a copy of the one above.
+mkdir -p "$DOCSITE/img"
+rsvg-convert -w 128 -h 128 chatbox-qs-mark.svg -o "$DOCSITE/img/chatbox-qs-icon.png"
+rsvg-convert -w 512 -h 512 chatbox-qs-mark.svg -o "$DOCSITE/img/chatbox-qs-hero.png"
+cp "$ASSETS/chatbox-qs-og.png" "$DOCSITE/img/chatbox-qs-og.png"
+
 echo "wrote:"
 echo "  docs/logo/*.png              README, docs, slides"
 echo "  assets/logo/*.png            social cards, blog hero, high-res"
-echo "  assets/logo/docs-site/*      documentation site favicons"
+echo "  assets/logo/docs-site/       a doc site's docs/public/: favicons, img/ icon, hero, og"
 echo "  preview.svg, preview.png     the extension's asset-panel preview"
