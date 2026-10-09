@@ -484,10 +484,10 @@ hit, each of which produced silently wrong output rather than an error.
 
 A change that a user would notice also gets a documentation draft in
 [to-doc-site/](to-doc-site/), in the same commit as the change;
-[to-doc-site/README.md](to-doc-site/README.md) says what counts and how to write one. There is no
-documentation site yet, so this file and the readme inside the release archive
-([release-config/readme-template.txt](release-config/readme-template.txt)) are what a user actually
-reads — a draft does not excuse leaving either of them stale.
+[to-doc-site/README.md](to-doc-site/README.md) says what counts and how to write one. The drafts
+become pages of the documentation site, which is being written from them; this file and the readme
+inside the release archive ([release-config/readme-template.txt](release-config/readme-template.txt))
+are documentation too — a draft does not excuse leaving either of them stale.
 
 ## Requirements
 
