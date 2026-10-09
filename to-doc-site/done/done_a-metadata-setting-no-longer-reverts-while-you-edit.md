@@ -1,3 +1,12 @@
+<!--
+Published 2026-10-09 in ptarmiganlabs/chatbox.qs-docs#11, on /v0.6/troubleshooting/ ("A
+setting reverts while you edit the sheet"), gated "Requires Chatbox.qs 0.6.3 or later":
+68d8066 is first in chatbox-qs-v0.6.3. A pointer to it sits under Message metadata on
+/v0.6/data-model/ (ptarmiganlabs/chatbox.qs-docs#8). As the notes below ask, the page promises no fix for a
+reload loop: it says the conversation could re-read its data repeatedly while edited, and
+no more.
+-->
+
 # A Message metadata setting no longer reverts while you edit the sheet
 
 _Requires Chatbox.qs 0.6.3 or later._

@@ -1,3 +1,12 @@
+<!--
+Published 2026-10-09 in ptarmiganlabs/chatbox.qs-docs#9, on /v0.6/highlighting/ ("Selecting from
+a highlight or a legend chip"), every notice also listed in the Reference (ptarmiganlabs/chatbox.qs-docs#6).
+Corrected: the engine-failure notice is "Could not select in HlKeyword: Qlik engine error N"
+(click-selection.js:133). Added: "Could not select in HlKeyword: the selection in progress
+could not be confirmed" (:124). The last point of the draft, why these clicks do not wait
+for the tick, is kept, as the notes asked. The 0.6.0 gate is dropped.
+-->
+
 # The object says what a click on a keyword selected
 
 _Requires Chatbox.qs 0.6.0 or later._

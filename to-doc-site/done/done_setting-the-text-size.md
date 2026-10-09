@@ -1,3 +1,13 @@
+<!--
+Published 2026-10-09 in ptarmiganlabs/chatbox.qs-docs#7, on /v0.6/usage/ ("Density and text size"),
+with the options in the Reference (ptarmiganlabs/chatbox.qs-docs#6). Corrected: the sizes are nine — 10, 11, 12,
+13, 14, 16, 18, 20 and 24 px — not a range (src/highlight/settings.js:23); day separators and
+the details scale too. Softened: the bar's choice is described as not saved rather than
+lasting "for as long as the object is open", since it lives in the rendering component and
+is lost when the object redraws from scratch. Not published: the theme-font fix in the
+notes, which shipped in 0.6.0, before the site's first line.
+-->
+
 # Setting the text size of a conversation
 
 _Requires Chatbox.qs 0.6.0 or later._

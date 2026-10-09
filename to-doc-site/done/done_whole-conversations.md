@@ -1,3 +1,12 @@
+<!--
+Published 2026-10-09 in ptarmiganlabs/chatbox.qs-docs#7, on /v0.6/usage/whole-conversations/.
+Corrected: the bar reads "· 8 matching the selection" — the README's "match" is wrong — and
+"in N conversations" appears only with conversations side by side (ChatLog.jsx:442-452);
+the Participants model's To field is freed too (context-gate.js:46-47). Not claimed: that a
+state the object inherits from its sheet counts, which the notes say has not been checked.
+No screenshot: no test app, and a public site.
+-->
+
 # Seeing the whole conversation a person is in
 
 _Requires Chatbox.qs 0.6.0 or later._

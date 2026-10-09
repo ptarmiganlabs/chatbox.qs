@@ -1,3 +1,9 @@
+<!--
+Published 2026-10-09 in ptarmiganlabs/chatbox.qs-docs#10, on /v0.6/getting-started/
+("Qlik Cloud is untested"), and mentioned on /v0.6/overview/ and /v0.6/troubleshooting/.
+When #13's test pass is done, those three places change together.
+-->
+
 # Qlik Cloud is untested
 
 _Applies to every released version. This corrects documentation that listed Qlik Cloud as supported
