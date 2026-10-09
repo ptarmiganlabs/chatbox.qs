@@ -169,7 +169,7 @@ function describeMeasureSlot(properties, index) {
                   'also keys a recipients table.'
             : 'Msr 2 · Integrity probe — Count([MsgId]). Detects merged bubbles. Keep this.';
     }
-    return 'Msr 3+ · Optional KPIs shown in the bubble footer or detail view.';
+    return "Msr 3+ · Optional KPIs, shown in each message's details.";
 }
 
 export default {

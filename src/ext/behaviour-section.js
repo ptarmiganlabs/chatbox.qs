@@ -77,7 +77,9 @@ export function behaviourSection() {
                 type: 'boolean',
                 component: 'switch',
                 label: 'Virtualize long conversations',
-                description: 'Turn off when exporting or printing, so every message is rendered.',
+                description:
+                    'Draws only the messages near the part of the conversation on screen, so a long ' +
+                    'one stays quick to scroll. An image or PDF export always draws every message.',
                 defaultValue: true,
                 options: ON_OFF,
             },
