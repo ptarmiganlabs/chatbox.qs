@@ -9,13 +9,15 @@ cannot drift apart. Extend those, not this.
 [`to-doc-site/`](to-doc-site/) in the same commit.**
 
 [`to-doc-site/README.md`](to-doc-site/README.md) is the authoritative spec — what counts as
-user-visible, who the reader is, how to write a draft, and the whole publishing loop. Read it before
-writing or publishing anything. Its rules are deliberately not repeated here.
+user-visible, who the reader is, how to write a draft, and what publishing one needs to know about
+this product, including the house rule that is the publishing loop. Read it before writing or
+publishing anything. Its rules are deliberately not repeated here.
 
-The documentation site does not exist yet; drafts accumulate until it does. That is not a reason to
-skip one, and it is not a reason to leave [`README.md`](README.md) or the release archive's readme
+The drafts are published to the documentation site, <https://chatboxqs.ptarmiganlabs.com>, from its
+own repository, `ptarmiganlabs/chatbox.qs-docs`. A draft is not a reason to leave
+[`README.md`](README.md) or the release archive's readme
 ([`release-config/readme-template.txt`](release-config/readme-template.txt)) stale — those two are
-the live documentation, and a user-visible change updates them in the same commit as well.
+live documentation too, and a user-visible change updates them in the same commit as well.
 
 ## What this repository has learned the hard way
 

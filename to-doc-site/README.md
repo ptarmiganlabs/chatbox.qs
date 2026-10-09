@@ -3,25 +3,29 @@
 Files in this folder are drafts of pages for the Chatbox.qs documentation site. They are written and
 reviewed here, alongside the change they describe, and published to the documentation site later.
 
-**This file is the authoritative spec for writing them and for publishing them.** `AGENTS.md`
-carries a short pointer to it and nothing more, so the rules live in one place and cannot drift
-apart. Extend this file rather than restating any of it in an agent instruction file.
+**This file is the authoritative spec for writing them, and records what publishing one needs to
+know about Chatbox.qs.** The publishing loop itself is a house rule, named under
+[Publishing](#publishing). `AGENTS.md` carries a short pointer to this file and nothing more, so the
+rules live in one place and cannot drift apart. Extend this file rather than restating any of it in
+an agent instruction file.
 
-## The documentation site does not exist yet
+## The documentation site
 
-There is no `chatbox-docs` repository and no published site. **That changes nothing about writing
-drafts.** Every user-visible change still gets its draft here, in the same commit as the change.
-Drafts accumulate until a documentation repository is created, and are then published one at a time,
-as [Publishing](#publishing-once-the-documentation-site-exists) describes.
+|                    |                                                                                                                                            |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Published site     | <https://chatboxqs.ptarmiganlabs.com> — public                                                                                             |
+| Source repository  | [ptarmiganlabs/chatbox.qs-docs](https://github.com/ptarmiganlabs/chatbox.qs-docs) — private, cloned at `/Users/goran/code/chatbox.qs-docs` |
+| Preview of `next`  | `https://next-chatbox-qs-docs.goran-df8.workers.dev` — staff and reviewers only, behind Cloudflare Access                                  |
+| First version line | `/v0.6/` — see [Decisions](#decisions)                                                                                                     |
 
-The alternative — reconstructing the documentation from memory and commit logs once a site exists —
-loses exactly the details a reader needs: why a default is what it is, the exact wording of a
-message they can search for, what a setting does _not_ do.
+Its branches, previews, hosting and page conventions are recorded in that repository's `AGENTS.md`,
+not here.
 
-Sibling projects are further along and their conventions are worth reading rather than guessing at:
-[magpie-cli](https://github.com/ptarmiganlabs/magpie-cli)'s `to-doc-site/README.md` is the fullest
-version of this spec and describes a live publishing loop; textview.qs is in the same position as
-this repository.
+**Every user-visible change gets its draft here, in the same commit as the change**, and is
+published to the site later, as [Publishing](#publishing) describes. The alternative —
+reconstructing the documentation from memory and commit logs — loses exactly the details a reader
+needs: why a default is what it is, the exact wording of a message they can search for, what a
+setting does _not_ do.
 
 ## Why this folder is at the repository root
 
@@ -58,21 +62,21 @@ check that reads it — a cost paid forever to save one run of a job that was go
 ## Purpose
 
 This folder is a **staging area, not the published source**. Nothing here is rendered anywhere; the
-site, when it exists, will live in its own repository and be written from these drafts.
+site lives in its own repository and is written from these drafts.
 
 |                |                                                                                                                        |
 | -------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| Published site | Does not exist yet                                                                                                     |
-| Source repo    | Does not exist yet                                                                                                     |
+| Published site | <https://chatboxqs.ptarmiganlabs.com>                                                                                  |
+| Source repo    | [ptarmiganlabs/chatbox.qs-docs](https://github.com/ptarmiganlabs/chatbox.qs-docs) (private)                            |
 | Product repo   | <https://github.com/ptarmiganlabs/chatbox.qs>                                                                          |
-| Interim docs   | [`README.md`](../README.md) in this repository                                                                         |
+| Repo README    | [`README.md`](../README.md) in this repository                                                                         |
 | Release readme | [`release-config/readme-template.txt`](../release-config/readme-template.txt), rendered into the outer release archive |
 
-Until the site exists, [`README.md`](../README.md) is what a user actually reads, and the release
-archive's `readme.txt` is what somebody who downloaded the zip reads. **A draft here does not excuse
-leaving either of those stale** — they are the live documentation, and a user-visible change updates
-them in the same commit too. The draft is for the page the site will eventually carry, at a length
-and depth the README cannot hold.
+[`README.md`](../README.md) is what somebody reading this repository sees, and the release archive's
+`readme.txt` is what somebody who downloaded the zip reads. **A draft here does not excuse leaving
+either of those stale** — they are live documentation too, and a user-visible change updates them in
+the same commit. The draft is for the page the site carries, at a length and depth the README cannot
+hold.
 
 ## When to add a file
 
@@ -203,35 +207,75 @@ published stays intact.
 
 ---
 
-## Publishing (once the documentation site exists)
+## Publishing
 
-Publishing is **not a bulk pass.** Drafts are processed one at a time, start to finish, each approved
-individually once its result can be previewed.
+**The publishing loop is `rules/docs/to-doc-site.md` in plabs-house-rules** — the one copy every
+Ptarmigan Labs product follows: scope and order, a critical review of each draft, every claim verified
+against the source, the release that ships it, and then one draft, one pull request into the site's
+`next`, one preview, one approval, and the `done_` move in the same turn as the approval. It runs only
+when asked. It is not repeated here, so that the copies cannot drift apart; what follows is what it
+needs to know about Chatbox.qs.
 
-1. **Establish scope and order, and present the plan.** Read every pending draft before publishing
-   the first. Order them by dependency: a draft that renames a setting goes before every draft that
-   mentions it. A draft saying something is "not yet available" is suspect — check whether the
-   follow-up landed. Present the order and wait for approval before touching the doc repository.
-2. **Review each draft critically.** Should it be published at all? Where does it fit — prefer
-   editing an existing page over adding one? What wording and cross-links does it need?
-3. **Verify every claim against the implementation.** Drafts are written from intent and can be
-   wrong in detail, and a backfilled draft can be wrong about a release it was written after.
-   Property-panel labels and defaults come from `src/ext/`; the extension's messages come from the
-   code that renders them; the behaviour of a mode comes from the code that decides it, not from the
-   draft's description of it.
-4. **Establish which version ships the behaviour.** Read the open release-please pull request's
-   title for the pending version and `gh release list` for what is published. A version number in a
-   draft is evidence of nothing — most of these drafts were written before the release they describe
-   had a number. Gate changed behaviour with a "Requires Chatbox.qs X.Y.Z or later" note wherever a
-   reader may be running an older build.
-5. **Land it, preview it, report it, wait.** One draft per pull request in the documentation
-   repository. Report the preview URL of each changed page with a short summary of what changed.
-   When the owner approves, move the draft into `done/` in the same turn — the approval of the
-   published page _is_ the authorisation for the move; asking again leaves the folder claiming
-   outstanding work that does not exist — then take the next draft.
+### Run the pass from this repository, at a fresh `origin/main`
 
-When a documentation repository is created, record its branch model, preview URLs and access rules
-**there**, and link it from here. Do not copy them into this file.
+The drafts are here, and so is the source every claim is checked against:
+
+```bash
+git -C /Users/goran/code/chatbox.qs fetch origin
+git -C /Users/goran/code/chatbox.qs show origin/main:to-doc-site/README.md
+```
+
+A working tree may be on a feature branch, where a draft that exists looks deleted and a property
+panel nobody has released looks current.
+
+### Which source settles which claim
+
+Drafts are written from intent and can be wrong in detail, and so can this repository's `README.md`
+about where a setting lives: it says **Show kinds as chips** is "under **Message kind**", where the
+panel puts it in **Message metadata**, beside the **Message kind** expression. Read the source at
+`origin/main`:
+
+| Claim                                                                        | Settled by                                                                                                      |
+| ---------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| A property-panel label, default or range, and when a setting is shown        | `src/ext/` — one file per panel section                                                                         |
+| Which dimension or measure takes which role, in each conversation model      | `src/qix/column-map.js`, `src/qix/role-labels.js`                                                               |
+| **Maximum messages**, a message id that is not unique, and their banners     | `src/chat/normalize.js`, `src/chat/message-limit.js`                                                            |
+| Which conversations get a lane, and the line that counts them                | `src/chat/lanes.js`, `src/ui/LaneBoard.jsx`                                                                     |
+| Whole conversations: what stops narrowing, and when the button is disabled   | `src/qix/whole-conversations.js`                                                                                |
+| Which values are highlighted and how they match; the banners and the summary | `src/highlight/settings.js`, `src/match/`, `src/highlight/summary.js`                                           |
+| What a click selects, and what the object says in its corner afterwards      | `src/ui/click-route.js`, `src/qix/object-selection.js`, `src/highlight/click-selection.js`, `src/ui/Notice.jsx` |
+| Keys                                                                         | `src/ui/keyboard.js`                                                                                            |
+| The find box and stepping                                                    | `src/highlight/navigator.js`                                                                                    |
+| Copying: the text transcript, the JSON and its `schemaVersion`               | `src/export/`                                                                                                   |
+| The object's context menu                                                    | `src/index.js`                                                                                                  |
+| What an image or PDF export shows                                            | `src/ui/snapshot.js`                                                                                            |
+| Qlik Cloud                                                                   | [#13](https://github.com/ptarmiganlabs/chatbox.qs/issues/13): untested until it is closed                       |
+
+Where behaviour can only be seen in Qlik Sense, the source says what is meant to happen and a live
+site says what does; leave out what neither has settled rather than guessing.
+
+### Which release ships it
+
+- **The pending version** is in the open release-please pull request's title,
+  `chore(main): release chatbox-qs X.Y.Z`. A version number written in a draft is evidence of nothing
+  — most of these drafts were written before the release they describe had a number.
+- **Tags carry the package name**: `chatbox-qs-vX.Y.Z`. A bare `vX.Y.Z` finds nothing.
+- **A tag does not mean the release is out.** Releases are created as drafts, and since 0.6.1 the tag
+  is made with the draft, before the archive is attached and the release is published by hand.
+  `gh release view chatbox-qs-vX.Y.Z --json isDraft` says which.
+
+### Decisions
+
+- **The site is public**, and so is everything published to it (Goran, 2026-10-09). Its previews are
+  not: they show behaviour no release has shipped yet.
+- **`/v0.6/` is the first line** (Goran, 2026-10-09). Releases go back to 0.2.0, but the site opened
+  at 0.6: nothing up to 0.6.0 is gated or given a history, so a draft's "Before 0.6.0 …" is dropped
+  when it is published. Gates start after 0.6.0, the 0.6.x patch releases included.
+- **The first content is one exception to the loop** (Goran, 2026-10-09). The thirteen drafts
+  written before the site existed are published in section-sized pull requests, each page written
+  once from every draft that touches it, each pull request reviewed on the preview, and all thirteen
+  then moved to `done/`. The exception is spent once they are; every draft after them goes through
+  the loop as written.
 
 ## Ownership
 
