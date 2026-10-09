@@ -9,6 +9,8 @@ talking back and forth, extending to any number of participants.
 
 Part of the [.qs Library](https://github.com/ptarmiganlabs) from Ptarmigan Labs.
 
+**Documentation:** <https://chatboxqs.ptarmiganlabs.com>
+
 ## What it does
 
 - Message bubbles with per-participant colour, avatars and author grouping
@@ -41,15 +43,15 @@ of a dimension that is already there.
 One dimension holds every speaker. Use it for group chats, or any conversation where who a message
 went to does not matter.
 
-| Slot        | Role                  | Notes                                                                              |
-| ----------- | --------------------- | ---------------------------------------------------------------------------------- |
-| Dimension 1 | Message ID            | Must be unique per message                                                         |
-| Dimension 2 | Participant           | The speaker. Selections act on this                                                |
-| Dimension 3 | Conversation / thread | Optional                                                                           |
-| Dimension 4 | To                    | Optional — adds recipients to the bubbles                                          |
-| Measure 1   | Message text          | `Only([MsgText])` — a measure, so long bodies never become selectable field values |
-| Measure 2   | Integrity probe       | `Count([MsgId])` — detects merged bubbles                                          |
-| Measure 3+  | KPIs                  | Optional                                                                           |
+| Slot        | Role                  | Notes                                                                                                                            |
+| ----------- | --------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| Dimension 1 | Message ID            | Must be unique per message                                                                                                       |
+| Dimension 2 | Participant           | The speaker. Selections act on this                                                                                              |
+| Dimension 3 | Conversation / thread | Optional                                                                                                                         |
+| Dimension 4 | To                    | Optional — adds recipients to the bubbles                                                                                        |
+| Measure 1   | Message text          | `Only([MsgText])` — a measure, so long bodies never become selectable field values                                               |
+| Measure 2   | Integrity probe       | `Count([MsgId])` — detects merged bubbles. Count a field only the messages table has instead when the id also keys another table |
+| Measure 3+  | KPIs                  | Optional                                                                                                                         |
 
 ### From → To
 
@@ -68,6 +70,9 @@ A sender and a recipient dimension, for one-to-one conversations — an agent's 
 - **One recipient per row.** A message to several people arrives as one row per recipient and is
   shown as one bubble listing them all. Store recipients one per row — split a stored list with
   `SubField()` in the load script.
+- **A message's rows must agree.** They fold into one bubble only when their text and their
+  Timestamp (numeric) are the same; rows that differ show as separate messages, flagged as sharing an
+  id.
 - **Spell each person identically** in From and To. People are matched by exact, case-sensitive text.
 - **Keep _Include null values_ on for To.** Unticking it silently drops every message without a
   recipient, and nothing downstream can detect that.
@@ -100,7 +105,7 @@ on its own:
 
 - **Own participant** goes right in every conversation they are part of, however many people are in
   it. An expression such as `=OSUser()` works.
-- Otherwise, in a two-person conversation the person with **more conversations** goes right, so an
+- Otherwise, in a two-person conversation the person with **the most different people to talk to** goes right, so an
   agent or an inbox owner stays on one side throughout. On a tie, whoever wrote last goes right — a
   single two-person chat looks exactly as it always has.
 - A group message goes right only when its sender is on the right in each of its pairs. Three or more
@@ -125,9 +130,9 @@ many messages it has.
   not shown, a line above the lanes says so, e.g. **4 of 12 conversations**; select conversations to
   choose which.
 - **Linked scrolling** (the default) lines the lanes up in time, with one scrollbar for all of them.
-  Messages are laid out in rows: a row holds at most one message per lane, everything in a row is later
-  than everything above it, a row never crosses a day, and messages side by side were sent within **Group
-  messages within** (Appearance, default 2 minutes) of each other — after a longer pause, a message
+  Messages are laid out in rows: a row holds at most one message per lane, everything in a row follows
+  everything above it, a row never crosses a day, and messages side by side were sent within **Group
+  messages within (seconds)** (Appearance, default 120) of each other — after a longer pause, a message
   starts a row of its own, below. A quiet lane shows gaps while another talks.
 - **Free scrolling** gives each lane its own list and scrollbar, packed without gaps, and each keeps its
   place when a selection changes the others.
@@ -184,13 +189,14 @@ the reader usually meant is _which chats is Ada in_ — and for that, **Show who
   Ada's chats, not the whole history.
 - The messages that match the selection are drawn as they always are; the rest are dimmed, because
   they are there to give the others their context. The bar says which is which, e.g. **24 messages in
-  3 conversations · 8 match the selection**.
-- A message belonging to no conversation is governed by the people rule alone: there is no
-  conversation of its own for it to be in scope of.
+  3 conversations · 8 matching the selection** with conversations side by side, or
+  **57 messages · 12 matching the selection** without.
+- A message belonging to no conversation has no conversation to be in scope of, so it is shown
+  whenever the other selections leave it, whoever wrote it.
 - The button in the bar flips it for one reader, for as long as the object is open; the setting is
   what everyone else starts with, and a change to it drops the reader's own choice.
 
-**It needs the people and conversation dimensions to be fields**, not expressions: freeing a field
+**It needs the Message ID, the people and the conversation dimensions to be fields**, not expressions: freeing a field
 from a selection means naming it, and bounding a conversation means selecting in one. Where one of them
 is an expression the button is disabled and says so, rather than widening some conversations and not
 others.
@@ -270,7 +276,7 @@ with each message.
 
 ### Message kinds as chips
 
-Switch on **Show kinds as chips** under **Message kind** to show a message's kinds as chips above its
+Switch on **Show kinds as chips** under **Message metadata**, after the **Message kind** expression, to show a message's kinds as chips above its
 text — tags, labels, a ticket's categories.
 
 - A message can have several kinds. `Only()` returns nothing for a message with more than one, so join
@@ -302,7 +308,7 @@ Set under **Highlights**:
 | Setting                            | Default | What it does                                                                                |
 | ---------------------------------- | ------- | ------------------------------------------------------------------------------------------- |
 | **Highlight possible values**      | On      | With nothing selected in the field, highlight the values that are possible.                 |
-| **Most values to highlight**       | 1000    | From 1 to 10,000. When there are more, the first in sort order count.                       |
+| **Most values to highlight**       | 1000    | From 1 to 10,000. When there are more, the first in the field's text order count.           |
 | **Select by clicking a highlight** | On      | A click on a highlight selects its value instead of doing what a click on the message does. |
 | **Match case**                     | Off     | On: "Istanbul" no longer highlights "ISTANBUL".                                             |
 | **Whole values only**              | On      | Off: a value is highlighted inside longer words too.                                        |
@@ -318,7 +324,7 @@ the next.
 Set under **Categories**, which appears once a highlight field is set:
 
 - **Category field** groups the values. A value without a category is highlighted in grey and counted
-  under **No category**; a value in several categories is tinted in the first and underlined in all.
+  under **No category**; a value in several categories is tinted in the first of them by name and underlined in all.
   A category field in a data island gives every value every category.
 - **Colour expression** is evaluated for each category and returns a colour — `RGB(68, 119, 170)`,
   `ARGB()`, `HSL()`, `Color(3)`, or text such as `'#4477aa'` or `'steelblue'`. Type it as plain text; a
@@ -359,7 +365,7 @@ values of X are possible with the current selections** — is the summary line.
   [GOTCHAS 11](docs/GOTCHAS.md)).
 - Load number-like keywords with `Text()`: a field loaded without it keeps one spelling for
   `0701234567` and `701234567`, and only that spelling is highlighted.
-- At most 20,000 value and category rows are read; the summary says when that leaves values out.
+- With a category field, at most 20,000 value and category rows are read; the summary says when that leaves values out.
 
 ## Searching messages
 
@@ -381,7 +387,7 @@ The controls sit in groups, each a tinted pill, so one is never mistaken for ano
 
 - **The find box** — what is typed, how many matches there are, and **▲ ▼** to step them.
 - **Keywords** — a swatch drawn as this conversation's highlights are drawn, how many there are, and
-  **◂ ▸** to step them. It appears once a highlight field is set.
+  **◂ ▸** to step them. It appears while there are highlighted values.
 - **Conversations** — **◂ 1–4 of 12 ▸**, with conversations side by side and more of them than fit.
 - **Text size**, and whatever else the view offers.
 
@@ -406,20 +412,20 @@ The find box's buttons, F3 and Ctrl+G go through the search matches; the keyword
 an arrow go through the highlights. Steps wrap around at either end, and the one you stepped to last is
 the one outlined.
 
-The **overview ruler** beside the conversation shows where the matches or highlights are, a tick per
-place, in the categories' colours; hover to count them, click to go there. It appears only while there
+The **overview ruler** beside the conversation shows where the search matches are while something
+is typed, and the highlights otherwise, a tick per place, in the categories' colours; hover to count them, click to go there. It appears only while there
 are some, so an object with no highlight field and nothing typed never shows one, whatever **Show
 overview ruler** under **Appearance** says.
 
-| Keys                                                                | What they do                                                           |
-| ------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| **Ctrl+F** (**Cmd+F**)                                              | Goes to the search box, from inside the object.                        |
-| **Enter** / **Shift+Enter** in the search box                       | The next or the previous match.                                        |
-| **F3** / **Shift+F3**, **Ctrl+G** / **Ctrl+Shift+G** (Cmd on a Mac) | The next or the previous search match.                                 |
-| **Alt+↓** / **Alt+↑**                                               | The next or the previous highlight.                                    |
-| **Enter** on a message                                              | Selects the value of the highlight stepped to; otherwise, details.     |
-| **←** / **→** on a message, with conversations side by side         | The neighbouring lane's message: in the same row, or where it is read. |
-| **Escape**                                                          | Clears the search, lets go of the highlight, then leaves the object.   |
+| Keys                                                                | What they do                                                                                                                          |
+| ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| **Ctrl+F** (**Cmd+F**)                                              | Goes to the search box, from inside the object.                                                                                       |
+| **Enter** / **Shift+Enter** in the search box                       | The next or the previous match.                                                                                                       |
+| **F3** / **Shift+F3**, **Ctrl+G** / **Ctrl+Shift+G** (Cmd on a Mac) | The next or the previous search match.                                                                                                |
+| **Alt+↓** / **Alt+↑**                                               | The next or the previous highlight.                                                                                                   |
+| **Enter** on a message                                              | Selects the value of the highlight stepped to; otherwise, details.                                                                    |
+| **←** / **→** on a message, with conversations side by side         | The neighbouring lane's message: in the same row, or where it is read.                                                                |
+| **Escape**                                                          | On a message: closes the details, lets go of the place stepped to, then leaves the object. In the search box: clears it, then leaves. |
 
 Before 0.6.0 one pair of buttons stepped both, and F3 meant the search matches while something was
 typed and the highlights otherwise — one key with two meanings, depending on a box you may not have
@@ -439,13 +445,13 @@ image or PDF export never has it.
 - **Text** is a transcript: the date (YYYY-MM-DD) where a new day starts, the day its separator shows,
   then for each message a line with the sender, every recipient and the time as the object shows it,
   then the message as it was written.
-- With **conversations side by side**, both copy the conversations shown one after another, each under
-  a line naming it, rather than interleaved as linked lanes show them.
+- With **conversations side by side**, both copy the conversations shown one after another rather than
+  interleaved as linked lanes show them; the text puts each under a line naming it.
 - **JSON** starts with a summary of what was copied, under `conversation`: the number of `messages`; the
   `rows` the conversation holds and how many were read (`rowsRead`); whether **Maximum messages** cut them
   short (`truncated`) and whether it kept the `"oldest"` or the `"newest"` (`truncatedTo`, null when
   nothing was cut); the `order`; and, side by side, how many `conversations` are shown of how many.
-- It then holds each message's id, sender, recipients, thread, time, kind, badge, format, body and KPIs,
+- It then holds each message's id, `author` (the sender), recipients, thread, time, kind, badge, format, body and KPIs,
   and, while highlighting is on, its highlights with their values, categories and offsets — into the
   body, or into `plainText`, the text a markdown message shows — after a summary of the highlight field
   and the counts per category. Search matches are not included.
@@ -485,7 +491,7 @@ hit, each of which produced silently wrong output rather than an error.
 A change that a user would notice also gets a documentation draft in
 [to-doc-site/](to-doc-site/), in the same commit as the change;
 [to-doc-site/README.md](to-doc-site/README.md) says what counts and how to write one. The drafts
-become pages of the documentation site, which is being written from them; this file and the readme
+become pages of the [documentation site](https://chatboxqs.ptarmiganlabs.com); this file and the readme
 inside the release archive ([release-config/readme-template.txt](release-config/readme-template.txt))
 are documentation too — a draft does not excuse leaving either of them stale.
 
