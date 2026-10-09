@@ -1,3 +1,9 @@
+<!--
+Published 2026-10-09 in ptarmiganlabs/chatbox.qs-docs#7, on /v0.6/usage/selecting/ ("Clicking a
+message"), as one paragraph, as the draft proposed. The 0.6.0 gate is dropped: /v0.6/ is
+the site's first line, and nothing up to 0.6.0 is gated.
+-->
+
 # A click on a message's avatar does what a click on the message does
 
 _Requires Chatbox.qs 0.6.0 or later._

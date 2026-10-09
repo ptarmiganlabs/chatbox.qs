@@ -1,3 +1,11 @@
+<!--
+Published 2026-10-09 in ptarmiganlabs/chatbox.qs-docs#7, on /v0.6/usage/side-by-side/ ("Selecting a
+conversation from its lane header"). Corrected: a refused header does not go grey; it goes
+back to unpicked, which is transparent (chat.module.css:1061-1073). Added: the header's
+tooltip, "Selects this conversation. Pick several, then confirm." (src/index.js:853). The
+0.6.0 gate is dropped.
+-->
+
 # Selecting a conversation by clicking its lane header
 
 _Requires Chatbox.qs 0.6.0 or later._

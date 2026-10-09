@@ -1,3 +1,15 @@
+<!--
+Published 2026-10-09 in ptarmiganlabs/chatbox.qs-docs#7, on /v0.6/usage/copying/ ("Copying one
+message"). Corrected against src/export/conversation-export.js: the time on the header line
+is whatever Timestamp (display) returns, so the example reads "Ada → Bob, Carol · 10:32"
+with the suggested Only(Time([SentAt])), and a message copied alone carries no date; a
+message with no text copies its header line alone. Added: the button also appears when
+hovering the sender's name, and always on a touch screen. Left out on purpose: activating the
+button from the keyboard. Reading src/ui/ChatLog.jsx:713-728, Enter or Space on it toggles
+the details instead once a message holds the roving focus; that wants checking in Sense, and
+fixing here, before a page promises it.
+-->
+
 # Copying one message
 
 _Requires Chatbox.qs 0.6.0 or later._

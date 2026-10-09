@@ -1,3 +1,11 @@
+<!--
+Published 2026-10-09 in ptarmiganlabs/chatbox.qs-docs#7, on /v0.6/usage/side-by-side/ ("Reaching the
+conversations that do not fit"), next to the lane-header section as the notes asked. Added
+from src/index.js:898-911: ◂, "Earlier conversations", moves towards the most recently
+active; the window pulls back to the last full window when a selection would run it off the
+end, and returns when the conversations do. The 0.6.0 gate is dropped.
+-->
+
 # Reaching conversations that do not fit on screen
 
 _Requires Chatbox.qs 0.6.0 or later._

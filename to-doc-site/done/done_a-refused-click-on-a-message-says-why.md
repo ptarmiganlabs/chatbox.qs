@@ -1,3 +1,11 @@
+<!--
+Published 2026-10-09 in ptarmiganlabs/chatbox.qs-docs#7, on /v0.6/usage/selecting/ ("When Qlik Sense
+refuses the click"), with the lane-header version on /v0.6/usage/side-by-side/ in the same
+words, as the notes asked. Added from the source: the engine-failure form, "Could not select
+in Author: Qlik engine error N" (click-selection.js:133), and the fallback name "the
+dimension clicked" where no column is found (src/index.js:594). The 0.6.0 gate is dropped.
+-->
+
 # A click on a message that Qlik Sense refuses says why
 
 _Requires Chatbox.qs 0.6.0 or later._

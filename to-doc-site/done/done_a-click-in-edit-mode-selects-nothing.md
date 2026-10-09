@@ -1,3 +1,11 @@
+<!--
+Published 2026-10-09 in ptarmiganlabs/chatbox.qs-docs#7, on /v0.6/usage/selecting/ ("When a click
+selects nothing"), and summarised on /v0.6/troubleshooting/ ("A click selects nothing").
+Gated "Requires Chatbox.qs 0.6.2 or later", confirmed: f1c4544 is first in chatbox-qs-v0.6.2.
+Added from the source: a click also selects nothing for a moment after a selection, while
+the new messages are read (src/ui/reload-view.js).
+-->
+
 # A click selects nothing while the sheet is being edited
 
 _Requires Chatbox.qs 0.6.2 or later. Earlier versions selected on a click in edit mode._

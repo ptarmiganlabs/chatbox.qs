@@ -1,3 +1,13 @@
+<!--
+Published 2026-10-09 in ptarmiganlabs/chatbox.qs-docs#7, on /v0.6/usage/side-by-side/ ("Density in
+narrow lanes"), summarised on /v0.6/usage/ ("Density and text size"). Corrected against
+src/ui/density.js and src/chat/lanes.js: automatic density is also Compact at 260 px high or
+less, so the 1,400-pixel, two-lane example is Comfortable only on an object taller than
+that; densities use the panel's labels (Ultra compact). Dropped: "Applies from 0.4.0" and
+"From 0.6.0", history before the site's first line. No screenshot: the product has no test
+app, and a real conversation must not appear on a public site.
+-->
+
 # Automatic density with conversations side by side
 
 _Applies from Chatbox.qs 0.4.0, when conversations side by side arrived. Nothing about it changed;

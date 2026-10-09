@@ -1,3 +1,13 @@
+<!--
+Published 2026-10-09 in ptarmiganlabs/chatbox.qs-docs#7, on /v0.6/usage/searching/ ("Stepping"),
+with the keys in the Reference (ptarmiganlabs/chatbox.qs-docs#6). Corrected against src/ui/ChatLog.jsx: the
+overview ruler shows find matches while something is typed and the highlights otherwise,
+never both (:369-372); Escape on a message closes the details, then lets go of the stepped
+place, then leaves the object, and never clears the search, which only Escape in the find
+box does (:730-744, 798-806). Dropped: that F3 and Ctrl+G changed meaning in 0.6.0 — history
+before the site's first line, so no callout either.
+-->
+
 # The find box and the keywords step separately
 
 _Requires Chatbox.qs 0.6.0 or later. F3 and Ctrl+G changed meaning in this release._
