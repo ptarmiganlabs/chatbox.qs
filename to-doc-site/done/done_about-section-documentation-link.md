@@ -1,3 +1,13 @@
+<!--
+Published 2026-10-10 in ptarmiganlabs/chatbox.qs-docs#13, on /v0.6/reference/ ("About") only.
+Gated "Requires Chatbox.qs 0.6.4 or later", confirmed: the Documentation link opens the GitHub
+repository at chatbox-qs-v0.6.0 and v0.6.3, and the documentation site at chatbox-qs-v0.6.4.
+Corrected: the note below says no page describes the About section. The Reference already had one
+("links to the documentation and to report an issue"), and Getting started points readers there for
+the version; the check behind the claim, git grep -E '\bAbout\b', never matches on macOS.
+Not published: the air-gap point, which the Overview and Getting started already make.
+-->
+
 # The Documentation link opens the documentation site
 
 _Requires Chatbox.qs 0.6.4 or later._
