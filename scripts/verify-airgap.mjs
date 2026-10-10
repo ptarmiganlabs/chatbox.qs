@@ -38,8 +38,9 @@ const TEXT_TYPES = new Set([
  * Hosts that are allowed to appear in the bundle.
  *
  * These are all inert string constants rather than anything fetched at runtime:
- * XML namespace URIs, React's error-explainer URL, our own repository links, and
- * the base used by the URL parser in sanitize.js.
+ * XML namespace URIs, React's error-explainer URL, our own repository links, the
+ * documentation site's address, and the base used by the URL parser in
+ * sanitize.js.
  */
 const ALLOWED = [
     /^https?:\/\/(www\.)?w3\.org\//,
@@ -50,6 +51,10 @@ const ALLOWED = [
     // github.com at all. This check exists to catch CDN and asset references,
     // which are what actually break an air-gapped installation.
     /^https?:\/\/github\.com\//,
+    // The documentation site, linked from the About section: a link a person may
+    // click, never loaded by the code. Its own host only, not every sub-domain of
+    // ptarmiganlabs.com, and the site's root needs no path after it.
+    /^https:\/\/chatboxqs\.ptarmiganlabs\.com(\/|$)/,
     /^https?:\/\/localhost\//,
 ];
 
