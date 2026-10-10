@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.6.4](https://github.com/ptarmiganlabs/chatbox.qs/compare/chatbox-qs-v0.6.3...chatbox-qs-v0.6.4) (2026-10-10)
+
+
+### Bug Fixes
+
+* open the documentation site from the panel's Documentation link ([a66ca5a](https://github.com/ptarmiganlabs/chatbox.qs/commit/a66ca5a34feab6e81065ce72f48c08f50755cf1a))
+* say what three panel texts actually do ([400996a](https://github.com/ptarmiganlabs/chatbox.qs/commit/400996a20d0ff2b37978e320a592ffca7e149d8e))
+
+
+### Miscellaneous
+
+* render the documentation site's navbar icon, hero and link card ([aeae66c](https://github.com/ptarmiganlabs/chatbox.qs/commit/aeae66c5770df7c20396f654d6fa2386e1d603f5))
+
+
+### Documentation
+
+* add the publishing notes the done/ move left out ([9d2a902](https://github.com/ptarmiganlabs/chatbox.qs/commit/9d2a902f52bd1cb1a8cf0f5cf7bb5a478cd8ae49))
+* correct the README where the source says otherwise ([71acb2d](https://github.com/ptarmiganlabs/chatbox.qs/commit/71acb2dd41d3a8ce18717979aeabcaeb5438e1b5))
+* move the thirteen published drafts to done/ ([9edf9ff](https://github.com/ptarmiganlabs/chatbox.qs/commit/9edf9ff0cfb5519c82e83321fdc087088f4baa0a))
+* point the draft spec at the documentation site ([6499493](https://github.com/ptarmiganlabs/chatbox.qs/commit/6499493bb42fe07ce54641d90700a3142ae20592))
+* say what docs-site/ holds now, and where the dots' colours come from ([efb790b](https://github.com/ptarmiganlabs/chatbox.qs/commit/efb790bffa92b11b161fe372b0de3dd32d62a421))
+
 ## [0.6.3](https://github.com/ptarmiganlabs/chatbox.qs/compare/chatbox-qs-v0.6.2...chatbox-qs-v0.6.3) (2026-10-06)
 
 
