@@ -24,7 +24,7 @@ export function aboutSection() {
             docs: {
                 component: 'link',
                 label: 'Documentation',
-                url: 'https://github.com/ptarmiganlabs/chatbox.qs',
+                url: 'https://chatboxqs.ptarmiganlabs.com',
             },
             issues: {
                 component: 'link',
