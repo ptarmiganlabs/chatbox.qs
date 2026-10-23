@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.6.5](https://github.com/ptarmiganlabs/chatbox.qs/compare/chatbox-qs-v0.6.4...chatbox-qs-v0.6.5) (2026-10-23)
+
+
+### Miscellaneous
+
+* pin Node 24.22.1 for the 2026-10-21 security release ([9e3c039](https://github.com/ptarmiganlabs/chatbox.qs/commit/9e3c039fee67452d9d4fc71210702c2e1b33e590))
+
+
+### Documentation
+
+* move the About-link draft to done/, with what publishing changed ([166b618](https://github.com/ptarmiganlabs/chatbox.qs/commit/166b6184f06278d3d9e4b6da98db5acef5136431))
+
 ## [0.6.4](https://github.com/ptarmiganlabs/chatbox.qs/compare/chatbox-qs-v0.6.3...chatbox-qs-v0.6.4) (2026-10-10)
 
 
