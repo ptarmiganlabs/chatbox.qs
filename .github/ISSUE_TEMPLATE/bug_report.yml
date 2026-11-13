@@ -1,0 +1,97 @@
+name: Bug report
+description: Something in Chatbox.qs doesn't work as it should
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. The extension's version is at the bottom of its property panel, under **About**.
+
+        Questions go to [Discussions](https://github.com/ptarmiganlabs/chatbox.qs/discussions/categories/q-a) instead.
+
+        This issue is public: leave out messages, names and app details you can't share.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did, and what the chat object showed. A banner or warning it showed, word for word, helps most. A screenshot is welcome, if it shows nothing you can't share.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected to happen
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: How to make it happen
+      description: The steps, from opening the sheet. Say which setting, selection or click is involved.
+      placeholder: |
+        1. Show conversations side by side, with linked scrolling
+        2. Select two conversations in a filter pane
+        3. ...
+  - type: input
+    id: extension-version
+    attributes:
+      label: Chatbox.qs version
+      description: In the property panel, under About, such as "Chatbox.qs v0.6.4".
+      placeholder: "0.6.4"
+    validations:
+      required: true
+  - type: dropdown
+    id: sense-edition
+    attributes:
+      label: Qlik Sense edition
+      options:
+        - Qlik Sense Enterprise on Windows (client-managed)
+        - Qlik Cloud
+        - Both
+    validations:
+      required: true
+  - type: input
+    id: sense-version
+    attributes:
+      label: Qlik Sense version
+      description: For client-managed Qlik Sense, the release, such as May 2025 Patch 3. Leave it empty for Qlik Cloud.
+      placeholder: "May 2025 Patch 3"
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and operating system
+      placeholder: "Chrome 142 on Windows 11"
+    validations:
+      required: true
+  - type: dropdown
+    id: conversation-model
+    attributes:
+      label: Conversation model
+      description: Under Conversation in the property panel.
+      options:
+        - Participants (one speaker dimension)
+        - From → To (sender and recipient dimensions)
+        - Don't know
+  - type: textarea
+    id: data-model
+    attributes:
+      label: Dimensions, measures and settings
+      description: The object's dimensions and measures, and any settings you changed, such as Layout, Message order or Maximum messages. Roughly how many messages and conversations the app has helps too.
+      placeholder: |
+        Dimensions: MsgId, Sender, Thread
+        Measures: Only([MsgText]), Count([MsgId])
+        Layout: Two-sided, Own participant =OSUser()
+        About 20,000 messages in 300 conversations
+  - type: textarea
+    id: console
+    attributes:
+      label: Browser console lines
+      description: "Open the browser's developer tools (F12, or Cmd+Option+I on a Mac), go to the Console tab, and paste the lines that start with **Chatbox.qs:**. Remove anything you can't share."
+      render: text
+  - type: checkboxes
+    id: public
+    attributes:
+      label: Before you send it
+      options:
+        - label: I've left out messages, names and app details I can't share, because this issue is public
+          required: true

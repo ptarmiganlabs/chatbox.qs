@@ -1,0 +1,27 @@
+name: Feature request
+description: Something Chatbox.qs could do that it doesn't
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Not sure yet what you need, or want to talk it over first? [Ideas in Discussions](https://github.com/ptarmiganlabs/chatbox.qs/discussions/categories/ideas) is the place.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What you're trying to do
+      description: The task, and what gets in the way today. Say what kind of conversations they are, such as support chats, email threads or chat exports.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would help
+      description: How you'd like the extension to do it. A sketch or a screenshot is welcome.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What you do now instead
+      description: Other extensions, charts or workarounds you use for it, if any.
