@@ -1,15 +1,43 @@
+<p align="center"><img src="docs/logo/chatbox-qs-logo-256.png" alt="Chatbox.qs logo" width="140"></p>
+
+<h1 align="center">Chatbox.qs</h1>
+
+<p align="center"><strong>Chat-style conversations from the Qlik Sense data model</strong></p>
+
 <p align="center">
-  <img src="docs/logo/chatbox-qs-logo-256.png" alt="Chatbox.qs" width="140">
+<a href="https://github.com/ptarmiganlabs/chatbox.qs/releases"><img src="https://img.shields.io/github/v/release/ptarmiganlabs/chatbox.qs?include_prereleases" alt="Latest release"></a>
+<a href="https://github.com/ptarmiganlabs/chatbox.qs/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-green" alt="License: MIT"></a>
+<a href="https://github.com/sponsors/ptarmiganlabs"><img src="https://img.shields.io/badge/Sponsor-%E2%9D%A4-db61a2?logo=githubsponsors" alt="Sponsor Ptarmigan Labs on GitHub"></a>
 </p>
 
-# Chatbox.qs
+<p align="center">
+<a href="https://chatboxqs.ptarmiganlabs.com">Documentation</a> ·
+<a href="https://github.com/ptarmiganlabs/chatbox.qs/discussions">Questions</a> ·
+<a href="https://github.com/ptarmiganlabs/chatbox.qs/issues">Report a bug</a> ·
+<a href="https://github.com/sponsors/ptarmiganlabs">❤️ Sponsor</a>
+</p>
 
 Render chat-style conversations from the Qlik Sense data model — message bubbles for two parties
 talking back and forth, extending to any number of participants.
 
 Part of the [.qs Library](https://github.com/ptarmiganlabs) from Ptarmigan Labs.
 
-**Documentation:** <https://chatboxqs.ptarmiganlabs.com>
+## ❤️ Support the project
+
+Chatbox.qs is free and open source, under the MIT licence. If you use it, please consider sponsoring its development: sponsorships pay for maintenance, bug fixes and new features, and keep the project going.
+
+**[❤️ Sponsor Ptarmigan Labs on GitHub](https://github.com/sponsors/ptarmiganlabs)**
+
+Other ways to help:
+
+- ⭐ **Star the repository**: it helps others find the project.
+- 💬 **Share your feedback** in [Discussions](https://github.com/ptarmiganlabs/chatbox.qs/discussions): tell us how you use it.
+- 🐛 **Report issues** in [Issues](https://github.com/ptarmiganlabs/chatbox.qs/issues).
+- 🍴 **Contribute**: pull requests are welcome.
+
+_Maintained by [Göran Sander](https://github.com/mountaindude) and supported by [Ptarmigan Labs](https://ptarmiganlabs.com)._
+
+---
 
 ## What it does
 
