@@ -1,8 +1,9 @@
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
-    // The build tokens must be re-declared here or source modules fail to load
-    // under test — they are substituted by Rollup at build time only.
+    // The build tokens (scripts/build-tokens.cjs) must be declared here, with test values, or
+    // source modules fail to load under test: Rollup replaces them at build time only.
+    // test/guards/nebula-config.test.js keeps these names in step with that list.
     define: {
         __BUILD_TYPE__: JSON.stringify('test'),
         __EXTENSION_TYPE__: JSON.stringify('chatbox-qs'),

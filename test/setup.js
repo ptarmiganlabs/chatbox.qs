@@ -9,7 +9,8 @@ if (!global.ResizeObserver) {
     };
 }
 
-if (!window.matchMedia) {
+// A test file that runs in Node (`// @vitest-environment node`) has no window to add it to.
+if (typeof window !== 'undefined' && !window.matchMedia) {
     window.matchMedia = (query) => ({
         matches: false,
         media: query,

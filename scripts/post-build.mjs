@@ -1,12 +1,18 @@
 /**
- * Post-build step.
+ * Post-build step, run after `nebula build` and `nebula sense`.
  *
- * 1. Re-substitutes the build tokens across dist/ and the generated extension
- *    folder. Rollup handles most of them, but `nebula sense` emits its own
- *    entry file after that pass, so this is the belt to Rollup's braces.
- * 2. Injects the shared `.qs Library` bundle metadata into the generated .qext
- *    and syncs its version from package.json, so the artifact can never drift
- *    from the manifest.
+ * 1. Fails the build if a build token is left in a .js file in dist/, or in the extension folder
+ *    that `nebula sense` writes, with its copy of the bundle. Rollup replaces every one while
+ *    nebula builds (`replacementStrings` in nebula.config.cjs, scripts/build-tokens.cjs), so one
+ *    left here means that the replacement stopped working, and the bundle would stop at the first
+ *    line that reads it. It is reported, never patched: a patch here once hid that nebula did not
+ *    read the replacement at all (docs/GOTCHAS.md #58). No bundle in dist/ fails the build too, so
+ *    a check that found nothing to read never passes as one that found nothing wrong.
+ * 2. Injects the shared `.qs Library` bundle metadata into the generated .qext and syncs its
+ *    version from package.json, so the artifact can never drift from the manifest.
+ * 3. Fails a production build if the JSX dev runtime leaked into the bundle (docs/GOTCHAS.md #4).
+ *
+ * It does not build, replace or zip anything itself.
  */
 import { readFile, writeFile, readdir, stat } from 'node:fs/promises';
 import { join, extname } from 'node:path';
@@ -14,7 +20,7 @@ import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
 const pkg = require('../package.json');
-const { buildDateString } = require('./build-date.cjs');
+const { TOKEN_NAMES } = require('./build-tokens.cjs');
 
 const EXTENSION_SUFFIX = process.env.EXTENSION_SUFFIX || '';
 const EXT_NAME = `chatbox-qs${EXTENSION_SUFFIX}`;
@@ -25,13 +31,6 @@ const BUNDLE_METADATA = {
     name: '.qs Library',
     description:
         'Extensions from Ptarmigan Labs that enhance the user experience with help capabilities, onboarding tours and more.',
-};
-
-const TOKENS = {
-    __BUILD_TYPE__: process.env.BUILD_TYPE || 'development',
-    __EXTENSION_TYPE__: EXT_NAME,
-    __PACKAGE_VERSION__: pkg.version,
-    __BUILD_DATE__: buildDateString(),
 };
 
 /**
@@ -57,20 +56,20 @@ async function jsFiles(dir) {
 }
 
 /**
- * Replace any surviving build tokens in a file.
+ * Find files that still contain a build token.
  *
- * @param {string} file - Path of the file to rewrite.
- * @returns {Promise<boolean>} True when the file was modified.
+ * @param {string[]} files - Paths to scan.
+ * @returns {Promise<string[]>} "file: token" descriptions of every token left.
  */
-async function substitute(file) {
-    const original = await readFile(file, 'utf8');
-    let next = original;
-    for (const [token, value] of Object.entries(TOKENS)) {
-        next = next.split(token).join(JSON.stringify(value));
+async function tokensLeft(files) {
+    const found = [];
+    for (const file of files) {
+        const source = await readFile(file, 'utf8');
+        for (const token of TOKEN_NAMES) {
+            if (source.includes(token)) found.push(`${file}: ${token}`);
+        }
     }
-    if (next === original) return false;
-    await writeFile(file, next, 'utf8');
-    return true;
+    return found;
 }
 
 /**
@@ -145,10 +144,27 @@ async function assertNoDevJsxRuntime() {
  * @returns {Promise<void>} Resolves when the post-build step is complete.
  */
 async function main() {
-    const files = [...(await jsFiles('dist')), ...(await jsFiles(EXT_DIR))];
-    let changed = 0;
-    for (const file of files) if (await substitute(file)) changed += 1;
-    console.log(`post-build: scanned ${files.length} js file(s), rewrote ${changed}`);
+    const bundles = await jsFiles('dist');
+    if (bundles.length === 0) {
+        console.error(
+            'post-build: FAILED — no bundle in dist/ to check. Build first: "npm run build" or "npm run build:dist".'
+        );
+        process.exit(1);
+    }
+    const files = [...bundles, ...(await jsFiles(EXT_DIR))];
+
+    const left = await tokensLeft(files);
+    if (left.length) {
+        console.error('post-build: FAILED — build tokens are left in the bundle:');
+        for (const line of left) console.error(`  ${line}`);
+        console.error(
+            '  Rollup replaces them through replacementStrings in nebula.config.cjs ' +
+                '(docs/GOTCHAS.md #58). Fix the replacement there; this step patches nothing.'
+        );
+        process.exit(1);
+    }
+    console.log(`post-build: checked ${files.length} js file(s), no build token left`);
+
     await patchQext();
     await assertNoDevJsxRuntime();
 }
