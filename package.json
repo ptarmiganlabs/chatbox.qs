@@ -74,7 +74,7 @@
         "@cyclonedx/cyclonedx-npm": "^6.0.1",
         "@eslint/js": "^10.0.1",
         "@nebula.js/cli": "^7.4.0",
-        "@nebula.js/cli-build": "^7.4.0",
+        "@nebula.js/cli-build": "^7.9.0",
         "@nebula.js/cli-sense": "^7.4.0",
         "@nebula.js/cli-serve": "^7.4.0",
         "@testing-library/jest-dom": "^7.0.0",
