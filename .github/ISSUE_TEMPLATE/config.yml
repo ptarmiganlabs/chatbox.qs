@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Ask a question
+    url: https://github.com/ptarmiganlabs/chatbox.qs/discussions/categories/q-a
+    about: How to do something with Chatbox.qs, or whether it can. Questions get answered in Discussions.
+  - name: Documentation
+    url: https://chatboxqs.ptarmiganlabs.com
+    about: Installing the extension, shaping the data model, and every setting in the property panel.
