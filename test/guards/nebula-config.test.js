@@ -92,13 +92,14 @@ describe('nebula.config.cjs', () => {
         expect(replace, 'nebula runs no replace plugin').toBeDefined();
 
         const source = TOKEN_NAMES.map((name, i) => `export const v${i} = ${name};`).join('\n');
-        const { code } = replace.transform(source, 'src/util/logger.js');
+        // The plugin returns null when it replaces nothing, and Rollup then bundles the source as
+        // it is: so a failure here names each token left, rather than throwing on the null.
+        const code = replace.transform(source, 'src/util/logger.js')?.code ?? source;
+        for (const name of TOKEN_NAMES) expect(code, `${name} is left`).not.toContain(name);
+        const replacements = nebulaConfig.build.replacementStrings ?? {};
         TOKEN_NAMES.forEach((name, i) => {
-            expect(code).toContain(
-                `export const v${i} = ${nebulaConfig.build.replacementStrings[name]};`
-            );
+            expect(code).toContain(`export const v${i} = ${replacements[name]};`);
         });
-        for (const name of TOKEN_NAMES) expect(code).not.toContain(name);
     });
 
     it('is named by every script that runs nebula build or nebula serve', () => {
@@ -127,7 +128,9 @@ describe('the build tokens', () => {
             '__EXTENSION_TYPE__',
             '__PACKAGE_VERSION__',
         ]);
-        expect(Object.keys(nebulaConfig.build.replacementStrings).sort()).toEqual(SORTED_NAMES);
+        expect(Object.keys(nebulaConfig.build.replacementStrings ?? {}).sort()).toEqual(
+            SORTED_NAMES
+        );
         expect(tokensIn(vitestConfig.define)).toEqual(SORTED_NAMES);
         const eslintGlobals = eslintConfig.flatMap((entry) =>
             tokensIn(entry.languageOptions?.globals)
