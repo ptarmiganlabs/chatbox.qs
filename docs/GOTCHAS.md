@@ -778,3 +778,35 @@ confirmed; the notification closing them into a loop has not been watched in a c
 q-property and its default value are one state (`expressionOf` in `src/qix/sync-attrs.js`). And the sync
 patches the two paths it owns rather than writing the whole properties object back, so what it does not own
 cannot be clobbered by it. _Guard: `test/unit/sync-attrs.test.js`._
+
+## 58. nebula reads only its own options from `nebula.config.cjs`
+
+`nebula build --config nebula.config.cjs` reads the file's `build` section as its command-line
+options (`require(configPath).build`, in `@nebula.js/cli-build`'s `lib/init-config.js`). A key it
+does not know stays in the parsed options and is never read: no error, and no warning. The file had
+two such keys from the first commit. `replacement` held the build tokens, but nebula's option is
+called `replacementStrings`. `rollup(config)` added Rollup's replace plugin to the pipeline, but
+nebula 7.4 calls no such hook. So Rollup replaced no token, in any build: after `nebula build`, all
+four were still in both bundles in `dist/`. The extension worked only because
+`scripts/post-build.mjs` replaced them in the built files afterwards, rewriting three of the four
+`.js` files on every build, while its header said that Rollup handled most of them and that it only
+caught the entry file `nebula sense` writes. That file holds no token: it is one `define()` of the
+bundle.
+
+It cost two things that nothing reported. The debug output that `src/util/logger.js` says is
+compiled out of production builds was in every production bundle, switched off only at run time:
+to terser, `__BUILD_TYPE__` was an unknown global, so `isDev` could not be folded. And
+`nebula serve` looks for `nebula.config.js`, so `npm start` built with no options at all, and its
+bundle stopped at `ReferenceError: __PACKAGE_VERSION__ is not defined` the moment it loaded. The
+same two keys were in the other .qs extensions' copies of the file; network.qs found them on
+2026-11-13 (its GOTCHAS #83).
+
+**Rule:** `nebula.config.cjs` sets only options that nebula reads, and gives nebula the tokens as
+`replacementStrings` (`scripts/build-tokens.cjs`). Every script that runs `nebula build` or
+`nebula serve` names the file with `--config`. `scripts/post-build.mjs` fails the build if a token
+is left in a bundle, and replaces nothing, so a replacement that stops working shows at once; it
+fails, too, when `dist/` holds no bundle to check. _Guard: `test/guards/nebula-config.test.js`,
+which fails on a `build` key that nebula does not read, on a script that runs nebula without the
+file, when the replace plugin of nebula's own Rollup configuration leaves a token, and when the
+lists of token names and the names the source reads disagree; and the post-build step on every
+build._

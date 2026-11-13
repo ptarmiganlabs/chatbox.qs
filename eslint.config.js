@@ -18,7 +18,8 @@ export default [
             globals: {
                 ...globals.browser,
                 ...globals.node,
-                // Build-time tokens substituted by nebula.config.cjs + post-build.mjs.
+                // The build tokens, which Rollup replaces while nebula builds
+                // (scripts/build-tokens.cjs). test/guards/nebula-config.test.js keeps them in step.
                 __BUILD_TYPE__: 'readonly',
                 __EXTENSION_TYPE__: 'readonly',
                 __PACKAGE_VERSION__: 'readonly',

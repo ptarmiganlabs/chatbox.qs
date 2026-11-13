@@ -1,9 +1,9 @@
 /**
  * Shared build-date helper.
  *
- * CommonJS on purpose: it is required by `nebula.config.cjs` (CJS) and by
- * `scripts/post-build.mjs` (ESM, via createRequire), so both stamp an identical
- * value into the bundle.
+ * CommonJS on purpose: `scripts/build-tokens.cjs` requires it, for the value
+ * Rollup puts in place of `__BUILD_DATE__` while nebula builds, and
+ * `nebula.config.cjs` requires that in turn.
  */
 
 /**
