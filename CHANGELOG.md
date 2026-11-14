@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.6.5](https://github.com/ptarmiganlabs/chatbox.qs/compare/chatbox-qs-v0.6.4...chatbox-qs-v0.6.5) (2026-11-14)
+
+
+### Miscellaneous
+
+* add issue forms for bug reports and feature requests ([b3ab24f](https://github.com/ptarmiganlabs/chatbox.qs/commit/b3ab24fcd29fecabf925c7682f91c5a5efc1dca1))
+* **deps-dev:** bump [@nebula](https://github.com/nebula).js/cli from 7.4.0 to 7.9.0 ([1232ad4](https://github.com/ptarmiganlabs/chatbox.qs/commit/1232ad4905331dc0339360540ff668c55ef88411))
+* **deps-dev:** bump [@nebula](https://github.com/nebula).js/cli from 7.4.0 to 7.9.0 ([5769e43](https://github.com/ptarmiganlabs/chatbox.qs/commit/5769e4382cd749265ec79c93878c2ccbfd0dd1c9))
+* **deps-dev:** bump [@nebula](https://github.com/nebula).js/cli-build from 7.4.0 to 7.9.0 ([8e34053](https://github.com/ptarmiganlabs/chatbox.qs/commit/8e340531168fab961c9b60d6c96b6e69dd38dc61))
+* **deps-dev:** bump [@nebula](https://github.com/nebula).js/cli-build from 7.4.0 to 7.9.0 ([c12b300](https://github.com/ptarmiganlabs/chatbox.qs/commit/c12b300a6b92f305b4ed662a4f97a76b89e85e4b))
+* **deps-dev:** bump [@nebula](https://github.com/nebula).js/cli-sense from 7.4.0 to 7.9.0 ([6e6a055](https://github.com/ptarmiganlabs/chatbox.qs/commit/6e6a05598bf41fc64eae9a8fb0752dff3e48c47c))
+* **deps-dev:** bump [@nebula](https://github.com/nebula).js/cli-sense from 7.4.0 to 7.9.0 ([f7b18a0](https://github.com/ptarmiganlabs/chatbox.qs/commit/f7b18a0bba0ede1e3ebcc1ab974a32dc166eb348))
+* **deps-dev:** bump [@nebula](https://github.com/nebula).js/cli-serve from 7.4.0 to 7.9.0 ([cef1528](https://github.com/ptarmiganlabs/chatbox.qs/commit/cef1528c39bf7fced2619bc61a99b133df169e5b))
+* **deps-dev:** bump [@nebula](https://github.com/nebula).js/cli-serve from 7.4.0 to 7.9.0 ([cb8414c](https://github.com/ptarmiganlabs/chatbox.qs/commit/cb8414ccccec0c9f13d414537c2c5ad1f462964a))
+* let Rollup replace the build tokens, through the option nebula reads ([9fd0fec](https://github.com/ptarmiganlabs/chatbox.qs/commit/9fd0fec0d1ed9fb94106dd6b977bf216b295efbc))
+* name the token left when nebula's replace plugin replaces nothing ([a77c656](https://github.com/ptarmiganlabs/chatbox.qs/commit/a77c656851b9b828413a60e8d8c09644198a0e7f))
+* pin Node 24.22.1 for the 2026-10-21 security release ([9e3c039](https://github.com/ptarmiganlabs/chatbox.qs/commit/9e3c039fee67452d9d4fc71210702c2e1b33e590))
+
+
+### Documentation
+
+* add sponsor section to README ([8620bcf](https://github.com/ptarmiganlabs/chatbox.qs/commit/8620bcfbd4138c79ef045fd3ff9f9cbd516a7197))
+* move the About-link draft to done/, with what publishing changed ([166b618](https://github.com/ptarmiganlabs/chatbox.qs/commit/166b6184f06278d3d9e4b6da98db5acef5136431))
+* show the demo GIF under the README header ([6951a7f](https://github.com/ptarmiganlabs/chatbox.qs/commit/6951a7f2b5d6558c5bffb51841777268a4b428a6))
+* the website's tagline on the social, og and square cards ([54ef337](https://github.com/ptarmiganlabs/chatbox.qs/commit/54ef337ca035cd7f7757833a82a3a8361b1f76c1))
+
 ## [0.6.4](https://github.com/ptarmiganlabs/chatbox.qs/compare/chatbox-qs-v0.6.3...chatbox-qs-v0.6.4) (2026-10-10)
 
 
