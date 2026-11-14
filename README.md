@@ -17,6 +17,10 @@
 <a href="https://github.com/sponsors/ptarmiganlabs">❤️ Sponsor</a>
 </p>
 
+<p align="center">
+  <img src="docs/img/chatbox-qs-demo.gif" alt="Chatbox.qs on a Qlik Sense sheet: three customer chats side by side with products, carriers and order numbers highlighted; one conversation is picked from its header, then searched for tomorrow" width="880">
+</p>
+
 Render chat-style conversations from the Qlik Sense data model — message bubbles for two parties
 talking back and forth, extending to any number of participants.
 
