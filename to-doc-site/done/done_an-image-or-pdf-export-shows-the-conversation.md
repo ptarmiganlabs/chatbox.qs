@@ -9,6 +9,7 @@ its gate. Scroll position is stated as kept, from src/ui/snapshot.js. Whole conv
 export and an old story snapshot were never checked live; both were published from the source and
 the unit tests in test/unit/conversation-rows.test.js.
 -->
+
 # An image or PDF export shows the conversation, not an error
 
 _Requires Chatbox.qs 0.6.5 or later. Earlier versions often exported only an error._
