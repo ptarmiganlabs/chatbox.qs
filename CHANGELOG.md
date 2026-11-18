@@ -5,21 +5,16 @@
 
 ### Bug Fixes
 
-* a lane header that does not select is not given a width ([7fc00ff](https://github.com/ptarmiganlabs/chatbox.qs/commit/7fc00ff7fa8a71cf28ab3114a1f17e01b0df1f57))
 * an image or PDF export shows the conversation, not an error ([f0a0f5c](https://github.com/ptarmiganlabs/chatbox.qs/commit/f0a0f5cec3f4dfc6ca672c7178d394f97feab980))
-* lane headers fit their lanes where they do not select ([1ad2e73](https://github.com/ptarmiganlabs/chatbox.qs/commit/1ad2e7337b05b8d1eb0ad80f60ca6fe32699b3a0))
+* lane headers fit their lanes where they do not select ([1ad2e73](https://github.com/ptarmiganlabs/chatbox.qs/commit/1ad2e7337b05b8d1eb0ad80f60ca6fe32699b3a0), [7fc00ff](https://github.com/ptarmiganlabs/chatbox.qs/commit/7fc00ff7fa8a71cf28ab3114a1f17e01b0df1f57))
 
 
 ### Miscellaneous
 
 * add issue forms for bug reports and feature requests ([b3ab24f](https://github.com/ptarmiganlabs/chatbox.qs/commit/b3ab24fcd29fecabf925c7682f91c5a5efc1dca1))
-* **deps-dev:** bump [@nebula](https://github.com/nebula).js/cli from 7.4.0 to 7.9.0 ([1232ad4](https://github.com/ptarmiganlabs/chatbox.qs/commit/1232ad4905331dc0339360540ff668c55ef88411))
 * **deps-dev:** bump [@nebula](https://github.com/nebula).js/cli from 7.4.0 to 7.9.0 ([5769e43](https://github.com/ptarmiganlabs/chatbox.qs/commit/5769e4382cd749265ec79c93878c2ccbfd0dd1c9))
-* **deps-dev:** bump [@nebula](https://github.com/nebula).js/cli-build from 7.4.0 to 7.9.0 ([8e34053](https://github.com/ptarmiganlabs/chatbox.qs/commit/8e340531168fab961c9b60d6c96b6e69dd38dc61))
 * **deps-dev:** bump [@nebula](https://github.com/nebula).js/cli-build from 7.4.0 to 7.9.0 ([c12b300](https://github.com/ptarmiganlabs/chatbox.qs/commit/c12b300a6b92f305b4ed662a4f97a76b89e85e4b))
-* **deps-dev:** bump [@nebula](https://github.com/nebula).js/cli-sense from 7.4.0 to 7.9.0 ([6e6a055](https://github.com/ptarmiganlabs/chatbox.qs/commit/6e6a05598bf41fc64eae9a8fb0752dff3e48c47c))
 * **deps-dev:** bump [@nebula](https://github.com/nebula).js/cli-sense from 7.4.0 to 7.9.0 ([f7b18a0](https://github.com/ptarmiganlabs/chatbox.qs/commit/f7b18a0bba0ede1e3ebcc1ab974a32dc166eb348))
-* **deps-dev:** bump [@nebula](https://github.com/nebula).js/cli-serve from 7.4.0 to 7.9.0 ([cef1528](https://github.com/ptarmiganlabs/chatbox.qs/commit/cef1528c39bf7fced2619bc61a99b133df169e5b))
 * **deps-dev:** bump [@nebula](https://github.com/nebula).js/cli-serve from 7.4.0 to 7.9.0 ([cb8414c](https://github.com/ptarmiganlabs/chatbox.qs/commit/cb8414ccccec0c9f13d414537c2c5ad1f462964a))
 * let Rollup replace the build tokens, through the option nebula reads ([9fd0fec](https://github.com/ptarmiganlabs/chatbox.qs/commit/9fd0fec0d1ed9fb94106dd6b977bf216b295efbc))
 * name the token left when nebula's replace plugin replaces nothing ([a77c656](https://github.com/ptarmiganlabs/chatbox.qs/commit/a77c656851b9b828413a60e8d8c09644198a0e7f))
