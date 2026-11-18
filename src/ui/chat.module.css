@@ -1163,3 +1163,162 @@ button.laneHeader:focus-visible {
     outline: 2px solid var(--cqs-focus, #3f8ab3);
     outline-offset: 0;
 }
+
+/* ---- Export dialog --------------------------------------------------------------------------------
+   Opened from the context menu, over the object: a card that fits a small tile and scrolls when the
+   tile is smaller still. It takes the theme's colours from the object's own custom properties. */
+.exportOverlay {
+    position: absolute;
+    inset: 0;
+    z-index: 30;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px;
+    background: rgba(0, 0, 0, 0.28);
+}
+
+.exportDialog {
+    width: min(360px, 100%);
+    max-height: 100%;
+    overflow: auto;
+    margin: 0;
+    padding: 14px 16px 12px;
+    border: 1px solid var(--cqs-border, #d9d9d9);
+    border-radius: 8px;
+    background: var(--cqs-bg, #ffffff);
+    color: var(--cqs-text, #404040);
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.22);
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+.exportTitle {
+    margin: 0 0 10px;
+    font-size: 15px;
+    font-weight: 600;
+}
+
+.exportGroup {
+    min-width: 0;
+    margin: 0 0 10px;
+    padding: 0;
+    border: 0;
+}
+
+.exportGroup legend {
+    margin-bottom: 4px;
+    padding: 0;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--cqs-muted, #6c6c6c);
+}
+
+.exportChoice {
+    display: flex;
+    align-items: baseline;
+    gap: 7px;
+    padding: 2px 0;
+    cursor: pointer;
+}
+
+.exportChoice > span {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.exportChoice input {
+    flex: none;
+    margin: 0;
+    accent-color: var(--cqs-selected, #009845);
+}
+
+.exportSegments {
+    display: inline-flex;
+    border: 1px solid var(--cqs-border, #d9d9d9);
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.exportSegment {
+    position: relative;
+    cursor: pointer;
+}
+
+.exportSegment + .exportSegment {
+    border-left: 1px solid var(--cqs-border, #d9d9d9);
+}
+
+/* The radio stays in the page, for the keyboard and for screen readers; the label is what is seen. */
+.exportSegment input {
+    position: absolute;
+    inset: 0;
+    margin: 0;
+    opacity: 0;
+    cursor: pointer;
+}
+
+.exportSegment span {
+    display: block;
+    padding: 4px 14px;
+}
+
+.exportSegment input:checked + span {
+    background: var(--cqs-pressed, rgba(0, 0, 0, 0.08));
+    font-weight: 600;
+}
+
+.exportSegment input:focus-visible + span {
+    outline: 2px solid var(--cqs-focus, #3f8ab3);
+    outline-offset: -2px;
+}
+
+.exportHint {
+    margin: 5px 0 0;
+    font-size: 12px;
+    color: var(--cqs-muted, #6c6c6c);
+}
+
+.exportActions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.exportBusy {
+    flex: 1;
+    min-width: 0;
+    font-size: 12px;
+    color: var(--cqs-muted, #6c6c6c);
+}
+
+.exportButton {
+    padding: 5px 14px;
+    border: 1px solid var(--cqs-border, #d9d9d9);
+    border-radius: 4px;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+}
+
+.exportButton:disabled {
+    opacity: 0.55;
+    cursor: default;
+}
+
+.exportButton:focus-visible {
+    outline: 2px solid var(--cqs-focus, #3f8ab3);
+    outline-offset: 1px;
+}
+
+.exportPrimary {
+    border-color: var(--cqs-selected, #009845);
+    background: var(--cqs-selected, #009845);
+    color: #ffffff;
+    font-weight: 600;
+}

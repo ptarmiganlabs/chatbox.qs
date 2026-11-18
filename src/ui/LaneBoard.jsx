@@ -285,7 +285,7 @@ export function LaneBoard({
             return (
                 <div className={styles.laneRow} data-lane-row={row}>
                     {cells.map((index, number) => (
-                        <div key={lanes[number].key} className={styles.laneCell}>
+                        <div key={lanes[number].key} className={styles.laneCell} data-lane={number}>
                             {index >= 0 ? renderRow(index) : null}
                         </div>
                     ))}
@@ -301,8 +301,8 @@ export function LaneBoard({
             >
                 {captionLine}
                 <div className={styles.laneHeaders} data-ruler={ruler ? 'true' : undefined}>
-                    {lanes.map((lane) => (
-                        <section key={lane.key} aria-label={lane.label}>
+                    {lanes.map((lane, number) => (
+                        <section key={lane.key} aria-label={lane.label} data-lane={number}>
                             {header(lane)}
                         </section>
                     ))}
@@ -348,6 +348,7 @@ export function LaneBoard({
                             key={lane.key}
                             className={styles.lane}
                             aria-label={lane.label}
+                            data-lane={number}
                             onPointerDown={use}
                             onWheel={use}
                             onFocusCapture={use}

@@ -113,6 +113,23 @@ message on its own is copied from the button in its upper corner, which
 appears under the pointer or the keyboard; "Show copy button on messages"
 under "Appearance" takes it away.
 
+EXPORTING A CONVERSATION
+------------------------
+Right-click the object for "Export conversation..." to export every message
+the object holds -- not only the part on screen -- as a PDF, as PNG images or
+as an HTML file, drawn for reading and for slides.
+
+With conversations side by side, the dialog asks whether to export the one you
+right-clicked or all of those shown, lined up in time. PDF opens the browser's
+print dialog: choose "Save as PDF" there. PNG is slide-sized (16:9) or one tall
+image; a long conversation is cut between messages into several images, saved
+as a zip, and the background can be transparent. The export opens with a title
+naming the conversation, its people, its dates and its size, which can be left
+out for a slide that has its own.
+
+Sense's own "Download as image" and "Download as PDF" still work, and show the
+part on screen: they draw the object once, at one size, on the server.
+
 DOCUMENTATION
 -------------
 https://chatboxqs.ptarmiganlabs.com
