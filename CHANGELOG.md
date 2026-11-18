@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.0.0](https://github.com/ptarmiganlabs/chatbox.qs/compare/chatbox-qs-v0.6.5...chatbox-qs-v1.0.0) (2026-11-18)
+
+
+### Features
+
+* export whole conversations as PDF, PNG or HTML ([1a0d21c](https://github.com/ptarmiganlabs/chatbox.qs/commit/1a0d21c52a33b5724b2ed70aadc881f6f45aefdd))
+
+
+### Miscellaneous
+
+* release the next version as 1.0.0 ([b417a87](https://github.com/ptarmiganlabs/chatbox.qs/commit/b417a87858997471474f8800125a3962ce7fd6f6))
+
 ## [0.6.5](https://github.com/ptarmiganlabs/chatbox.qs/compare/chatbox-qs-v0.6.4...chatbox-qs-v0.6.5) (2026-11-18)
 
 
