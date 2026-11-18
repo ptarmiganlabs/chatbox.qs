@@ -95,3 +95,15 @@ describe('the stylesheet keeps the font family and the font size apart', () => {
         }
     });
 });
+
+describe('lane headers in the stylesheet', () => {
+    it('fit their lane whether they are buttons or not', () => {
+        // A header that selects is a button, which browsers size as border-box; one that does not is a
+        // div, which they do not. At width 100% with padding, the div ran into the next lane, which is
+        // how every header in an image or PDF export looked.
+        const header = declarationsOf('.laneHeader');
+        expect(header).not.toBeNull();
+        expect(header).toMatch(/width:\s*100%/);
+        expect(header).toMatch(/box-sizing:\s*border-box/);
+    });
+});

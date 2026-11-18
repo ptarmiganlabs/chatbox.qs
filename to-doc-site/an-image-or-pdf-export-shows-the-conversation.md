@@ -59,5 +59,5 @@ conversation; it now shows the same messages as the sheet.
   12000 messages" banner. A PNG of the free-lanes object C showed the reader's four lanes, Thread 24
   to Thread 21. Not checked: a story snapshot, and Whole conversations in an export.
 - Seen in that check, and not part of this change: in an exported lane board, each lane's message
-  count sits flush against the next lane's title, and the last one is clipped. The sheet itself
-  leaves a gap there.
+  count sits flush against the next lane's title, and the last one is clipped. That is fixed
+  separately; see `lane-headers-fit-their-lanes.md`.
