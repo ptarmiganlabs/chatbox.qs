@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.0.1](https://github.com/ptarmiganlabs/chatbox.qs/compare/chatbox-qs-v1.0.0...chatbox-qs-v1.0.1) (2026-11-18)
+
+
+### Miscellaneous
+
+* stop pinning the release version now 1.0.0 is out ([7faf1d2](https://github.com/ptarmiganlabs/chatbox.qs/commit/7faf1d29ce3d691ed441c7b11f60b3e27aa631b3))
+
+
+### Documentation
+
+* mark the whole-conversation export draft published ([1c0be81](https://github.com/ptarmiganlabs/chatbox.qs/commit/1c0be8169b2fcadf36fb080e9170c463b474846c))
+* record the live check of whole conversations in an export ([5a151b4](https://github.com/ptarmiganlabs/chatbox.qs/commit/5a151b45d3553915fdf208b60c10ff5520390e5e))
+
 ## [1.0.0](https://github.com/ptarmiganlabs/chatbox.qs/compare/chatbox-qs-v0.6.5...chatbox-qs-v1.0.0) (2026-11-18)
 
 
