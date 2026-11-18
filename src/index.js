@@ -28,7 +28,7 @@ import definition from './object-properties';
 import dataTargets from './data';
 import ext from './ext/index';
 import { normalize } from './chat/normalize';
-import { readConversationRows } from './qix/conversation-rows';
+import { readConversationRows, readSnapshotRows } from './qix/conversation-rows';
 import { ROLES, conversationModelOf, fieldOfColumn, resolveRoles } from './qix/column-map';
 import { buildContextGate, gateDimensionExpression, gateProblemText } from './qix/context-gate';
 import {
@@ -46,6 +46,7 @@ import {
     readLaneSnapshot,
     shouldRenderAll,
     writeLaneSnapshot,
+    writeRowSnapshot,
     writeSnapshot,
 } from './ui/snapshot';
 import { createBoardCache, laneKeys, laneWindowStart, readLaneSettings } from './chat/lanes';
@@ -145,12 +146,24 @@ export default function supernova(galaxy) {
             // re-renders from it in a backend browser and photographs that. So
             // anything that must survive — scroll position, the open detail —
             // has to be written into the layout copy here.
-            onTakeSnapshot(async (snapshotLayout) =>
-                writeLaneSnapshot(
-                    writeSnapshot(snapshotLayout, viewStateRef.current),
-                    laneKeys(lastViewRef.current?.board ?? null)
-                )
-            );
+            //
+            // The rows go too: the export's model has no data calls (GOTCHAS 29). The rows on screen
+            // are the ones last normalized while a conversation is shown — widened or not.
+            onTakeSnapshot(async (snapshotLayout) => {
+                const shown = lastViewRef.current ? conversationCacheRef.current : null;
+                return writeRowSnapshot(
+                    writeLaneSnapshot(
+                        writeSnapshot(snapshotLayout, viewStateRef.current),
+                        laneKeys(lastViewRef.current?.board ?? null)
+                    ),
+                    shown && {
+                        rows: shown.page.rows,
+                        area: shown.page.area,
+                        phantomTail: shown.page.phantomTail,
+                        hyperCube: shown.layout?.qHyperCube,
+                    }
+                );
+            });
 
             // Page against the STALE layout: it is pinned while a selection is
             // in progress, so an in-flight brush cannot restart a multi-round-trip
@@ -389,6 +402,13 @@ export default function supernova(galaxy) {
             const [page, fetchError] = usePromise(async () => {
                 if (!model || !staleLayout?.qHyperCube) return null;
                 const runId = ++runIdRef.current;
+                // An export: no engine to page, sort or widen with, and the rows are in the layout.
+                if (isSnapshot(staleLayout)) {
+                    return {
+                        ...readSnapshotRows({ layout: staleLayout, settings }),
+                        derivedFrom: staleLayout,
+                    };
+                }
                 // The widened cube when there is one; the object's own otherwise. Read from the ref
                 // so a cube that arrives between renders is used as soon as the version says so.
                 const wide =

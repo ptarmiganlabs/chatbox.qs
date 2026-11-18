@@ -244,7 +244,8 @@ injected into it. The object's own cube is untouched and stays in the default st
 behave exactly as they always have. Nothing is written to the app: the state and the copy both live
 only in your session, the state never appears among the app's alternate states, it never shows in the
 selection bar, and nothing is ever selected in it. An image or PDF export is drawn without an engine,
-so it shows the strict conversation.
+so it cannot make that state: it shows the messages the reader had on screen when it was taken, widened
+or not.
 
 A widened conversation holds more messages than a narrow one, so **Maximum messages** is reached
 sooner; the banner says when it was.

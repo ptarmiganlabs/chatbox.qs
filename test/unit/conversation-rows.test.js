@@ -1,5 +1,10 @@
 import { describe, it, expect, vi } from 'vitest';
-import { DEFAULT_MAX_MESSAGES, readConversationRows } from '../../src/qix/conversation-rows';
+import {
+    DEFAULT_MAX_MESSAGES,
+    readConversationRows,
+    readSnapshotRows,
+} from '../../src/qix/conversation-rows';
+import { writeRowSnapshot, writeSnapshot } from '../../src/ui/snapshot';
 import { StaleError } from '../../src/qix/paging';
 
 // A participant cube: message id, author, thread, text, probe. A phantom row is a linked value with no
@@ -190,5 +195,98 @@ describe('readConversationRows', () => {
         ).rejects.toThrow(StaleError);
         expect(model.calls).toHaveLength(1);
         expect(scans(model)).toHaveLength(1);
+    });
+});
+
+/**
+ * The model an image or PDF export renders with: nebula's snapshot renderer gives the object a model
+ * that answers getLayout and nothing else (GOTCHAS 29).
+ */
+const exportModel = (layout) => ({
+    getLayout: async () => layout,
+    on() {},
+    once() {},
+});
+
+/** The layout copy Sense hands onTakeSnapshot, with the view state and the rows shown written in. */
+function snapshotOf(layout, read) {
+    const copy = JSON.parse(JSON.stringify(layout));
+    writeSnapshot(copy, { firstVisibleIndex: 0, openId: null });
+    return writeRowSnapshot(copy, { ...read, hyperCube: layout.qHyperCube });
+}
+
+describe('rows in an image or PDF export', () => {
+    it('cannot be paged from the export model — the error an export showed', async () => {
+        const rows = cubeRows(9000, 7000);
+        const snapshot = JSON.parse(JSON.stringify(layoutOf(rows)));
+        await expect(
+            readConversationRows({
+                model: exportModel(snapshot),
+                layout: snapshot,
+                settings: { order: 'newest', maxMessages: 5000 },
+            })
+        ).rejects.toThrow(/getHyperCubeData is not a function/);
+    });
+
+    it.each([
+        [
+            'Newest first past phantom rows',
+            cubeRows(9000, 7000),
+            { order: 'newest', maxMessages: 5000 },
+        ],
+        ['lanes', cubeRows(30, 20), { order: 'oldest', maxMessages: 10, lanes: { show: true } }],
+        [
+            'Oldest first past the initial fetch',
+            cubeRows(3000),
+            { order: 'oldest', maxMessages: 2500 },
+        ],
+    ])('shows the rows the reader saw, with %s', async (_, rows, settings) => {
+        const layout = layoutOf(rows);
+        const live = await readConversationRows({ model: cubeModel(rows), layout, settings });
+        const snapshot = snapshotOf(layout, live);
+        // What the export reads it with is serialized and sent away first.
+        const exported = JSON.parse(JSON.stringify(snapshot));
+        expect(readSnapshotRows({ layout: exported, settings })).toEqual(live);
+    });
+
+    it('carries the widened cube the rows were read from, not the object’s own', () => {
+        const own = layoutOf(cubeRows(5));
+        const widened = layoutOf(cubeRows(8));
+        widened.qHyperCube.qSize.qcx = 6;
+        widened.qHyperCube.qDimensionInfo.push({ cId: 'chatbox-context-gate' });
+        const wideRows = widened.qHyperCube.qDataPages[0].qMatrix.map((r) => [...r, { qNum: 1 }]);
+        const copy = writeSnapshot(JSON.parse(JSON.stringify(own)), {});
+        writeRowSnapshot(copy, {
+            rows: wideRows,
+            area: { qTop: 0, qLeft: 0, qWidth: 6, qHeight: 8 },
+            phantomTail: 0,
+            hyperCube: widened.qHyperCube,
+        });
+        expect(copy.qHyperCube.qSize).toEqual({ qcx: 6, qcy: 8 });
+        expect(copy.qHyperCube.qDimensionInfo.at(-1).cId).toBe('chatbox-context-gate');
+        expect(copy.qHyperCube.qDataPages).toEqual([
+            { qArea: { qTop: 0, qLeft: 0, qWidth: 6, qHeight: 8 }, qMatrix: wideRows },
+        ]);
+        // A copy: the live session's cube is left as it was.
+        expect(copy.qHyperCube.qDataPages[0].qMatrix).not.toBe(wideRows);
+        expect(widened.qHyperCube.qDataPages[0].qMatrix[0]).toHaveLength(5);
+    });
+
+    it('shows the rows the layout holds for a snapshot taken without them, and asks no engine', () => {
+        // A story snapshot saved by an earlier build: the view state, and only the initial fetch.
+        const rows = cubeRows(3000);
+        const snapshot = writeSnapshot(JSON.parse(JSON.stringify(layoutOf(rows))), {});
+        const result = readSnapshotRows({ layout: snapshot, settings: { maxMessages: 400 } });
+        expect(numbers(result.rows)).toEqual(Array.from({ length: 400 }, (_, i) => i + 1));
+        expect(result).toMatchObject({ total: 3000, truncated: true, phantomTail: 0 });
+        expect(result.area).toEqual({ qTop: 0, qLeft: 0, qWidth: 5, qHeight: 400 });
+    });
+
+    it('leaves a layout with nothing shown as it was', () => {
+        const layout = writeSnapshot(layoutOf(cubeRows(3)), {});
+        const pages = layout.qHyperCube.qDataPages;
+        writeRowSnapshot(layout, null);
+        expect(layout.qHyperCube.qDataPages).toBe(pages);
+        expect(layout.snapshotData.chatboxRows).toBeUndefined();
     });
 });

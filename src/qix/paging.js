@@ -163,6 +163,43 @@ export async function fetchAllRows({
     };
 }
 
+/**
+ * The rows the layout already holds, without asking the engine for any.
+ *
+ * For a render that has no engine to ask: an export of a snapshot taken before snapshots carried the
+ * rows shown. The full-width pages that run on from the first one, up to a cap — a part of the
+ * conversation, said to be one, rather than an error in place of all of it.
+ *
+ * @param {object} options - Inputs.
+ * @param {object} options.layout - The layout.
+ * @param {number} [options.maxRows] - Hard cap on rows taken.
+ * @returns {object} { rows, area, total, truncated }, as {@link fetchAllRows} returns them.
+ */
+export function heldRows({ layout, maxRows = 5000 }) {
+    const hc = layout?.qHyperCube;
+    if (!hc) return { rows: [], area: null, total: 0, truncated: false };
+    const colCount = hc.qSize?.qcx || 1;
+    const total = hc.qSize?.qcy || 0;
+    const cap = Math.max(0, Math.floor(maxRows));
+    const pages = (hc.qDataPages || []).filter((page) => (page.qArea?.qWidth ?? 0) >= colCount);
+    const first = pages[0]?.qArea?.qTop ?? 0;
+    const rows = [];
+    for (const page of pages) {
+        // Only pages that carry on where the rows so far end: a gap would put rows at the wrong row numbers.
+        if ((page.qArea?.qTop ?? 0) !== first + rows.length) break;
+        for (const row of page.qMatrix || []) {
+            if (rows.length >= cap) break;
+            rows.push(row);
+        }
+    }
+    return {
+        rows,
+        area: { qTop: first, qLeft: 0, qWidth: colCount, qHeight: rows.length },
+        total,
+        truncated: total > rows.length,
+    };
+}
+
 /** How many rows the first call of a backwards scan reads; each later call reads twice as many. */
 export const FIRST_SCAN_ROWS = 100;
 
