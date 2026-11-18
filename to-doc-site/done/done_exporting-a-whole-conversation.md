@@ -1,3 +1,16 @@
+<!--
+Published 2026-11-18 in ptarmiganlabs/chatbox.qs-docs#25, to production in #26, into the v1.0 line
+that #24 opened for 1.0.0.
+Page: Usage → Copying and exporting (/v1.0/usage/copying/), new section "Exporting the whole
+conversation", and a tip in its "Image and PDF exports" section pointing to it.
+Differences from the draft: a section of the existing Copying page rather than a page of its own; no
+version gate, because the v1.0 line starts at 1.0.0; the day-separator example says the date is
+written in the browser's language. No screenshots yet.
+Every quoted string was checked against src/ at origin/main (1.0.0). Live checks before release:
+lane preselection, PNG slides, an 8,000-message HTML export, the print frame and a real Save as PDF.
+Goran reviews the pass in production; merging this pull request is his approval.
+-->
+
 # Export a whole conversation as a PDF, PNG images or an HTML file
 
 _Requires Chatbox.qs 0.7.0 or later._
