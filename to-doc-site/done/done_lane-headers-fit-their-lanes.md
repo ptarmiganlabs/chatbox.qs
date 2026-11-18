@@ -1,3 +1,13 @@
+<!--
+Published 2026-11-18 in ptarmiganlabs/chatbox.qs-docs#22, to production in #23.
+The site has no release notes, so this became a 0.6.5 gate on Usage → Conversations side by side,
+under "Selecting a conversation from its lane header", next to the list of where a header selects
+nothing. The publishing note about the Printing Service became a paragraph in Getting started's
+upgrade steps and a Troubleshooting section, "An export still looks like the old version". That
+section says "more than half an hour", from the lab check, and claims nothing about how long the
+cache lasts in general.
+-->
+
 # Lane headers fit their lanes in exports and in edit mode
 
 _Requires Chatbox.qs 0.6.5 or later._
