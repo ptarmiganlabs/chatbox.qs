@@ -839,3 +839,18 @@ at once because nothing was pending. A print then takes whatever font the browse
 (`themeFontFaces` in `src/export/export-assets.js`), and load every face the frame carries
 explicitly before printing or measuring (`settle` in `src/export/export-frame.js`). _Guard:
 `test/unit/export-assets.test.js`, with Sense's own file names._
+
+## 60. A release can be built from the commit before it
+
+The release job builds the assets of a release created in the same run. release-please does not
+read the commit the run started on: it asks GitHub about `main` as it is at that moment. On
+2026-11-18, #117 was merged and its run started; while it ran, the release pull request #118 was
+merged too. #117's run found #118 merged, created the 1.0.0 release with its tag on #118's merge
+commit, and built the assets from its own commit, the one before the version bump. The zip carried
+all of 1.0.0's code, stamped 0.6.5 in its `.qext`, its About section and its SBOM. #118's own run then
+found the release already made and skipped the build. Nothing failed.
+
+**Rule:** the release job checks out the release tag, never the run's commit, and fails when
+`package.json` there is not the version being released. _Guard: the "Check the version being built is
+the one being released" step in `.github/workflows/ci.yaml`. The 1.0.0 assets were rebuilt from the
+tag and replaced by hand._

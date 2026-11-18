@@ -114,10 +114,25 @@ jobs:
         env:
             DIST_FILE_NAME: chatbox-qs
         steps:
-            - name: Checkout repository
+            # The release tag, not the commit this run started on. release-please reads main as it is
+            # now, so a run started by an earlier merge can find the release pull request merged in
+            # the meantime and create the release; built from its own commit, the release then ships
+            # the previous version's number (1.0.0 shipped as 0.6.5, GOTCHAS #60).
+            - name: Checkout the release tag
               uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
               with:
+                  ref: ${{ needs.release-please.outputs.release_tag_name }}
                   persist-credentials: false
+
+            - name: Check the version being built is the one being released
+              env:
+                  RELEASE_VERSION: ${{ needs.release-please.outputs.release_version }}
+              run: |
+                  BUILT=$(node -p "require('./package.json').version")
+                  if [ "$BUILT" != "$RELEASE_VERSION" ]; then
+                      echo "package.json says $BUILT, the release is $RELEASE_VERSION"
+                      exit 1
+                  fi
 
             - name: Setup Node.js
               uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
