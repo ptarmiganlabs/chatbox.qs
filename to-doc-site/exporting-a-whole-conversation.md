@@ -1,6 +1,6 @@
 # Export a whole conversation as a PDF, PNG images or an HTML file
 
-_Requires Chatbox.qs 0.7.0 or later._
+_Requires Chatbox.qs 1.0.0 or later._
 
 ## What changed
 
@@ -129,8 +129,8 @@ The corner of the object says what was done:
 
 ## Notes for the publishing pass — remove before publishing
 
-- The version gate assumes this ships as a feature in the next minor release; check the open
-  release-please pull request's title.
+- This ships in 1.0.0: the commit that brought it carries `Release-As: 1.0.0` (Goran, 2026-11-18).
+  Check the open release-please pull request's title all the same.
 - Proposed page: a new **Exporting a conversation** page beside **Copying a conversation**, linked from
   the page on conversations side by side.
 - Screenshots to take against the test app: the dialog with conversations side by side (**This one**
