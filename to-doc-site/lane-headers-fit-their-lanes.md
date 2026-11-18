@@ -32,8 +32,11 @@ selects.
   if it describes exports or edit mode.
 - The gate says 0.6.5 because that was the open release pull request when this was written. Check
   which release ships it.
-- Checked 2026-11-18 on the lab, sheet "chatbox.qs lanes & chips", object C. With the fixed build,
-  live headers switched to the kind that does not select (as an export draws them) fit their lanes:
-  224 px in a 224–225 px lane, against 240 px before. A real export still showed the old header after
-  the upload. Its PNG was byte for byte the export from before the upload, which points to the
-  printing service caching the extension. Confirm with an export once that has cleared.
+- Checked 2026-11-18 on the lab, sheet "chatbox.qs lanes & chips", with real PNG exports. Before the
+  fix, object A (linked lanes) read "T9 | 3T8 | 4T7 | 3T6", with T6's count cut off, and object C
+  (free lanes) read "500Thread 23", with the last count clipped to "50". With the fix, A reads
+  "T9 3 | T8 4 | T7 3 | T6 4" and C shows "500" at the right of each of its four lanes.
+- Publishing note: the Qlik Sense Printing Service kept drawing exports with an older copy of the
+  extension for over half an hour after an upload, even for a fresh render at a new size. Restarting
+  the service brought in the new build. Worth a line on the installation or troubleshooting page:
+  after updating the extension, restart the Printing Service before judging an export.
