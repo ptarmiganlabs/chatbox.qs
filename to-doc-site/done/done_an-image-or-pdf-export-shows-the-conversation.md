@@ -8,6 +8,11 @@ over ten columns) went on the Troubleshooting page only; the copying page names 
 its gate. Scroll position is stated as kept, from src/ui/snapshot.js. Whole conversations in an
 export and an old story snapshot were never checked live; both were published from the source and
 the unit tests in test/unit/conversation-rows.test.js.
+Whole conversations in an export checked live 2026-11-18, on 1.0.0 in the lab, after a Printing
+Service restart: Download as image of a lanes object with "Show whole conversations" on and one
+author selected showed the widened conversations, the author's 6 messages drawn normally and the 7
+context messages dimmed, as on screen. The Whole conversations page's claim holds. An old story
+snapshot is still unchecked.
 -->
 
 # An image or PDF export shows the conversation, not an error
