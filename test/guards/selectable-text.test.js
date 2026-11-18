@@ -95,3 +95,19 @@ describe('the stylesheet keeps the font family and the font size apart', () => {
         }
     });
 });
+
+describe('lane headers in the stylesheet', () => {
+    it('fit their lane whether they are buttons or not', () => {
+        // A header that does not select is a div. Given width 100%, a div is content-box, and its padding
+        // ran into the next lane, which is how every header in an image or PDF export looked; saying
+        // border-box did not reach the export. A div fills its lane without a width, padding inside.
+        const header = declarationsOf('.laneHeader');
+        expect(header).not.toBeNull();
+        expect(header).not.toMatch(/(^|;|\s)width:/);
+        // A button sizes to its content, so it alone is given the width, as border-box.
+        const button = declarationsOf('button.laneHeader');
+        expect(button).not.toBeNull();
+        expect(button).toMatch(/width:\s*100%/);
+        expect(button).toMatch(/box-sizing:\s*border-box/);
+    });
+});
