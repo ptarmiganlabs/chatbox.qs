@@ -24,8 +24,7 @@
     ],
     "packages": {
         ".": {
-            "package-name": "chatbox-qs",
-            "release-as": "1.0.0"
+            "package-name": "chatbox-qs"
         }
     }
 }
