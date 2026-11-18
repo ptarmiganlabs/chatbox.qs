@@ -53,6 +53,11 @@ conversation; it now shows the same messages as the sheet.
   Whole conversations page) to say what this draft says.
 - Target pages: a line on the export or troubleshooting page, under the error text above so a search
   for it finds the page, and the correction on the Whole conversations page.
-- Not yet checked in a real Qlik Sense export. The fix is covered by unit tests of the snapshot round
-  trip; confirm on the lab site before publishing, and screenshot an exported Newest-first
-  conversation.
+- Checked on the lab site on 2026-11-18, app "Chatbox.qs test". On 0.6.4, a PNG export of the
+  Newest-first object D ("chatbox.qs message limit" sheet) showed only the error above. With the fix,
+  the PNG and the PDF of D showed messages 12000 downwards under the "Showing the newest 5000 of
+  12000 messages" banner. A PNG of the free-lanes object C showed the reader's four lanes, Thread 24
+  to Thread 21. Not checked: a story snapshot, and Whole conversations in an export.
+- Seen in that check, and not part of this change: in an exported lane board, each lane's message
+  count sits flush against the next lane's title, and the last one is clipped. The sheet itself
+  leaves a gap there.
