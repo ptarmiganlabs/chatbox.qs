@@ -75,6 +75,9 @@ import { extensionState } from './util/extension-state';
 import logger, { PACKAGE_VERSION } from './util/logger';
 import { copyConversation } from './export/copy-conversation';
 import { copyMessage } from './export/copy-message';
+import { laneAt } from './export/export-model';
+import { runExport } from './export/run-export';
+import { EXPORT_DEFAULTS } from './ui/ExportDialog';
 
 /** How long a notice stays in the corner, in milliseconds. */
 const NOTICE_MS = 5000;
@@ -182,10 +185,17 @@ export default function supernova(galaxy) {
             // Monotonic token for highlight loads, like runIdRef for rows.
             const highlightRunRef = useRef(0);
 
+            // The export dialog, while it is open: which lane was right-clicked to open it, and an id that
+            // starts it afresh each time. The choices of the last export are offered again.
+            const [exportAsk, setExportAsk] = useState(null);
+            const exportIdRef = useRef(0);
+            const exportChoiceRef = useRef(EXPORT_DEFAULTS);
+
             // Copy the conversation shown, as text or JSON, from the object's context menu. The hook is
             // not in stardust's type declarations but is exported at runtime (7.4.0), as textview.qs
-            // and QvsView.qs use it. The items appear only while a conversation is shown.
-            onContextMenu((menu) => {
+            // and QvsView.qs use it. The items appear only while a conversation is shown. Nebula hands
+            // the callback the event that opened the menu, which says which lane was right-clicked.
+            onContextMenu((menu, event) => {
                 const view = lastViewRef.current;
                 if (!view?.conversation?.messages?.length) return;
                 for (const [format, label] of [
@@ -212,6 +222,23 @@ export default function supernova(galaxy) {
                         },
                     });
                 }
+                // The whole conversation, not the part on screen, as a PDF, a PNG or an HTML file:
+                // Sense's own export draws the object once, at one size (src/export/run-export.js).
+                const lane = laneAt(
+                    view.board,
+                    event?.target ?? event?.originalEvent?.target ?? null
+                );
+                menu.addItem({
+                    translation: 'Export conversation…',
+                    tid: 'chatbox-export',
+                    icon: 'export',
+                    /**
+                     * Open the export dialog, with the lane right-clicked chosen.
+                     *
+                     * @returns {void}
+                     */
+                    select: () => setExportAsk({ id: ++exportIdRef.current, lane }),
+                });
             });
 
             // Search: the finder shares the markdown projections with the highlighter, and the query
@@ -934,6 +961,45 @@ export default function supernova(galaxy) {
                 const view = {
                     conversation: shown,
                     board,
+                    // The theme as the object draws it, for an export drawn outside the object.
+                    exportTheme: vars,
+                    exportDialog: exportAsk
+                        ? {
+                              id: exportAsk.id,
+                              lanes: board
+                                  ? board.lanes.map((lane) => ({
+                                        label: lane.label,
+                                        count: lane.count,
+                                    }))
+                                  : null,
+                              lane: exportAsk.lane,
+                              initial: exportChoiceRef.current,
+                              /**
+                               * Close the dialog without exporting.
+                               *
+                               * @returns {void}
+                               */
+                              onCancel: () => setExportAsk(null),
+                              /**
+                               * Export what the reader chose, then close the dialog and say how it went.
+                               *
+                               * @param {object} choice - From the dialog.
+                               * @param {function(number, number): void} onProgress - Told which image is drawn.
+                               * @returns {Promise<void>} Resolves once the export has run.
+                               */
+                              onExport: async (choice, onProgress) => {
+                                  const { format, shape, transparent, title } = choice;
+                                  exportChoiceRef.current = { format, shape, transparent, title };
+                                  const result = await runExport({
+                                      view: lastViewRef.current,
+                                      choice,
+                                      onProgress,
+                                  });
+                                  setExportAsk(null);
+                                  if (result) setNotice({ ...result, id: ++noticeIdRef.current });
+                              },
+                          }
+                        : null,
                     lanePicking,
                     laneSteps,
                     whole: wholeControl,
@@ -1006,6 +1072,7 @@ export default function supernova(galaxy) {
                 widenedVersion,
                 pickedLanes,
                 laneOffset,
+                exportAsk,
             ]);
 
             // Let go of the widened cube when the object leaves the sheet. Its own effect, because

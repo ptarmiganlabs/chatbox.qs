@@ -26,7 +26,7 @@ import { ICONS, Icon } from './controls';
  * @param {string} label - The participant's display name.
  * @returns {string} One or two uppercase initials.
  */
-function initials(label) {
+export function initials(label) {
     const parts = String(label || '?')
         .trim()
         .split(/\s+/)

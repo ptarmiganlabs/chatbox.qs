@@ -810,3 +810,26 @@ which fails on a `build` key that nebula does not read, on a script that runs ne
 file, when the replace plugin of nebula's own Rollup configuration leaves a token, and when the
 lists of token names and the names the source reads disagree; and the post-build step on every
 build._
+
+## 59. Sense's theme fonts are in no stylesheet, and a frame off screen loads none
+
+An export is drawn in a frame of its own, and a PNG is an SVG image that loads nothing from the
+network, so the theme's font has to be found and handed over: to the frame by address, to the image
+as a data URL. The obvious place to find it is the page's `@font-face` rules. On Qlik Sense
+(client 8.646, 2026-11-18) they hold two icon fonts and nothing else: **Source Sans Pro** and
+**QlikView Sans** are registered from script, through the `FontFace` API, and a `FontFace` does not say
+where its file came from. Reading the stylesheets found nothing, and every export fell back to the
+reader's system font without a word.
+
+The files are still among the page's loaded resources, named after the family and weight:
+`…/fonts/SourceSansPro-SemiBold.woff`, `…/fonts/qlikview-sans-bold.woff`. So a family without a rule
+is looked for there, its weight and style read from the file name, `semibold` before `bold`.
+
+Second, a frame placed off screen had asked for **none** of those faces by the time the export
+printed: all four were `unloaded` when `print()` was called, `document.fonts.ready` having resolved
+at once because nothing was pending. A print then takes whatever font the browser picks.
+
+**Rule:** find the theme's font by `@font-face` rule first and by loaded file name second
+(`themeFontFaces` in `src/export/export-assets.js`), and load every face the frame carries
+explicitly before printing or measuring (`settle` in `src/export/export-frame.js`). _Guard:
+`test/unit/export-assets.test.js`, with Sense's own file names._

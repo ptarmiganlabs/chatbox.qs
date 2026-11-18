@@ -56,6 +56,8 @@ _Maintained by [Göran Sander](https://github.com/mountaindude) and supported by
   category, with a legend, an overview ruler and click-to-select
 - **Search** within the conversation shown, stepping from match to match
 - **Copy the conversation** as a readable transcript or as JSON, from the object's context menu
+- **Export the whole conversation** — not only the part on screen — as a PDF, as PNG images sized for
+  slides, or as an HTML file, from the object's context menu
 - Message text can be selected and copied with the mouse
 - Detects the one data-model mistake that silently corrupts a chat view: a non-unique message id
 
@@ -497,6 +499,49 @@ image or PDF export never has it.
 
 Message text can also be selected and copied with the mouse; a drag that selects text does not count
 as a click on the message.
+
+## Exporting a conversation
+
+Right-click the object for **Export conversation…**. It exports **every message the object holds**
+under the current selections, the ones scrolled out of sight too, as a PDF, as PNG images or as an HTML
+file. The export is drawn for reading and for slides rather than copied from the screen.
+
+- **With conversations side by side**, the dialog asks whether to export **This one**, the conversation
+  you right-clicked, chosen to begin with, or **All N shown, side by side**, lined up in time as linked
+  lanes are. Right-click outside a lane and all of them are chosen. Conversations that are not shown
+  (the other eight of **4 of 12 conversations**) are not exported: select them, or step to them, first.
+- **PDF** opens the browser's print dialog: choose **Save as PDF** there. Pages are portrait for one
+  conversation and landscape for several, a message is never split across two pages, the conversation
+  names repeat at the top of every page, and the text stays text, selectable and searchable.
+- **PNG** is either **Slide-sized, 16:9**, images of 1920 × 1080 pixels or more, each ready to paste
+  onto a slide, or **One tall image**. A conversation that does not fit one image is cut between
+  messages into several, saved together as a `.zip`; a slide that is a few lines over shrinks slightly
+  rather than leave one message for the next. **Transparent background** leaves the page out, so the
+  bubbles sit on the slide's own background.
+- **HTML** is one file that opens in any browser, with no script in it.
+- **Title with people, dates and counts**, on by default, opens the export with the conversation's name
+  (the object's title when several are exported), its people, the days it covers, how many messages it
+  holds, the highlight categories that occur in it, and what a reader should know: that **Maximum
+  messages** left messages out, or that faded messages are context. Leave it out for a slide that has a
+  title of its own; the footer then still says when not every message is included.
+- Every page and image ends with the date it was exported, and an image that is one of several says
+  which, e.g. **2 of 5**.
+
+The export takes the app's theme colours, a dark theme included, and draws highlights and categories
+as the object does. Day separators name the date itself, never Today. A participant colour too pale to
+read as a name is darkened, or on a dark theme lightened. An avatar from a site that does not allow it
+to be copied is drawn as initials in a PNG. The PDF and the PNG use the theme's font; the HTML file names
+it but does not carry it, so a reader who does not have it sees their own system font.
+
+Files are named after the object, the conversation when one is exported alone, and the day, e.g.
+`Support chats - Order 1042 - 2026-11-18.pdf`. Nothing leaves the browser: the file is made there and
+saved as a download. The corner says what was done, e.g. **Saved 120 messages as 4 images in a zip**,
+or **The export did not work:** and why.
+
+**Why not Sense's own export?** Qlik Sense's **Download as image** and **Download as PDF** draw the
+object once, at one size, on the server: a long conversation is cut at the object's frame, and the PDF
+is one page. They still work, and show the part that was on screen. **Export conversation…** makes the
+whole conversation, in the reader's browser.
 
 ## Getting started
 

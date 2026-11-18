@@ -25,6 +25,7 @@ import {
 } from './keyboard';
 import { readSnapshot, shouldRenderAll } from './snapshot';
 import MessageRow from './render-message';
+import ExportDialog from './ExportDialog';
 import ConversationBar from './ConversationBar';
 import Notice from './Notice';
 import HighlightRuler from './HighlightRuler';
@@ -137,6 +138,8 @@ function ReloadingLine({ reloading }) {
  * @param {?object} [props.laneSteps] - Stepping the window of conversations: `first`, `shown`,
  *     `total` and `onStep(direction)`; null where every conversation is already shown.
  * @param {?string} [props.laneNotice] - Why conversations cannot be shown side by side, as a banner.
+ * @param {?object} [props.exportDialog] - The export dialog's props, while it is open; see
+ *     src/ui/ExportDialog.jsx.
  * @returns {object} The rendered conversation.
  */
 export function ChatLog({
@@ -159,6 +162,7 @@ export function ChatLog({
     laneSteps = null,
     onCopyMessage = null,
     whole = null,
+    exportDialog = null,
 }) {
     // State captured when a snapshot was taken. Null for a normal render.
     const snapshot = readSnapshot(layout);
@@ -937,6 +941,7 @@ export function ChatLog({
         >
             {reloading ? <ReloadingLine reloading={reloading} /> : null}
             <Notice notice={notice} />
+            {exportDialog ? <ExportDialog key={exportDialog.id} {...exportDialog} /> : null}
             {warnings.map((w) => (
                 <div
                     key={w.code}
