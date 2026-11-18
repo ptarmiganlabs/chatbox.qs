@@ -17,6 +17,9 @@ const KEY = 'snapshotData';
 /** Where the lanes shown live, beside the view state rather than inside it. */
 const LANES_KEY = 'chatboxLanes';
 
+/** Marks a snapshot whose cube carries the rows shown, and how many phantom rows were left out. */
+const ROWS_KEY = 'chatboxRows';
+
 /** The furthest from 1970 a Date can be, either way, in milliseconds. */
 const DATE_RANGE_MS = 8.64e15;
 
@@ -107,6 +110,74 @@ export function readLaneSnapshot(layout) {
     const keys = layout[KEY][LANES_KEY]?.keys;
     const kept = Array.isArray(keys) ? keys.filter((key) => typeof key === 'string') : [];
     return kept.length > 0 ? { keys: kept } : null;
+}
+
+/**
+ * Write the rows shown into a layout copy, for a snapshot.
+ *
+ * An export draws the object again from this layout with a model that has no data calls at all — no
+ * getHyperCubeData — so the rows must travel in it. They go where a layout keeps rows anyway, as the
+ * cube's one data page, and the cube they came from goes with them: with Whole conversations that is
+ * the widened cube, whose columns are not the object's own.
+ *
+ * @param {object} layout - The layout copy handed to onTakeSnapshot.
+ * @param {?object} shown - What is on screen: { rows, area, phantomTail } as the row read returned
+ *   them, and `hyperCube`, the qHyperCube of the layout they were read against. Null when no
+ *   conversation is shown, which leaves the layout as it is.
+ * @returns {object} The same layout, mutated when there are rows.
+ */
+export function writeRowSnapshot(layout, shown) {
+    if (!layout || typeof layout !== 'object') return layout;
+    const rows = shown?.rows;
+    const hyperCube = shown?.hyperCube ?? layout.qHyperCube;
+    if (!Array.isArray(rows) || !hyperCube || typeof hyperCube !== 'object') return layout;
+    // A copy: the rows and the widened cube belong to the live session, and the layout copy is
+    // serialized and sent away after this returns.
+    const cube = JSON.parse(JSON.stringify(hyperCube));
+    delete cube.qDataPages;
+    const top = Number.isInteger(shown.area?.qTop) && shown.area.qTop >= 0 ? shown.area.qTop : 0;
+    const width = cube.qSize?.qcx ?? shown.area?.qWidth ?? rows[0]?.length ?? 0;
+    layout.qHyperCube = {
+        ...cube,
+        qDataPages: [
+            {
+                qArea: { qTop: top, qLeft: 0, qWidth: width, qHeight: rows.length },
+                qMatrix: JSON.parse(JSON.stringify(rows)),
+            },
+        ],
+    };
+    const phantomTail = Math.max(0, Math.floor(shown.phantomTail) || 0);
+    const existing = layout[KEY] && typeof layout[KEY] === 'object' ? layout[KEY] : {};
+    layout[KEY] = { ...existing, [ROWS_KEY]: { phantomTail } };
+    return layout;
+}
+
+/**
+ * Read back the rows a snapshot carried.
+ *
+ * @param {object} [layout] - The object layout.
+ * @returns {?object} { rows, area, total, truncated, phantomTail }, shaped as the row read returns
+ *   them; null when this is not a snapshot or it carried no rows.
+ */
+export function readRowSnapshot(layout) {
+    if (!isSnapshot(layout)) return null;
+    const record = layout[KEY][ROWS_KEY];
+    const page = layout.qHyperCube?.qDataPages?.[0];
+    if (!record || !Array.isArray(page?.qMatrix)) return null;
+    const rows = page.qMatrix;
+    const total = layout.qHyperCube.qSize?.qcy ?? rows.length;
+    return {
+        rows,
+        area: {
+            qTop: page.qArea?.qTop ?? 0,
+            qLeft: 0,
+            qWidth: page.qArea?.qWidth ?? layout.qHyperCube.qSize?.qcx ?? 0,
+            qHeight: rows.length,
+        },
+        total,
+        truncated: total > rows.length,
+        phantomTail: Math.max(0, Math.floor(record.phantomTail) || 0),
+    };
 }
 
 /**

@@ -84,8 +84,8 @@ and the object to be in the default state, since it widens against the default
 state's selection. Where either is not so, the button is disabled and says why.
 The object reads a copy of its own cube in an empty session alternate state:
 nothing is written to your app, and selections behave exactly as they always
-have. An image or PDF export cannot make that state, so it shows the strict
-conversation.
+have. An image or PDF export cannot make that state, so it shows the messages
+the reader had on screen when it was taken, widened or not.
 
 The widened cube weighs every message in the app rather than only the ones
 read, so on a very large table expect the first draw after a selection to take

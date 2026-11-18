@@ -349,11 +349,17 @@ and once more after the commit; the list does not follow new rows to the bottom.
 ## 29. An image or PDF export draws the object without the engine
 
 Sense exports by drawing the object again from a copy of its layout, on a server where the model has no
-data calls: a companion object cannot be created there.
+data calls: nebula's snapshot renderer hands the object a model with `getLayout`, `on` and `once` and
+nothing else. A companion object cannot be created there, and the cube cannot be paged: every export of a
+conversation whose rows were not all in the initial fetch — Newest first, lanes, more rows than the fetch
+holds, or more columns than its width — drew nothing but _Could not load the conversation_ over
+"model.getHyperCubeData is not a function".
 
 **Rule:** a snapshot layout gets no highlights and no search box, rather than an engine call that
-cannot succeed. _Guard: `test/unit/highlight/highlight-result.test.js`,
-`test/component/chatlog-search.test.jsx`._
+cannot succeed. The rows shown travel in the snapshot, as its cube's one data page and with the cube they
+were read from (the widened one under Whole conversations); a snapshot render reads them from there and
+never pages, sorts or widens. _Guard: `test/unit/highlight/highlight-result.test.js`,
+`test/component/chatlog-search.test.jsx`, `test/unit/conversation-rows.test.js`._
 
 ## 30. The Clipboard API is refused on plain-HTTP Sense
 

@@ -13,7 +13,8 @@
  */
 import { readsFromEnd } from '../chat/message-limit';
 import { phantomRowTest } from '../chat/normalize';
-import { countTrailingRows, fetchAllRows } from './paging';
+import { readRowSnapshot } from '../ui/snapshot';
+import { countTrailingRows, fetchAllRows, heldRows } from './paging';
 
 /** Maximum messages when the setting holds no usable number. */
 export const DEFAULT_MAX_MESSAGES = 5000;
@@ -55,6 +56,26 @@ export async function readConversationRows({ model, layout, settings, isStale, o
         onProgress,
     });
     return { ...result, phantomTail };
+}
+
+/**
+ * Read the rows a snapshot shows, without the engine.
+ *
+ * An image or PDF export draws the object again from a snapshot of its layout, with a model that
+ * has no data calls (GOTCHAS 29): paging it fails with "getHyperCubeData is not a function", and
+ * that error was all an export showed. The rows shown travel in the snapshot instead; one taken
+ * before they did shows the rows its layout happens to hold.
+ *
+ * @param {object} options - Inputs.
+ * @param {object} options.layout - The snapshot layout.
+ * @param {object} [options.settings] - The `chatbox` property bag.
+ * @returns {object} What {@link readConversationRows} returns.
+ */
+export function readSnapshotRows({ layout, settings }) {
+    const captured = readRowSnapshot(layout);
+    if (captured) return captured;
+    const maxRows = Number(settings?.maxMessages) || DEFAULT_MAX_MESSAGES;
+    return { ...heldRows({ layout, maxRows }), phantomTail: 0 };
 }
 
 export default readConversationRows;
