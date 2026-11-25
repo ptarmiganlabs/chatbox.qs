@@ -108,7 +108,9 @@ describe('readConversationRows', () => {
         expect(model.getHyperCubeData).not.toHaveBeenCalled();
     });
 
-    it('costs one small scan when the cube does not end in phantom rows', async () => {
+    it('costs no call of its own when the cube does not end in phantom rows', async () => {
+        // The scan before reading used to be a round trip of its own, which on a sheet of several
+        // objects queued behind their pages for ~140 ms (GOTCHAS 61).
         const rows = cubeRows(12000);
         const model = cubeModel(rows);
         const result = await readConversationRows({
@@ -117,9 +119,40 @@ describe('readConversationRows', () => {
             settings: { order: 'newest', maxMessages: 5000 },
         });
         expect(result.phantomTail).toBe(0);
-        expect(numbers(result.rows)[0]).toBe(7001);
-        expect(scans(model)).toHaveLength(1);
-        expect(scans(model)[0][0].qHeight).toBe(100);
+        expect(numbers(result.rows)).toEqual(Array.from({ length: 5000 }, (_, i) => 7001 + i));
+        expect(scans(model)).toHaveLength(0);
+        expect(model.calls.map((pages) => pages[0].qTop)).toEqual([7000, 9000, 11000]);
+    });
+
+    it('counts a few phantom rows among the rows read, and reads the ones they displaced in one call', async () => {
+        const rows = cubeRows(12000, 300);
+        const model = cubeModel(rows);
+        const result = await readConversationRows({
+            model,
+            layout: layoutOf(rows),
+            settings: { order: 'newest', maxMessages: 5000 },
+        });
+        expect(result.phantomTail).toBe(300);
+        expect(numbers(result.rows)).toEqual(Array.from({ length: 5000 }, (_, i) => 7001 + i));
+        expect(result.area).toEqual({ qTop: 7000, qLeft: 0, qWidth: 5, qHeight: 5000 });
+        expect(result.truncated).toBe(true);
+        expect(scans(model)).toHaveLength(0);
+        // The last 5,000 rows, then the 300 before them.
+        expect(model.calls.at(-1)[0]).toMatchObject({ qTop: 7000, qHeight: 300 });
+    });
+
+    it('keeps every message when the phantom rows push the rows wanted back to row 0', async () => {
+        // 4,900 messages and 300 phantom rows: 5,200 rows, over the limit of 5,000 only by phantoms.
+        const rows = cubeRows(4900, 300);
+        const result = await readConversationRows({
+            model: cubeModel(rows),
+            layout: layoutOf(rows),
+            settings: { order: 'newest', maxMessages: 5000 },
+        });
+        expect(result.phantomTail).toBe(300);
+        expect(numbers(result.rows)).toEqual(Array.from({ length: 4900 }, (_, i) => i + 1));
+        expect(result.area.qTop).toBe(0);
+        expect(result.truncated).toBe(true);
     });
 
     it('does not scan a cube within the limit, whose phantom rows take no message’s place', async () => {
@@ -173,7 +206,7 @@ describe('readConversationRows', () => {
         expect(result.rows).toHaveLength(DEFAULT_MAX_MESSAGES);
     });
 
-    it('reports reading progress, and aborts a superseded run during the scan', async () => {
+    it('reports reading progress, and aborts a superseded run', async () => {
         const rows = cubeRows(9000, 7000);
         const progress = [];
         await readConversationRows({
@@ -194,7 +227,6 @@ describe('readConversationRows', () => {
             })
         ).rejects.toThrow(StaleError);
         expect(model.calls).toHaveLength(1);
-        expect(scans(model)).toHaveLength(1);
     });
 });
 
