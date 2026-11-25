@@ -160,9 +160,10 @@ Null message ids sort **last** under every sort tried on Qlik Sense May 2026 —
 ascending and descending — so the phantom rows are one block at the end of the cube. Reading the newest
 rows (entry 31) read that block first: with as many phantom rows as the limit, an object showed no
 message at all. When the newest rows are read and the cube has more rows than the limit, the block is
-counted back from the last row first, over the message id, text and probe columns only, with the same
-test (`phantomRowTest`), and the rows read end before it; skipped phantom rows are not counted as rows
-left out.
+counted back from the last row read, with the same test (`phantomRowTest`), and the rows kept end before
+it; the rows it displaced are read in one more call. Only when every row read is a phantom is the block
+found by a scan of its own, over the message id, text and probe columns only, before reading again.
+Skipped phantom rows are not counted as rows left out.
 
 _See `isPhantomRecord` in `src/chat/collapse.js`, `src/qix/conversation-rows.js`. Guard:
 `test/unit/conversation-rows.test.js`, `test/unit/scale.test.js`._
@@ -874,7 +875,8 @@ In place, on the "chatbox.qs message limit" sheet, where two objects share the c
 wait for a selection fell from about 440 to 303 ms for the _Newest first_ object and from 481 to 322 ms
 for the _Oldest first_ one on clearing it. The gain is smaller than in isolation because the two
 objects' pages now compete for the same connection: a small call queues behind another object's large
-ones, as the phantom-row scan of entry 13 did, waiting about 140 ms for 300 cells.
+ones, as the phantom-row scan of entry 13 did, waiting about 140 ms for 300 cells; it now runs only when
+every row read is a phantom.
 
 **Rule:** `fetchAllRows` plans every page up front and keeps up to `MAX_CALLS_IN_FLIGHT` of them out at
 once, each within the cap, and puts the rows together in cube order only once all are back. A run
