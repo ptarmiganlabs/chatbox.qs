@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import dataTargets from '../../src/data';
-import { ATTR_ORDER } from '../../src/ext/metadata-section';
 import { DEFAULT_CIDS, ROLES } from '../../src/qix/column-map';
 
 const target = dataTargets.targets[0];
@@ -117,17 +116,14 @@ describe('data targets: dimension seeding', () => {
         ]);
     });
 
-    it('gives the message-id dimension numeric sort and every attribute expression, empty', () => {
+    it('gives the message-id dimension numeric sort and no attribute expressions yet', () => {
         const properties = makeProperties();
         const id = addDimension(properties);
 
         expect(id.qDef.qSortCriterias).toEqual([{ qSortByNumeric: 1, qSortByAscii: 0 }]);
-        // The seeding list and the panel's slot order are two separate arrays in
-        // two files. The engine returns attribute values positionally, so they
-        // must never drift apart.
-        expect(id.qAttributeExpressions.map((e) => e.id)).toEqual(ATTR_ORDER);
-        expect(id.qAttributeExpressions.every((e) => e.qExpression === '')).toBe(true);
-        expect(id.qAttributeExpressions.every((e) => e.qAttribute === true)).toBe(true);
+        // The panel binds to chatbox.attrs and the sync copies the expressions set there onto the
+        // dimension. An empty one seeded here would be evaluated and sent with every row.
+        expect(id.qAttributeExpressions).toEqual([]);
     });
 
     it('gives other dimensions ascii sort and no attribute expressions', () => {

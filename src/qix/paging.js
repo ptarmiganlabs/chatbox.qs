@@ -6,18 +6,32 @@
  * this module and its cancellation are ours to own, with no vendor reference
  * implementation to copy.
  *
- * Two engine facts shape it:
+ * Three engine facts shape it:
  *
  *  - GetHyperCubeData caps at 10 000 cells *per call*, counted across every
- *    page in that call (engine error 7009). So pages are fetched sequentially;
- *    a Promise.all of several pages breaches the cap rather than parallelising
- *    within it.
+ *    page in that call (engine error 7009). So each call asks for one page of at
+ *    most that many cells; putting several pages in one call breaches the cap.
+ *  - The cap is per call, not per object: separate calls in flight at once are
+ *    each within it. A call's time grows with what it carries rather than with
+ *    the engine's work, so calls that overlap finish sooner than the same calls
+ *    one after another — measured on Qlik Sense May 2026, 12,000 rows in 440 ms
+ *    against 715 ms (GOTCHAS 61). Pages are fetched a few at a time.
  *  - Attribute expressions do not count toward that cap, which is why all the
- *    per-message metadata rides on them instead of on extra columns.
+ *    per-message metadata rides on them instead of on extra columns. They are
+ *    not free to carry, though: every one is sent with every row.
  */
 
 /** The engine's per-call cell budget, inclusive. */
 export const MAX_CELLS = 10000;
+
+/**
+ * How many calls for pages one fetch has in flight at once.
+ *
+ * Enough to overlap the transfer of one page with the engine's work on the next, and few enough
+ * that one object paging a long conversation does not hold the connection every other object on
+ * the sheet shares.
+ */
+export const MAX_CALLS_IN_FLIGHT = 4;
 
 /**
  * Compute how many rows fit in one request for a given column count.
@@ -49,6 +63,131 @@ export class StaleError extends Error {
 }
 
 /**
+ * Fetch the rest of a run of rows one page at a time, asking before each call whether it is needed.
+ *
+ * @param {Array[]} rows - The rows so far, from the first row of the run; appended to.
+ * @param {object} request - What to fetch.
+ * @param {object} request.model - The enigma GenericObject model.
+ * @param {Function} request.isStale - Returns true when the run is superseded.
+ * @param {?Function} request.onProgress - Called with (loaded, wanted) per page.
+ * @param {number} request.first - The cube row the run starts at.
+ * @param {number} request.wanted - How many rows the run holds when complete.
+ * @param {number} request.colCount - The cube's width.
+ * @param {function(Array[]): boolean} request.isEnough - Given the rows so far, true when no more
+ *   are needed.
+ * @returns {Promise<void>} Resolves once the rows are complete, enough, or the engine has no more.
+ */
+async function pageInTurn(rows, { model, isStale, onProgress, first, wanted, colCount, isEnough }) {
+    const perPage = rowsPerPage(colCount);
+    while (rows.length < wanted && !isEnough(rows)) {
+        if (isStale()) throw new StaleError();
+
+        const qHeight = Math.min(wanted - rows.length, perPage);
+        const pages = await model.getHyperCubeData('/qHyperCubeDef', [
+            { qTop: first + rows.length, qLeft: 0, qWidth: colCount, qHeight },
+        ]);
+
+        // Check again after the await: the layout may have changed while the
+        // request was in flight, and appending stale rows to fresh ones is how
+        // a conversation silently duplicates itself.
+        if (isStale()) throw new StaleError();
+
+        const matrix = pages?.[0]?.qMatrix ?? [];
+        if (matrix.length === 0) break;
+
+        for (const matrixRow of matrix) rows.push(matrixRow);
+        onProgress?.(rows.length, wanted);
+
+        // A short page means the engine has no more rows for us.
+        if (matrix.length < qHeight) break;
+    }
+}
+
+/**
+ * Fetch the rest of a run of rows, a few pages at a time.
+ *
+ * Every page is planned up front and asked for in order, at most {@link MAX_CALLS_IN_FLIGHT} at once.
+ * The answers can arrive in any order, so each is kept at its own place and the rows are put
+ * together only once every call is back: rows keep their cube order and their row numbers whatever
+ * order the engine answered in. Everything the one-at-a-time loop guarantees still holds:
+ *
+ * - A run superseded before a call is made makes no more calls, and one superseded while calls are out
+ *   keeps none of what they bring back. Either way the fetch rejects with a {@link StaleError}.
+ * - A short page means the engine has no more rows: the rows end with it, and no call is made for a
+ *   page after it. Pages past it that were already asked for are dropped, since rows after a gap
+ *   would sit at the wrong row numbers.
+ * - A call that fails fails the fetch, and no further call is made.
+ *
+ * @param {Array[]} rows - The rows so far, from the first row of the run; appended to.
+ * @param {object} request - What to fetch.
+ * @param {object} request.model - The enigma GenericObject model.
+ * @param {Function} request.isStale - Returns true when the run is superseded.
+ * @param {?Function} request.onProgress - Called with (loaded, wanted) as pages arrive.
+ * @param {number} request.first - The cube row the run starts at.
+ * @param {number} request.wanted - How many rows the run holds when complete.
+ * @param {number} request.colCount - The cube's width.
+ * @returns {Promise<void>} Resolves once every page is back, or the engine has no more rows.
+ */
+async function pageAtOnce(rows, { model, isStale, onProgress, first, wanted, colCount }) {
+    const perPage = rowsPerPage(colCount);
+    const pages = [];
+    for (let at = rows.length; at < wanted; at += perPage) {
+        pages.push({
+            qTop: first + at,
+            qLeft: 0,
+            qWidth: colCount,
+            qHeight: Math.min(perPage, wanted - at),
+        });
+    }
+    if (pages.length === 0) return;
+
+    const matrices = new Array(pages.length);
+    // The pages that hold rows of the run: all of them, until a short one says the rest have none.
+    let end = pages.length;
+    // The next page to ask for.
+    let next = 0;
+    // Set once the fetch has failed or been superseded, so no further call is made.
+    let stopped = false;
+
+    /**
+     * Ask for one page after another until none is left, as one of the calls in flight.
+     *
+     * @returns {Promise<void>} Resolves when no page is left to ask for.
+     */
+    const caller = async () => {
+        try {
+            while (!stopped && next < end) {
+                const index = next;
+                next += 1;
+                if (isStale()) throw new StaleError();
+                const answer = await model.getHyperCubeData('/qHyperCubeDef', [pages[index]]);
+                // As in the one-at-a-time loop: what a superseded call brings back is never kept.
+                if (isStale()) throw new StaleError();
+                if (stopped) return;
+                const matrix = answer?.[0]?.qMatrix ?? [];
+                matrices[index] = matrix;
+                if (matrix.length < pages[index].qHeight) end = Math.min(end, index + 1);
+                // The rows in hand without a gap: a page past a short one, or ahead of one still out,
+                // may yet be dropped, so progress never counts it.
+                let loaded = rows.length;
+                for (let k = 0; k < end && matrices[k]; k++) loaded += matrices[k].length;
+                onProgress?.(Math.min(loaded, wanted), wanted);
+            }
+        } catch (error) {
+            stopped = true;
+            throw error;
+        }
+    };
+
+    await Promise.all(
+        Array.from({ length: Math.min(MAX_CALLS_IN_FLIGHT, pages.length) }, () => caller())
+    );
+    for (let index = 0; index < end; index++) {
+        for (const matrixRow of matrices[index]) rows.push(matrixRow);
+    }
+}
+
+/**
  * Fetch the rows of the hypercube, up to a cap.
  *
  * The rows read are one unbroken run: the first `maxRows` rows, or with
@@ -75,7 +214,8 @@ export class StaleError extends Error {
  *   values stop at a whole value past their limit this way, rather than at a row
  *   count that could cut a value off from some of its categories. The rows so far
  *   start at the first row read, so with `fromEnd` stopping early leaves out the
- *   last rows.
+ *   last rows. Given one, pages are fetched one at a time, since each call
+ *   depends on what the ones before it brought; without one, a few at a time.
  * @returns {Promise<object>} { rows, area, total, truncated }. `area` covers the
  *   rows read, so `absoluteRow(area, index)` is the cube row of `rows[index]`.
  */
@@ -87,7 +227,7 @@ export async function fetchAllRows({
     maxRows = 5000,
     fromEnd = false,
     skipLast = 0,
-    isEnough = () => false,
+    isEnough = null,
 }) {
     const hc = layout?.qHyperCube;
     if (!hc) return { rows: [], area: null, total: 0, truncated: false };
@@ -127,31 +267,10 @@ export async function fetchAllRows({
         for (let i = from; i < matrix.length && rows.length < wanted; i++) rows.push(matrix[i]);
     }
 
-    // 2. Page the remainder sequentially, resuming rather than refetching.
-    const perPage = rowsPerPage(colCount);
-
-    while (rows.length < wanted && !isEnough(rows)) {
-        if (isStale()) throw new StaleError();
-
-        const qHeight = Math.min(wanted - rows.length, perPage);
-        const pages = await model.getHyperCubeData('/qHyperCubeDef', [
-            { qTop: first + rows.length, qLeft: 0, qWidth: colCount, qHeight },
-        ]);
-
-        // Check again after the await: the layout may have changed while the
-        // request was in flight, and appending stale rows to fresh ones is how
-        // a conversation silently duplicates itself.
-        if (isStale()) throw new StaleError();
-
-        const matrix = pages?.[0]?.qMatrix ?? [];
-        if (matrix.length === 0) break;
-
-        for (const matrixRow of matrix) rows.push(matrixRow);
-        onProgress?.(rows.length, wanted);
-
-        // A short page means the engine has no more rows for us.
-        if (matrix.length < qHeight) break;
-    }
+    // 2. Page the remainder, resuming rather than refetching.
+    const request = { model, isStale, onProgress, first, wanted, colCount };
+    if (isEnough) await pageInTurn(rows, { ...request, isEnough });
+    else await pageAtOnce(rows, request);
 
     return {
         rows,

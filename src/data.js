@@ -14,7 +14,6 @@
  * `description()` the object properties, but calls `max` with nothing but the
  * other axis's count. So `max` is a constant that fits both models.
  */
-import { defaultAttributeExpressions } from './object-properties';
 import {
     CONVERSATION_MODELS,
     DEFAULT_CIDS,
@@ -197,9 +196,11 @@ export default {
                  * Two things matter here. `autoSort` must be pinned false or the
                  * Sense property panel overwrites the deliberate sort criteria,
                  * which is the "why is my chat in random order" bug. And the
-                 * message-id dimension carries every per-message attribute
-                 * expression, seeded empty so the property panel can bind to
-                 * stable refs without needing an applyPatches round trip.
+                 * message-id dimension is where the per-message attribute
+                 * expressions go. It starts with none: the panel binds to
+                 * `chatbox.attrs`, and src/qix/sync-attrs.js copies the ones that
+                 * hold an expression onto the dimension. An empty one would still
+                 * be evaluated and sent with every row.
                  *
                  * @param {object} dimension - The NxDimension being added.
                  * @param {object} properties - The object's current properties.
@@ -227,7 +228,7 @@ export default {
                         // Sorted numerically by default; the property panel can
                         // switch this to an expression over a timestamp field.
                         dimension.qDef.qSortCriterias = [{ qSortByNumeric: 1, qSortByAscii: 0 }];
-                        dimension.qAttributeExpressions = defaultAttributeExpressions();
+                        dimension.qAttributeExpressions = [];
                     } else {
                         dimension.qDef.qSortCriterias = [{ qSortByAscii: 1 }];
                     }
