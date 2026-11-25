@@ -8,6 +8,7 @@ import {
     projectMarkdown,
     walkProjection,
 } from '../../../src/highlight/markdown-projection';
+import { fastestTime } from '../../helpers/timing';
 
 describe('projectMarkdown', () => {
     it.each([
@@ -121,9 +122,12 @@ describe('isPlainText — the bodies that need no parsing', () => {
     it('projects 20,000 plain bodies in a time a first search can afford', () => {
         // Parsing them took 1.4 seconds on Node 24; the fast path takes a few milliseconds.
         const bodies = Array.from({ length: 20_000 }, (_, i) => `message ${i} about the reload`);
-        const started = performance.now();
-        for (const body of bodies) projectMarkdown(body);
-        expect(performance.now() - started).toBeLessThan(200);
+        // The fastest of several runs: contention from test files running beside this one only adds time.
+        expect(
+            fastestTime(() => {
+                for (const body of bodies) projectMarkdown(body);
+            })
+        ).toBeLessThan(200);
     });
 });
 

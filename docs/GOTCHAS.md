@@ -879,8 +879,9 @@ ones, as the phantom-row scan of entry 13 did, waiting about 140 ms for 300 cell
 **Rule:** `fetchAllRows` plans every page up front and keeps up to `MAX_CALLS_IN_FLIGHT` of them out at
 once, each within the cap, and puts the rows together in cube order only once all are back. A run
 superseded while calls are out keeps nothing they bring, a short page ends the rows, and a failed call
-fails the fetch and stops further calls. The highlight values, which ask before every call whether
-more rows are needed, still fetch one page at a time. _Guard: `test/unit/paging.test.js`, "several
+fails the fetch and stops further calls. Categorised highlight values, which ask before every call
+whether more rows are needed, still fetch one page at a time; other highlight values are paged side by
+side too. _Guard: `test/unit/paging.test.js`, "several
 pages in flight"._
 
 ## 62. An empty attribute expression is still sent with every row
@@ -901,5 +902,6 @@ message-id dimension starts with none. The values are read by id (`buildAttrMap`
 not there reads as one with nothing in it. The sync's guard treats a missing array as an empty one: the
 session object kept the key, but entry 57 found a saved object leaving out a default-valued
 `qExpression`, and read as drift a missing array would write on every layout change. An object saved
-by an earlier build is written once more the next time it is edited, and then holds. _Guard:
+by an earlier build is written once more the next time it is edited, and then holds — unless its
+expressions were set outside the panel, which the sync never rewrites, so its empty slots stay. _Guard:
 `test/unit/sync-attrs.test.js`, `test/unit/data-targets.test.js`._

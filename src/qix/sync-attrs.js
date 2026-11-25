@@ -86,7 +86,8 @@ function expressionOf(entry) {
  * engine returns the first where a build wrote the second (see {@link expressionOf}); and a missing
  * array is an empty one, which GetProperties may return for an empty array by the same rule. An
  * empty slot that is there — as earlier builds wrote every one — is not in sync with a build that
- * leaves it out, so such an object is written once more the next time it is edited, and then holds.
+ * leaves it out, so such an object is written once more the next time it is edited, and then holds —
+ * unless its expressions were set outside the panel, which the sync never rewrites, so its empty slots stay.
  *
  * @param {object[]} [current] - The dimension's current qAttributeExpressions.
  * @param {object[]} desired - The array {@link buildAttributeExpressions} produced.

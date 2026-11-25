@@ -148,7 +148,6 @@ async function pageAtOnce(rows, { model, isStale, onProgress, first, wanted, col
     let next = 0;
     // Set once the fetch has failed or been superseded, so no further call is made.
     let stopped = false;
-    let received = rows.length;
 
     /**
      * Ask for one page after another until none is left, as one of the calls in flight.
@@ -168,10 +167,11 @@ async function pageAtOnce(rows, { model, isStale, onProgress, first, wanted, col
                 const matrix = answer?.[0]?.qMatrix ?? [];
                 matrices[index] = matrix;
                 if (matrix.length < pages[index].qHeight) end = Math.min(end, index + 1);
-                if (index < end) {
-                    received += matrix.length;
-                    onProgress?.(Math.min(received, wanted), wanted);
-                }
+                // The rows in hand without a gap: a page past a short one, or ahead of one still out,
+                // may yet be dropped, so progress never counts it.
+                let loaded = rows.length;
+                for (let k = 0; k < end && matrices[k]; k++) loaded += matrices[k].length;
+                onProgress?.(Math.min(loaded, wanted), wanted);
             }
         } catch (error) {
             stopped = true;
