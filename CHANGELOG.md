@@ -1,5 +1,25 @@
 # Changelog
 
+## [1.0.1](https://github.com/ptarmiganlabs/chatbox.qs/compare/chatbox-qs-v1.0.0...chatbox-qs-v1.0.1) (2026-11-25)
+
+
+### Performance
+
+* count the phantom rows among the last rows read ([fb0a81c](https://github.com/ptarmiganlabs/chatbox.qs/commit/fb0a81c3ec7ebcb8f69663c9a5e22f0c071b7e10))
+* fetch pages side by side and send less per row ([f3f279d](https://github.com/ptarmiganlabs/chatbox.qs/commit/f3f279d4130200ca6865f42c4c9e692b8df86498))
+
+
+### Miscellaneous
+
+* stop pinning the release version now 1.0.0 is out ([7faf1d2](https://github.com/ptarmiganlabs/chatbox.qs/commit/7faf1d29ce3d691ed441c7b11f60b3e27aa631b3))
+
+
+### Documentation
+
+* correct the paging and attribute notes, and steady the projection timing test ([4eab364](https://github.com/ptarmiganlabs/chatbox.qs/commit/4eab3647d757567b06f0de0ae2b455b5ad63598a))
+* mark the whole-conversation export draft published ([1c0be81](https://github.com/ptarmiganlabs/chatbox.qs/commit/1c0be8169b2fcadf36fb080e9170c463b474846c))
+* record the live check of whole conversations in an export ([5a151b4](https://github.com/ptarmiganlabs/chatbox.qs/commit/5a151b45d3553915fdf208b60c10ff5520390e5e))
+
 ## [1.0.0](https://github.com/ptarmiganlabs/chatbox.qs/compare/chatbox-qs-v0.6.5...chatbox-qs-v1.0.0) (2026-11-18)
 
 
