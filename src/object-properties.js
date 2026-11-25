@@ -7,7 +7,6 @@
  * unique message-id dimension must lead the cube or separate messages with
  * identical text merge into one bubble.
  */
-import { ATTR_IDS } from './qix/attr-map';
 import { DEFAULT_CIDS, ROLES } from './qix/column-map';
 import { kindChipsBag } from './chat/kind-chips';
 import { lanesBag } from './chat/lanes';
@@ -24,34 +23,6 @@ const COLS = 10;
 
 /** The engine caps a GetHyperCubeData call at 10 000 cells (qWidth x qHeight). */
 export const MAX_CELLS = 10000;
-
-/**
- * Attribute expressions carrying per-message metadata.
- *
- * These ride on the message-id dimension and, critically, do **not** count
- * against the 10 000-cell page budget — that limit is qWidth x qHeight only.
- * So metadata is free, which is what makes the data-driven design viable.
- *
- * The `id` is a plain lowercase string of our choosing, echoed back by the
- * engine on `qAttrExprInfo[i].id`. There is no `qId` field in the schema.
- *
- * Order matters only in that values return positionally; never read by index,
- * always through the id -> index map built from the layout.
- *
- * @returns {object[]} Attribute-expression definitions, all initially empty.
- */
-export function defaultAttributeExpressions() {
-    return [
-        { id: ATTR_IDS.TS, qExpression: '', qAttribute: true },
-        { id: ATTR_IDS.TS_TEXT, qExpression: '', qAttribute: true },
-        { id: ATTR_IDS.AVATAR, qExpression: '', qAttribute: true },
-        { id: ATTR_IDS.MEDIA, qExpression: '', qAttribute: true },
-        { id: ATTR_IDS.KIND, qExpression: '', qAttribute: true },
-        { id: ATTR_IDS.SIDE, qExpression: '', qAttribute: true },
-        { id: ATTR_IDS.ACCENT, qExpression: '', qAttribute: true },
-        { id: ATTR_IDS.BADGE, qExpression: '', qAttribute: true },
-    ];
-}
 
 export default {
     showTitles: true,

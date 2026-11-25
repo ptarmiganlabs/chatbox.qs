@@ -854,3 +854,52 @@ found the release already made and skipped the build. Nothing failed.
 `package.json` there is not the version being released. _Guard: the "Check the version being built is
 the one being released" step in `.github/workflows/ci.yaml`. The 1.0.0 assets were rebuilt from the
 tag and replaced by hand._
+
+## 61. The cell cap is per call, so pages can be fetched side by side
+
+The paging code fetched one page after another, because its first comment said that "a Promise.all of
+several pages breaches the cap". That holds for several pages in **one** call: the 10,000 cells of
+`GetHyperCubeData` are counted across every page in the call (engine error 7009). It does not hold for
+separate calls. Measured on Qlik Sense May 2026 against the ChatBig fixture, 12,000 rows of a
+five-column cube with eight attribute expressions, six calls of 2,000 rows in flight at once were all
+accepted, and took **440 ms** against **715 ms** one after another; 5,000 rows read from the end took
+203 against 282 ms. A call's time follows what it carries — 6.65 MB of JSON for those 12,000 rows — so
+overlapping the transfer of one page with the engine's work on the next is where the time comes from.
+
+Fetched one after another, the pages were most of what a selection cost: for a _Newest first_ object at
+5,000 of 12,000 rows, 362 of 685 ms, against 17 ms for everything the browser did once the last page
+was in.
+
+In place, on the "chatbox.qs message limit" sheet, where two objects share the connection, the median
+wait for a selection fell from about 440 to 303 ms for the _Newest first_ object and from 481 to 322 ms
+for the _Oldest first_ one on clearing it. The gain is smaller than in isolation because the two
+objects' pages now compete for the same connection: a small call queues behind another object's large
+ones, as the phantom-row scan of entry 13 did, waiting about 140 ms for 300 cells.
+
+**Rule:** `fetchAllRows` plans every page up front and keeps up to `MAX_CALLS_IN_FLIGHT` of them out at
+once, each within the cap, and puts the rows together in cube order only once all are back. A run
+superseded while calls are out keeps nothing they bring, a short page ends the rows, and a failed call
+fails the fetch and stops further calls. The highlight values, which ask before every call whether
+more rows are needed, still fetch one page at a time. _Guard: `test/unit/paging.test.js`, "several
+pages in flight"._
+
+## 62. An empty attribute expression is still sent with every row
+
+Every build up to 1.0.0 put all eight metadata slots on the message-id dimension, empty or not, because
+the panel was once going to bind to them. It binds to `chatbox.attrs` instead (entry 5), and the empty
+slots stayed behind. The engine evaluates and sends them anyway: on the ChatBig fixture, with three of
+the eight set, a row took 550 bytes with the empty five and 490 without, and a call of 2,000 rows 126
+against 113 ms. With none at all a row took 312 bytes. Attribute expressions cost nothing against the
+cell cap; they cost what they carry.
+
+Measured on a session object, Qlik Sense May 2026: an empty slot comes back in each row as
+`{"qNum":"NaN"}`, a dimension with no slots carries no `qAttrExps` at all, and an empty array reads
+back from GetProperties as `[]`.
+
+**Rule:** the sync copies onto the dimension only the slots that hold an expression, and a new
+message-id dimension starts with none. The values are read by id (`buildAttrMap`), so a slot that is
+not there reads as one with nothing in it. The sync's guard treats a missing array as an empty one: the
+session object kept the key, but entry 57 found a saved object leaving out a default-valued
+`qExpression`, and read as drift a missing array would write on every layout change. An object saved
+by an earlier build is written once more the next time it is edited, and then holds. _Guard:
+`test/unit/sync-attrs.test.js`, `test/unit/data-targets.test.js`._

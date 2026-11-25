@@ -78,10 +78,20 @@ describe('formulaOf', () => {
 });
 
 describe('buildAttributeExpressions', () => {
-    it('emits every slot in canonical order, even when unset', () => {
-        const out = buildAttributeExpressions({});
-        expect(out.map((e) => e.id)).toEqual(ATTR_ORDER);
-        expect(out.every((e) => e.qExpression === '' && e.qAttribute === true)).toBe(true);
+    it('emits nothing for a bag with nothing in it', () => {
+        expect(buildAttributeExpressions({})).toEqual([]);
+        expect(buildAttributeExpressions(undefined)).toEqual([]);
+        expect(
+            buildAttributeExpressions(Object.fromEntries(ATTR_ORDER.map((id) => [id, ''])))
+        ).toEqual([]);
+    });
+
+    it('emits only the slots that hold an expression, in canonical order', () => {
+        // An empty attribute expression is still evaluated and sent with every row: on the lab's
+        // 12,000-message fixture the five empty slots were 60 of the 550 bytes a row took.
+        const out = buildAttributeExpressions({ badge: 'Only(ThreadId)', ts: 'A', avatar: '   ' });
+        expect(out.map((e) => e.id)).toEqual(['ts', 'badge']);
+        expect(out.every((e) => e.qAttribute === true)).toBe(true);
     });
 
     it('carries configured expressions through', () => {
@@ -96,7 +106,7 @@ describe('buildAttributeExpressions', () => {
 
 describe('isInSync', () => {
     it('detects a match and any drift', () => {
-        const desired = buildAttributeExpressions({ ts: 'A' });
+        const desired = buildAttributeExpressions({ ts: 'A', badge: 'B' });
         expect(isInSync(desired, desired)).toBe(true);
         expect(isInSync([], desired)).toBe(false);
         expect(isInSync(undefined, desired)).toBe(false);
@@ -105,12 +115,32 @@ describe('isInSync', () => {
     });
 
     it('takes a slot with no qExpression for the empty slot it is', () => {
-        // Regression: GetProperties leaves out a q-property whose value is the default, so the slots
-        // left empty in the panel come back as `{ id, qAttribute: true }` while the build emits
-        // `qExpression: ''`. Compared raw, `undefined === ''` failed for every one of them, so the
-        // guard never held for a real object and every layout change in edit mode wrote again.
+        // Regression: GetProperties leaves out a q-property whose value is the default, so a slot
+        // written empty comes back as `{ id, qAttribute: true }` while the write had `qExpression: ''`.
+        // Compared raw, `undefined === ''` failed for every one of them, so the guard never held for a
+        // real object and every layout change in edit mode wrote again.
+        const wrote = [
+            { id: 'ts', qExpression: 'A', qAttribute: true },
+            { id: 'badge', qExpression: '', qAttribute: true },
+        ];
+        const readBack = [
+            { id: 'ts', qExpression: 'A', qAttribute: true },
+            { id: 'badge', qAttribute: true },
+        ];
+        expect(isInSync(readBack, wrote)).toBe(true);
+    });
+
+    it('takes a missing array for the empty one it is', () => {
+        // The same engine rule for the whole array: a dimension written with no attribute expressions
+        // can come back without the key. Read as drift, an object with no metadata would write on
+        // every layout change in edit mode.
+        expect(isInSync(undefined, buildAttributeExpressions({}))).toBe(true);
+        expect(isInSync([], buildAttributeExpressions({}))).toBe(true);
+    });
+
+    it('takes the empty slots an earlier build wrote for drift, so they are written away once', () => {
         const attrs = { ts: 'Num(Min(FtSentAt))', tsText: "Only(Time(FtSentAt, 'hh:mm'))" };
-        expect(isInSync(asEngineReturns(attrs), buildAttributeExpressions(attrs))).toBe(true);
+        expect(isInSync(asEngineReturns(attrs), buildAttributeExpressions(attrs))).toBe(false);
     });
 
     it('still sees drift in a slot the engine left out', () => {
@@ -155,7 +185,9 @@ describe('syncAttributeExpressions', () => {
         });
         const wrote = await syncAttributeExpressions({ model, layout: fromTo, canEdit: true });
         expect(wrote).toBe(true);
-        expect(written(model)).toHaveLength(ATTR_ORDER.length);
+        expect(written(model)).toEqual([
+            { id: 'ts', qExpression: 'Num(Min(SentAt))', qAttribute: true },
+        ]);
         // and nothing at all on the recipient dimension
         expect(
             patched(model, '/qHyperCubeDef/qDimensions/2/qAttributeExpressions')
@@ -209,20 +241,50 @@ describe('syncAttributeExpressions', () => {
     });
 
     it('does NOT write for the shape the engine returns — this is what looped', async () => {
-        // Regression: on a real object the empty slots come back without a qExpression, the guard
+        // Regression: on a real object the empty slots came back without a qExpression, the guard
         // never held, and the effect wrote on every layout change in edit mode. The engine answers a
         // write with a change notification, so that write brought the next layout, which brought the
         // next write — an endless loop, re-fetching the data each time round.
         const attrs = { ts: 'A' };
-        const model = mkModel(
-            [
-                {
-                    qDef: { cId: 'd_msgid', qSortCriterias: timeSortCriteria('A') },
-                    qAttributeExpressions: asEngineReturns(attrs),
+        // What an earlier build wrote, every slot, as GetProperties returns it.
+        let held = asEngineReturns(attrs);
+        const model = {
+            getProperties: vi.fn(async () => ({
+                qHyperCubeDef: {
+                    qDimensions: [
+                        {
+                            qDef: { cId: 'd_msgid', qSortCriterias: timeSortCriteria('A') },
+                            qAttributeExpressions: held,
+                        },
+                    ],
                 },
-            ],
-            attrs
-        );
+                chatbox: { attrs },
+            })),
+            applyPatches: vi.fn(async (patches) => {
+                // The engine keeps what was written, minus any q-property at its default.
+                held = JSON.parse(patches[0].qValue).map(({ qExpression, ...rest }) =>
+                    qExpression ? { ...rest, qExpression } : rest
+                );
+            }),
+        };
+        const sync = () =>
+            syncAttributeExpressions({
+                model,
+                layout: layout([{ cId: 'd_msgid' }]),
+                canEdit: true,
+            });
+
+        // The empty slots are written away once…
+        expect(await sync()).toBe(true);
+        expect(held).toEqual([{ id: 'ts', qExpression: 'A', qAttribute: true }]);
+        // …and what the engine then holds is in sync, however many layouts follow.
+        expect(await sync()).toBe(false);
+        expect(await sync()).toBe(false);
+        expect(model.applyPatches).toHaveBeenCalledTimes(1);
+    });
+
+    it('does NOT write for an object with no metadata whose array the engine left out', async () => {
+        const model = mkModel([{ qDef: { cId: 'd_msgid' } }], {});
         const wrote = await syncAttributeExpressions({
             model,
             layout: layout([{ cId: 'd_msgid' }]),
@@ -426,6 +488,6 @@ describe('syncAttributeExpressions — clobber guard', () => {
             canEdit: true,
         });
         expect(wrote).toBe(true);
-        expect(written(model).every((e) => e.qExpression === '')).toBe(true);
+        expect(written(model)).toEqual([]);
     });
 });

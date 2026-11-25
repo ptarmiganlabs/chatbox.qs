@@ -154,14 +154,73 @@ export function walkProjection(tree, onSegment) {
     return text;
 }
 
+/** A character that can open, close or change a markdown construct wherever it is in a line. */
+const INLINE_SYNTAX = /[*_`~[\]!<>&\\|]/;
+
+/** A first character that can open a block: a heading, a quote, a list item or a setext underline. */
+const BLOCK_OPENER = /^[\d#>+\-=]/;
+
+/** Whitespace other than a plain space: line breaks, tabs, and non-breaking and other Unicode spaces. */
+const OTHER_WHITESPACE = /[^\S ]/;
+
+/**
+ * A control character. The parser replaces NUL, which is also the block separator, and no control
+ * character is worth trusting a fast path with.
+ */
+// eslint-disable-next-line no-control-regex -- matching control characters is the point
+const CONTROL = /[\u0000-\u001f\u007f]/;
+
+/**
+ * Tell whether a body is text markdown renders exactly as it is, so its projection is the body itself.
+ *
+ * One line, starting and ending with something other than whitespace, holding no character that can
+ * open or change any construct — emphasis, code, links, images, raw HTML, entities, escapes,
+ * strikethrough, tables — and not starting with a character that can open a block. Such a body parses
+ * to one paragraph holding one text node: its value. Links that GFM finds in plain text, such as
+ * `www.example.com` or an e-mail address, keep their text as written, so they change nothing here.
+ *
+ * Conservative by design: a body this turns down is parsed, which is always right. A body it lets
+ * through must project to itself exactly, or a highlight would be found in one text and drawn into
+ * another, and would then not be drawn at all; `test/unit/highlight/markdown-projection.test.js`
+ * checks it against the parser.
+ *
+ * @param {string} body - The markdown.
+ * @returns {boolean} True when the body projects to itself.
+ */
+export function isPlainText(body) {
+    return (
+        typeof body === 'string' &&
+        body !== '' &&
+        body.trim() === body &&
+        !BLOCK_OPENER.test(body) &&
+        !INLINE_SYNTAX.test(body) &&
+        !OTHER_WHITESPACE.test(body) &&
+        !CONTROL.test(body)
+    );
+}
+
+/**
+ * Work out the text a markdown body renders by parsing it, as react-markdown does.
+ *
+ * @param {string} body - The markdown.
+ * @returns {string} The projection.
+ */
+export function projectByParsing(body) {
+    return walkProjection(processor.runSync(processor.parse(String(body ?? ''))));
+}
+
 /**
  * Work out the text a markdown body renders.
+ *
+ * Parsing costs about 0.07 ms a body, which is 1.4 seconds for the first search or highlight over
+ * 20,000 markdown messages. Most chat messages hold no markdown at all, and those are their own
+ * projection, found without parsing ({@link isPlainText}).
  *
  * @param {string} body - The markdown.
  * @returns {string} The projection.
  */
 export function projectMarkdown(body) {
-    return walkProjection(processor.runSync(processor.parse(String(body ?? ''))));
+    return isPlainText(body) ? body : projectByParsing(body);
 }
 
 /**

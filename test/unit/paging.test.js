@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
     FIRST_SCAN_ROWS,
+    MAX_CALLS_IN_FLIGHT,
     MAX_CELLS,
     StaleError,
     countTrailingRows,
@@ -84,7 +85,7 @@ describe('fetchAllRows', () => {
         expect(rows).toHaveLength(2500);
     });
 
-    it('pages sequentially and never asks for more than 10 000 cells in one call', async () => {
+    it('asks for the pages in order and never for more than 10 000 cells in one call', async () => {
         const seen = [];
         const model = mkModel(5000, 5, (p) => seen.push(p));
         const layout = mkLayout({ qcy: 5000 });
@@ -92,7 +93,7 @@ describe('fetchAllRows', () => {
 
         expect(rows).toHaveLength(5000);
         for (const p of seen) expect(p.qWidth * p.qHeight).toBeLessThanOrEqual(MAX_CELLS);
-        // Sequential: each page starts where the previous ended.
+        // Each page starts where the previous one ends.
         expect(seen.map((p) => p.qTop)).toEqual([0, 2000, 4000]);
     });
 
@@ -388,7 +389,7 @@ describe('fetchAllRows — reading the last rows', () => {
             maxRows: 5000,
             fromEnd: true,
         });
-        expect(model.getHyperCubeData).toHaveBeenCalledTimes(2);
+        // All three pages are asked for at once; the one past the short page brings nothing and is dropped.
         expect(rows.map(rowOf)).toEqual(Array.from({ length: 3000 }, (_, i) => 4000 + i));
         expect(area.qTop).toBe(4000);
         expect(truncated).toBe(true);
@@ -457,6 +458,180 @@ describe('fetchAllRows — reading the last rows', () => {
             ).rejects.toThrow(StaleError);
             expect(calls).toBe(2);
         });
+    });
+});
+
+describe('fetchAllRows — several pages in flight', () => {
+    /** The cube row a fake row was made for, from its first cell. */
+    const rowOf = (row) => Number(row[0].qText.split(':')[0]);
+
+    /**
+     * A model whose calls are answered only when the test says so, recording every page asked for.
+     *
+     * @param {number} totalRows - The rows the engine really has.
+     * @param {number} [qcx] - The cube's width.
+     * @returns {object} The model, with `asked` (pages in the order asked for), `open` (calls not yet
+     *   answered) and `answer(index)`, `fail(index, error)` for a call by the order it was asked in.
+     */
+    function heldModel(totalRows, qcx = 5) {
+        const asked = [];
+        const pending = [];
+        const model = {
+            asked,
+            open: () => pending.filter((call) => !call.settled).length,
+            getHyperCubeData: vi.fn((path, pages) => {
+                const page = pages[0];
+                asked.push(page);
+                return new Promise((resolve, reject) => {
+                    pending.push({ page, resolve, reject, settled: false });
+                });
+            }),
+            answer(index) {
+                const call = pending[index];
+                call.settled = true;
+                const { qTop, qHeight } = call.page;
+                const available = Math.max(0, Math.min(qHeight, totalRows - qTop));
+                call.resolve([
+                    {
+                        qArea: { qTop, qLeft: 0, qWidth: qcx, qHeight: available },
+                        qMatrix: Array.from({ length: available }, (_, i) => mkRow(qTop + i, qcx)),
+                    },
+                ]);
+            },
+            fail(index, error) {
+                pending[index].settled = true;
+                pending[index].reject(error);
+            },
+        };
+        return model;
+    }
+
+    /** Let the calls answered so far be taken in, and the next ones be asked for. */
+    const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+    it(`keeps at most ${MAX_CALLS_IN_FLIGHT} calls in flight, and asks for the next as one returns`, async () => {
+        // 1 column: 10 000 rows a page, so 60 000 rows are six pages.
+        const model = heldModel(60000, 1);
+        const done = fetchAllRows({
+            model,
+            layout: mkLayout({ qcy: 60000, qcx: 1 }),
+            maxRows: 60000,
+        });
+        await settle();
+        expect(model.asked).toHaveLength(MAX_CALLS_IN_FLIGHT);
+        expect(model.open()).toBe(MAX_CALLS_IN_FLIGHT);
+
+        model.answer(0);
+        await settle();
+        expect(model.asked).toHaveLength(MAX_CALLS_IN_FLIGHT + 1);
+        expect(model.open()).toBe(MAX_CALLS_IN_FLIGHT);
+
+        for (let index = 1; index < 6; index++) {
+            model.answer(index);
+            await settle();
+        }
+        const { rows, truncated } = await done;
+        expect(rows).toHaveLength(60000);
+        expect(truncated).toBe(false);
+        expect(model.asked.map((page) => page.qTop)).toEqual(
+            [0, 1, 2, 3, 4, 5].map((n) => n * 10000)
+        );
+    });
+
+    it('keeps cube order and row numbers when the engine answers out of order', async () => {
+        const model = heldModel(9000);
+        const done = fetchAllRows({
+            model,
+            layout: mkLayout({ qcy: 9000 }),
+            maxRows: 5000,
+            fromEnd: true,
+        });
+        await settle();
+        // Rows 4000 to 8999 in three pages, answered last first.
+        for (const index of [2, 1, 0]) {
+            model.answer(index);
+            await settle();
+        }
+        const { rows, area } = await done;
+        expect(rows.map(rowOf)).toEqual(Array.from({ length: 5000 }, (_, i) => 4000 + i));
+        expect(area).toEqual({ qTop: 4000, qLeft: 0, qWidth: 5, qHeight: 5000 });
+    });
+
+    it('asks for no page after a short one, and drops the pages past it', async () => {
+        // The engine claims 60 000 rows of one column but has 15 000: the cube changed after the layout.
+        const model = heldModel(15000, 1);
+        const done = fetchAllRows({
+            model,
+            layout: mkLayout({ qcy: 60000, qcx: 1 }),
+            maxRows: 60000,
+        });
+        await settle();
+        // Answer the second page, which is short, before the first: what the first brings is kept.
+        model.answer(1);
+        await settle();
+        expect(model.asked).toHaveLength(MAX_CALLS_IN_FLIGHT);
+        for (const index of [0, 2, 3]) {
+            model.answer(index);
+            await settle();
+        }
+        const { rows, truncated } = await done;
+        expect(model.asked).toHaveLength(MAX_CALLS_IN_FLIGHT);
+        expect(rows.map(rowOf)).toEqual(Array.from({ length: 15000 }, (_, i) => i));
+        expect(truncated).toBe(true);
+    });
+
+    it('fails with the engine’s error and asks for nothing more', async () => {
+        const model = heldModel(60000, 1);
+        const done = fetchAllRows({
+            model,
+            layout: mkLayout({ qcy: 60000, qcx: 1 }),
+            maxRows: 60000,
+        });
+        await settle();
+        const error = new Error('engine said no');
+        model.fail(0, error);
+        await expect(done).rejects.toBe(error);
+        for (let index = 1; index < MAX_CALLS_IN_FLIGHT; index++) model.answer(index);
+        await settle();
+        expect(model.asked).toHaveLength(MAX_CALLS_IN_FLIGHT);
+    });
+
+    it('keeps nothing a call brings back once the run is superseded', async () => {
+        const model = heldModel(60000, 1);
+        let stale = false;
+        const done = fetchAllRows({
+            model,
+            layout: mkLayout({ qcy: 60000, qcx: 1 }),
+            maxRows: 60000,
+            isStale: () => stale,
+        });
+        await settle();
+        stale = true;
+        model.answer(2);
+        await expect(done).rejects.toThrow(StaleError);
+        for (const index of [0, 1, 3]) model.answer(index);
+        await settle();
+        expect(model.asked).toHaveLength(MAX_CALLS_IN_FLIGHT);
+    });
+
+    it('asks one page at a time while the caller says when the rows are enough', async () => {
+        // The highlight values: whether a call is needed depends on what the calls before it brought.
+        const model = heldModel(60000, 1);
+        const done = fetchAllRows({
+            model,
+            layout: mkLayout({ qcy: 60000, qcx: 1 }),
+            maxRows: 60000,
+            isEnough: (rows) => rows.length >= 20000,
+        });
+        await settle();
+        expect(model.open()).toBe(1);
+        model.answer(0);
+        await settle();
+        expect(model.open()).toBe(1);
+        model.answer(1);
+        const { rows } = await done;
+        expect(rows).toHaveLength(20000);
+        expect(model.asked).toHaveLength(2);
     });
 });
 

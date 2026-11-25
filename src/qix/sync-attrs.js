@@ -49,15 +49,20 @@ export function formulaOf(value) {
 /**
  * Build the attribute-expression array a dimension should carry.
  *
+ * Only the slots that hold an expression. An empty attribute expression is still evaluated for every
+ * row and sent with every row — on the lab's 12,000-message fixture the five empty slots were 60 of
+ * the 550 bytes a row took, and the calls took about a tenth longer for them (GOTCHAS 62). The values
+ * are read by id, never by position, so a slot that is not there reads as one with nothing in it.
+ *
  * @param {object} [attrs] - The `chatbox.attrs` bag from the object properties.
- * @returns {object[]} Attribute-expression definitions in canonical slot order.
+ * @returns {object[]} Attribute-expression definitions in canonical slot order, empty ones left out.
  */
 export function buildAttributeExpressions(attrs = {}) {
     return ATTR_ORDER.map((id) => ({
         id,
         qExpression: formulaOf(attrs?.[id]),
         qAttribute: true,
-    }));
+    })).filter((entry) => entry.qExpression.trim() !== '');
 }
 
 /**
@@ -77,17 +82,21 @@ function expressionOf(entry) {
 /**
  * Report whether a dimension's attribute expressions already match the bag.
  *
- * Both sides are normalised through {@link expressionOf}: a missing `qExpression` and an empty one
- * are the same state, and the engine returns the first where the build emits the second.
+ * Both sides are normalised: a missing `qExpression` and an empty one are the same state, and the
+ * engine returns the first where a build wrote the second (see {@link expressionOf}); and a missing
+ * array is an empty one, which GetProperties may return for an empty array by the same rule. An
+ * empty slot that is there — as earlier builds wrote every one — is not in sync with a build that
+ * leaves it out, so such an object is written once more the next time it is edited, and then holds.
  *
  * @param {object[]} [current] - The dimension's current qAttributeExpressions.
  * @param {object[]} desired - The array {@link buildAttributeExpressions} produced.
  * @returns {boolean} True when a write is unnecessary.
  */
 export function isInSync(current, desired) {
-    if (!Array.isArray(current) || current.length !== desired.length) return false;
+    const held = Array.isArray(current) ? current : [];
+    if (held.length !== desired.length) return false;
     return desired.every(
-        (want, i) => current[i]?.id === want.id && expressionOf(current[i]) === expressionOf(want)
+        (want, i) => held[i]?.id === want.id && expressionOf(held[i]) === expressionOf(want)
     );
 }
 
